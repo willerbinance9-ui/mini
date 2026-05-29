@@ -1,6 +1,8 @@
 # Render setup for mini-backend
 
-After pushing to [willerbinance9-ui/mini](https://github.com/willerbinance9-ui/mini):
+**Prerequisite:** Push `main` to GitHub — see [GITHUB_PUSH.md](./GITHUB_PUSH.md) if `git push` fails with permission denied.
+
+After the repo is on [willerbinance9-ui/mini](https://github.com/willerbinance9-ui/mini):
 
 ## 1. Create service
 
