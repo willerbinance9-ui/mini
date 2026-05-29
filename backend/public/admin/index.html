@@ -1,0 +1,2975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Airfarms Admin</title>
+  <style>
+    :root {
+      --bg: #0e0e0e;
+      --surface: #151717;
+      --surface2: #242828;
+      --border: #323738;
+      --text: #ffffff;
+      --muted: #c2c2c2;
+      --accent: #ff444f;
+      --accent-dim: rgba(255, 68, 79, 0.18);
+      --danger: #ff444f;
+      --ok: #00b324;
+      --warn: #ffad3a;
+      --sidebar-w: 240px;
+      --radius: 14px;
+      --phone-w: 400px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      min-height: 100vh;
+    }
+    .hidden { display: none !important; }
+
+    /* Mobile-style login */
+    .login-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255, 68, 79, 0.12), transparent),
+        var(--bg);
+    }
+    .phone-card {
+      width: 100%;
+      max-width: var(--phone-w);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 32px 24px 28px;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+    }
+    .login-logo {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(201, 162, 39, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.1rem;
+      color: var(--accent);
+      margin: 0 auto 16px;
+    }
+    .login-title {
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--text);
+      margin: 0 0 4px;
+    }
+    .login-sub {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.88rem;
+      margin: 0 0 28px;
+    }
+    label {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 14px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 1rem;
+      margin-bottom: 16px;
+    }
+    input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 18px;
+      font-weight: 700;
+      font-size: 1rem;
+      width: 100%;
+    }
+    .btn-primary { background: var(--accent); color: #ffffff; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      width: auto;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      border-radius: 10px;
+    }
+    .btn-danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid var(--danger);
+      width: auto;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      border-radius: 10px;
+    }
+    .btn-warn {
+      background: transparent;
+      color: var(--warn);
+      border: 1px solid var(--warn);
+      width: auto;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      border-radius: 10px;
+    }
+    .btn-block-sm { width: 100%; margin-top: 8px; }
+    .err { color: var(--danger); font-size: 0.85rem; margin-top: 4px; }
+    .hint { color: var(--muted); font-size: 0.82rem; margin: 0 0 12px; }
+    .warn-box { color: var(--warn); font-size: 0.82rem; margin-bottom: 12px; padding: 10px; background: rgba(251, 191, 36, 0.08); border-radius: 8px; border: 1px solid rgba(251, 191, 36, 0.25); }
+
+    /* App shell + sidebar */
+    .app-shell { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 20px 12px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+    .sidebar-brand {
+      padding: 8px 12px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .sidebar-brand h1 {
+      margin: 0;
+      font-size: 1.15rem;
+      color: var(--accent);
+      font-weight: 800;
+    }
+    .sidebar-brand p { margin: 4px 0 0; font-size: 0.72rem; color: var(--muted); }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      text-align: left;
+      padding: 12px 14px;
+      margin-bottom: 4px;
+      border-radius: 10px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.92rem;
+      cursor: pointer;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+    .nav-item.active {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border: 1px solid rgba(201, 162, 39, 0.35);
+    }
+    .nav-icon { font-size: 1.1rem; width: 22px; text-align: center; }
+    .sidebar-foot {
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .topbar {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .topbar h2 { margin: 0; font-size: 1.25rem; font-weight: 700; }
+    .topbar-actions { display: flex; gap: 8px; }
+    .content { padding: 20px 24px 40px; flex: 1; overflow: auto; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+    .row > * { flex: 1; min-width: 140px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    th, td {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 700; font-size: 0.7rem; text-transform: uppercase; }
+    tr:hover td { background: rgba(255,255,255,0.03); }
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+    .pill-paused { background: rgba(248, 113, 113, 0.15); color: var(--danger); }
+    .pill-ok { background: rgba(74, 222, 128, 0.15); color: var(--ok); }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .stat { background: var(--bg); border-radius: 10px; padding: 12px; border: 1px solid var(--border); }
+    .stat .val { font-size: 1.15rem; font-weight: 700; color: var(--accent); }
+    .stat .lbl { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; }
+    .loading { color: var(--muted); font-size: 0.9rem; padding: 24px 0; text-align: center; }
+    .band-picks { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-bottom: 12px; }
+    .band-picks label { display: inline-flex; align-items: center; gap: 6px; margin: 0; text-transform: none; letter-spacing: 0; font-size: 0.85rem; color: var(--text); font-weight: 500; }
+    .band-picks input { width: auto; margin: 0; }
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.65);
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+      z-index: 200;
+      overflow-y: auto;
+    }
+    .modal { max-width: 560px; width: 100%; max-height: 90vh; overflow-y: auto; position: relative; }
+    .modal-wide { max-width: 860px; }
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+    @media (max-width: 700px) {
+      .chart-grid { grid-template-columns: 1fr; }
+    }
+    .chart-wrap {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px 8px;
+      height: 220px;
+    }
+    .chart-wrap h4 {
+      margin: 0 0 6px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .journal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+    .journal-weekday {
+      text-align: center;
+      font-size: 0.65rem;
+      color: var(--muted);
+      font-weight: 700;
+      padding: 2px 0 4px;
+    }
+    .journal-cell {
+      min-height: 44px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      padding: 4px 2px;
+      font-size: 0.72rem;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+    }
+    .journal-cell.empty { visibility: hidden; pointer-events: none; }
+    .journal-cell.profit {
+      border-color: rgba(74, 222, 128, 0.55);
+      background: rgba(74, 222, 128, 0.12);
+    }
+    .journal-cell.selected {
+      outline: 2px solid var(--accent);
+      outline-offset: 0;
+    }
+    .journal-cell .day-num { font-weight: 700; line-height: 1.1; }
+    .journal-cell .day-amt {
+      font-size: 0.58rem;
+      color: var(--ok);
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* User detail page (replaces modal) */
+    .user-page-banner {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      margin: -20px -24px 16px;
+      padding: 12px 24px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+    }
+    .user-page-banner.banner-err {
+      background: rgba(248, 113, 113, 0.12);
+      color: var(--danger);
+      border-bottom-color: rgba(248, 113, 113, 0.35);
+    }
+    .user-page-banner.banner-ok {
+      background: rgba(74, 222, 128, 0.1);
+      color: var(--ok);
+      border-bottom-color: rgba(74, 222, 128, 0.35);
+    }
+    .user-page-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 12px 16px;
+      margin-bottom: 20px;
+    }
+    .user-page-header .user-page-title-block { flex: 1; min-width: 200px; }
+    .user-page-header h2 { margin: 0 0 4px; font-size: 1.35rem; }
+    .user-page-header .user-page-meta { margin: 0; }
+    .user-page-sections {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 1100px;
+    }
+    .admin-section {
+      margin-bottom: 0;
+    }
+    .admin-section-title {
+      margin: 0 0 4px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .admin-section-desc {
+      margin: 0 0 16px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .btn-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+    }
+    .btn-toolbar .btn-primary,
+    .btn-toolbar .btn-warn,
+    .btn-toolbar .btn-ghost,
+    .btn-toolbar .btn-danger {
+      width: auto;
+      min-width: 120px;
+      padding: 10px 16px;
+      font-size: 0.85rem;
+      margin: 0;
+    }
+    .form-grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px 16px;
+      margin-bottom: 12px;
+    }
+    .form-grid-2 label { margin-bottom: 6px; }
+    .form-grid-2 input,
+    .form-grid-2 select {
+      margin-bottom: 0;
+    }
+    .section-inline-ok {
+      font-size: 0.82rem;
+      color: var(--ok);
+      margin: 8px 0 0;
+    }
+    .table-scroll {
+      overflow-x: auto;
+      margin-top: 8px;
+    }
+    .table-scroll.tall { max-height: 280px; overflow-y: auto; }
+    .tier-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .tier-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .tier-card h4 {
+      margin: 0 0 6px;
+      font-size: 1rem;
+      color: var(--accent);
+    }
+    .tier-card .tier-index {
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+    .tier-card .tier-hint {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin: 0 0 12px;
+      line-height: 1.4;
+    }
+    .tier-kv {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 12px;
+      margin-bottom: 12px;
+      font-size: 0.85rem;
+    }
+    .tier-kv dt { color: var(--muted); margin: 0; }
+    .tier-kv dd { margin: 0; font-weight: 600; color: var(--text); }
+    .tier-edit {
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+      margin-top: 4px;
+    }
+    .tier-edit label { font-size: 0.7rem; margin-bottom: 4px; }
+    .tier-edit input { padding: 8px 10px; font-size: 0.9rem; margin-bottom: 8px; }
+    .tier-ref-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 16px; }
+    .tier-ref-table th, .tier-ref-table td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tier-ref-table th { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; }
+    .tier-ref-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .tier-pct-big { font-size: 1.35rem; font-weight: 800; color: var(--ok); }
+    .modal-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .modal-header h2 { margin: 0; flex: 1; }
+    .modal-close {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--muted);
+      font-size: 1.25rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0;
+    }
+    .modal-close:hover { color: var(--text); border-color: var(--accent); }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .menu-toggle {
+      display: none;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      width: auto;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 1.2rem;
+    }
+    @media (max-width: 860px) {
+      .app-shell { flex-direction: column; }
+      .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 150;
+        height: 100vh;
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+        box-shadow: 8px 0 24px rgba(0,0,0,0.4);
+      }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 140;
+      }
+      .sidebar-overlay.open { display: block; }
+      .menu-toggle { display: inline-block; }
+    }
+    @media (max-width: 600px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .content { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="loginScreen" class="login-screen">
+    <div class="phone-card">
+      <div class="login-logo">EMA</div>
+      <h1 class="login-title">Admin sign in</h1>
+      <p class="login-sub">Secure access to users, support, and drops</p>
+      <label for="username">Username</label>
+      <input id="username" value="admin" autocomplete="username" />
+      <label for="password">Password</label>
+      <input id="password" type="password" value="admin" autocomplete="current-password" />
+      <button type="button" class="btn-primary" id="loginBtn">Sign in</button>
+      <p id="loginErr" class="err hidden"></p>
+    </div>
+  </div>
+
+  <div id="appShell" class="app-shell hidden">
+    <div id="sidebarOverlay" class="sidebar-overlay"></div>
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-brand">
+        <h1>EMA Admin</h1>
+        <p>Operations console</p>
+      </div>
+      <nav>
+        <button type="button" class="nav-item active" data-tab="users">
+          <span class="nav-icon">👤</span> Users
+        </button>
+        <button type="button" class="nav-item" data-tab="support">
+          <span class="nav-icon">💬</span> Support
+        </button>
+        <button type="button" class="nav-item" data-tab="withdrawals">
+          <span class="nav-icon">💸</span> Withdrawals
+        </button>
+        <button type="button" class="nav-item" data-tab="aiearnings">
+          <span class="nav-icon">🤖</span> AI earnings
+        </button>
+        <button type="button" class="nav-item" data-tab="tiers">
+          <span class="nav-icon">📊</span> Drop tiers
+        </button>
+        <button type="button" class="nav-item" data-tab="drops">
+          <span class="nav-icon">📉</span> Drops
+        </button>
+        <button type="button" class="nav-item" data-tab="announce">
+          <span class="nav-icon">📢</span> Notify
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <button type="button" class="btn-ghost btn-block-sm" id="refreshBtn">Refresh</button>
+        <button type="button" class="btn-danger btn-block-sm" id="logoutBtn">Sign out</button>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button type="button" class="menu-toggle" id="menuToggle" aria-label="Menu">☰</button>
+          <h2 id="pageTitle">Users</h2>
+        </div>
+        <div class="topbar-actions">
+          <span id="adminUserLabel" style="color:var(--muted);font-size:0.85rem;"></span>
+        </div>
+      </header>
+
+      <div class="content">
+        <div id="panelUsers">
+          <div id="panelUsersList">
+          <div class="card">
+            <div class="row">
+              <div style="flex:2;">
+                <label>Search by email</label>
+                <input id="userSearch" type="search" placeholder="user@example.com" />
+              </div>
+              <div style="flex:0;">
+                <button type="button" class="btn-primary" id="searchUsersBtn" style="width:auto;margin-bottom:16px;">Search</button>
+              </div>
+            </div>
+            <p id="userStats" class="hint"></p>
+            <div id="usersLoading" class="loading hidden">Loading users…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Email</th>
+                    <th>Cash</th>
+                    <th>Airfarming</th>
+                    <th>VIP</th>
+                    <th>Drops</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="userRows"></tbody>
+              </table>
+            </div>
+            <p id="usersErr" class="err hidden"></p>
+          </div>
+          </div>
+
+          <div id="panelUserDetail" class="hidden">
+            <div id="userPageBanner" class="user-page-banner banner-err hidden" role="alert"></div>
+
+            <div class="user-page-header">
+              <button type="button" class="btn-ghost" id="backToUsersBtn" style="width:auto;flex-shrink:0;">← Users</button>
+              <div class="user-page-title-block">
+                <h2 id="userModalTitle">User</h2>
+                <p id="userModalMeta" class="hint user-page-meta"></p>
+              </div>
+            </div>
+
+            <div class="stat-grid" id="userStatsGrid" style="max-width:1100px;margin-bottom:20px;"></div>
+
+            <div class="user-page-sections">
+
+              <section class="card admin-section">
+                <h3 class="admin-section-title">Airfarming drops</h3>
+                <p id="userPauseStatus" class="admin-section-desc"></p>
+                <div class="btn-toolbar">
+                  <button type="button" id="toggleUserPauseBtn" class="btn-warn">Pause drops</button>
+                </div>
+              </section>
+
+              <section class="card admin-section">
+                <h3 class="admin-section-title">Custom drop plan (AI)</h3>
+                <p class="admin-section-desc">Set how many upcoming drops this user gets and the combined profit target. AI suggests percent and hours between each drop.</p>
+                <div class="form-grid-2">
+                  <div>
+                    <label>Upcoming drops</label>
+                    <input id="userDropPlanCount" type="number" min="1" max="12" step="1" value="3" />
+                  </div>
+                  <div>
+                    <label>Target total profit (USD)</label>
+                    <input id="userDropPlanTarget" type="number" min="0" step="0.01" placeholder="500.00" />
+                  </div>
+                  <div>
+                    <label>Week (UTC Mon)</label>
+                    <input id="userDropPlanWeek" type="date" />
+                  </div>
+                </div>
+                <p id="userDropPlanMeta" class="hint" style="margin-bottom:0;"></p>
+                <div class="btn-toolbar">
+                  <button type="button" class="btn-primary" id="userDropPlanAiBtn">AI suggest</button>
+                  <button type="button" class="btn-warn" id="userDropPlanApplyBtn">Apply to schedule</button>
+                </div>
+                <p id="userDropPlanSummary" class="hint" style="margin-top:12px;"></p>
+                <div class="table-scroll">
+                  <table>
+                    <thead><tr><th>#</th><th>%</th><th>Interval (h)</th><th>Projected</th><th>Tier window</th></tr></thead>
+                    <tbody id="userDropPlanRows"></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="card admin-section">
+                <h3 class="admin-section-title">Scheduled drops</h3>
+                <p class="admin-section-desc">Upcoming airfarming drops for this user (current week).</p>
+                <div class="table-scroll">
+                  <table>
+                    <thead><tr><th>#</th><th>Due</th><th>%</th><th>Tier &amp; balance window</th></tr></thead>
+                    <tbody id="userDropRows"></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="card admin-section">
+                <h3 class="admin-section-title">Wallets</h3>
+                <p class="admin-section-desc">Adjust balances (reason required) or move cash into airfarming.</p>
+                <h4 style="font-size:0.88rem;margin:0 0 10px;color:var(--muted);">Adjust balance</h4>
+                <div class="form-grid-2">
+                  <div>
+                    <label>Wallet</label>
+                    <select id="adjustWallet">
+                      <option value="cash">Cash (USD)</option>
+                      <option value="airfarming">Airfarming (USD)</option>
+                      <option value="usdt">Crypto USDT</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Action</label>
+                    <select id="adjustMode">
+                      <option value="set">Set balance to</option>
+                      <option value="adjust">Add or subtract</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Direction</label>
+                    <select id="adjustDirection">
+                      <option value="add">Add funds</option>
+                      <option value="remove">Remove funds</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Amount (USD)</label>
+                    <input id="adjustAmount" type="number" step="0.01" min="0" placeholder="0.00" />
+                  </div>
+                </div>
+                <label>Reason (required)</label>
+                <input id="adjustReason" type="text" placeholder="e.g. Manual correction per support ticket #123" />
+                <div class="btn-toolbar">
+                  <button type="button" class="btn-warn" id="applyAdjustBtn">Apply adjustment</button>
+                </div>
+                <p id="adjustOk" class="section-inline-ok hidden"></p>
+                <h4 style="font-size:0.88rem;margin:20px 0 10px;color:var(--muted);">Move cash → airfarming</h4>
+                <div class="form-grid-2">
+                  <div>
+                    <label>Amount (USD)</label>
+                    <input id="moveAmount" type="number" step="0.01" min="0.01" placeholder="0.00" />
+                  </div>
+                </div>
+                <div class="btn-toolbar">
+                  <button type="button" class="btn-primary" id="moveToAfBtn">Move funds</button>
+                </div>
+              </section>
+
+              <section class="card admin-section">
+                <h3 class="admin-section-title">Reset password</h3>
+                <p class="admin-section-desc">Set a new password for this user (minimum 6 characters).</p>
+                <div class="form-grid-2">
+                  <div>
+                    <label>New password</label>
+                    <input id="userNewPassword" type="password" autocomplete="new-password" placeholder="New password" />
+                  </div>
+                  <div>
+                    <label>Confirm password</label>
+                    <input id="userNewPasswordConfirm" type="password" autocomplete="new-password" placeholder="Confirm password" />
+                  </div>
+                </div>
+                <div class="btn-toolbar">
+                  <button type="button" class="btn-primary" id="saveUserPasswordBtn">Update password</button>
+                </div>
+                <p id="userPasswordOk" class="section-inline-ok hidden"></p>
+              </section>
+
+              <section class="card admin-section">
+                <h3 class="admin-section-title">Deposits &amp; profits (90 days)</h3>
+                <p id="chartTotals" class="admin-section-desc"></p>
+                <div class="chart-grid">
+                  <div class="chart-wrap">
+                    <h4>Deposits (USD)</h4>
+                    <canvas id="chartDeposits"></canvas>
+                  </div>
+                  <div class="chart-wrap">
+                    <h4>Drop profits (USD)</h4>
+                    <canvas id="chartProfits"></canvas>
+                  </div>
+                </div>
+              </section>
+
+              <section class="card admin-section">
+                <h3 class="admin-section-title">Performance journal (UTC)</h3>
+                <p id="userJournalSummary" class="hint" style="margin-bottom:12px;"></p>
+                <div class="row" style="align-items:center;justify-content:space-between;margin-bottom:12px;max-width:320px;">
+                  <button type="button" class="btn-ghost" id="userJournalPrev" style="width:auto;min-width:48px;">←</button>
+                  <strong id="userJournalMonthLabel">—</strong>
+                  <button type="button" class="btn-ghost" id="userJournalNext" style="width:auto;min-width:48px;">→</button>
+                </div>
+                <div id="userJournalGrid" class="journal-grid"></div>
+                <p id="userJournalDayTitle" class="hint" style="margin:12px 0 8px;font-weight:700;"></p>
+                <div class="table-scroll tall">
+                  <table>
+                    <thead><tr><th>Source</th><th>Detail</th><th>Amount</th></tr></thead>
+                    <tbody id="userJournalDayRows"></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="card admin-section">
+                <h3 class="admin-section-title">Transactions</h3>
+                <p class="admin-section-desc">Latest 50 wallet transactions.</p>
+                <div class="table-scroll tall">
+                  <table>
+                    <thead><tr><th>Type</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
+                    <tbody id="userTxRows"></tbody>
+                  </table>
+                </div>
+              </section>
+
+            </div>
+          </div>
+        </div>
+
+        <div id="panelSupport" class="hidden">
+          <div class="card">
+            <div class="row">
+              <div>
+                <label>Search user email</label>
+                <input id="ticketSearch" type="search" placeholder="user@example.com" />
+              </div>
+              <div>
+                <label>Status</label>
+                <select id="ticketStatus">
+                  <option value="">All</option>
+                  <option value="under_review">Under review</option>
+                  <option value="in_progress">In progress</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+              <div>
+                <label>Category</label>
+                <select id="ticketCategory">
+                  <option value="">All</option>
+                  <option value="general">General</option>
+                  <option value="withdraw">Withdraw</option>
+                  <option value="deposit">Deposit</option>
+                  <option value="daily_earning">Daily earning</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </div>
+              <div style="flex:0;">
+                <button type="button" class="btn-primary" id="searchTicketsBtn" style="width:auto;margin-bottom:16px;">Search</button>
+              </div>
+            </div>
+            <p id="ticketStats" class="hint"></p>
+            <div id="ticketsLoading" class="loading hidden">Loading tickets…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="ticketRows"></tbody>
+              </table>
+            </div>
+            <p id="ticketsErr" class="err hidden"></p>
+          </div>
+        </div>
+
+        <div id="panelWithdrawals" class="hidden">
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Pending withdrawals</h3>
+            <p class="hint" style="margin-bottom:12px;">
+              All user withdrawals stay <strong>pending</strong> until you approve them here. Rejecting refunds the user
+              (cash wallet, crypto, or mobile money). Crypto payouts are sent to NOWPayments only after approval.
+            </p>
+            <p id="withdrawStats" class="hint"></p>
+            <div id="withdrawalsLoading" class="loading hidden">Loading withdrawals…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Destination</th>
+                    <th>Requested</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="withdrawRows"></tbody>
+              </table>
+            </div>
+            <p id="withdrawalsErr" class="err hidden"></p>
+          </div>
+        </div>
+
+        <div id="panelAnnounce" class="hidden">
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">In-app announcement</h3>
+            <p class="hint">Shown on the Home screen banner when published. Users can dismiss it; publishing again replaces the active banner.</p>
+            <p id="announceActive" class="warn-box hidden"></p>
+            <label>Title</label>
+            <input id="announceTitle" type="text" placeholder="e.g. Scheduled maintenance" />
+            <label>Message</label>
+            <textarea id="announceBody" rows="4" placeholder="Message for all users…" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:1rem;margin-bottom:12px;"></textarea>
+            <div class="row">
+              <button type="button" class="btn-primary" id="publishAnnounceBtn" style="width:auto;">Publish</button>
+              <button type="button" class="btn-ghost" id="clearAnnounceBtn" style="width:auto;">Clear active</button>
+            </div>
+            <p id="announceOk" class="hint hidden" style="color:var(--ok);"></p>
+            <p id="announceErr" class="err hidden"></p>
+          </div>
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Push notifications (inbox)</h3>
+            <p class="hint" style="margin-bottom:12px;">
+              Appears in the app <strong>Notifications</strong> screen (bell icon). Leave email empty and check broadcast to notify every user; otherwise enter one user&apos;s email for a targeted message.
+            </p>
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin-bottom:12px;">
+              <input id="notifyBroadcast" type="checkbox" style="width:auto;margin:0;" />
+              Broadcast to all users
+            </label>
+            <label>User email (targeted)</label>
+            <input id="notifyUserEmail" type="email" placeholder="user@example.com" />
+            <label>Title</label>
+            <input id="notifyTitle" type="text" placeholder="e.g. Withdrawal approved" />
+            <label>Message</label>
+            <textarea id="notifyBody" rows="3" placeholder="Short message for the notification inbox…" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:1rem;margin-bottom:12px;"></textarea>
+            <button type="button" class="btn-primary" id="sendNotifyBtn" style="width:auto;">Send notification</button>
+            <p id="notifyOk" class="hint hidden" style="color:var(--ok);"></p>
+            <p id="notifyErr" class="err hidden"></p>
+          </div>
+        </div>
+
+        <div id="panelAiEarnings" class="hidden">
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Daily AI earnings planner</h3>
+            <p class="hint" style="margin-bottom:12px;">
+              Set today’s payout budget (UTC). Run the planner to assign per-user drop tiers and windows.
+              Under budget → plan goes <strong>active</strong> automatically; over budget → <strong>pending approval</strong>.
+            </p>
+            <div class="row" style="align-items:flex-end;margin-bottom:12px;">
+              <div>
+                <label>Plan date (UTC)</label>
+                <input id="aiPlanDate" type="date" />
+              </div>
+              <div>
+                <label>Today’s budget (USD)</label>
+                <input id="aiBudgetUsd" type="number" step="0.01" min="0" placeholder="5000" />
+              </div>
+              <div>
+                <label>Market regime</label>
+                <select id="aiRegime">
+                  <option value="calm">Calm</option>
+                  <option value="normal" selected>Normal</option>
+                  <option value="volatile">Volatile</option>
+                  <option value="risk_off">Risk off</option>
+                </select>
+              </div>
+              <div style="flex:2;">
+                <label>Market notes</label>
+                <input id="aiMarketNotes" type="text" placeholder="Optional context for the planner" />
+              </div>
+            </div>
+            <div class="row" style="margin-bottom:12px;">
+              <button type="button" class="btn-primary" id="aiSaveBudgetBtn" style="width:auto;">Save budget</button>
+              <button type="button" class="btn-ghost" id="aiFetchMarketBtn" style="width:auto;">Fetch from Alpaca</button>
+              <button type="button" class="btn-primary" id="aiRunPlannerBtn" style="width:auto;">Run planner</button>
+              <button type="button" class="btn-ghost" id="aiApprovePlanBtn" style="width:auto;" disabled>Approve plan</button>
+            </div>
+            <p id="aiPlanSummary" class="hint"></p>
+            <p id="aiPlanOk" class="hint hidden" style="color:var(--ok);"></p>
+            <p id="aiPlanErr" class="err hidden"></p>
+          </div>
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Plan history</h3>
+            <p class="hint" style="margin-bottom:10px;">Click a date to load that plan. Status shows whether the day&apos;s budget was approved and how much was paid out.</p>
+            <div style="overflow-x:auto;max-height:200px;margin-bottom:16px;">
+              <table class="tier-ref-table">
+                <thead>
+                  <tr>
+                    <th>Date (UTC)</th>
+                    <th>Status</th>
+                    <th>Budget</th>
+                    <th>Projected</th>
+                    <th>Spent</th>
+                    <th>Left</th>
+                  </tr>
+                </thead>
+                <tbody id="aiPlansListRows"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:8px;">
+              <span id="aiStatusPill" class="badge">—</span>
+              <span class="hint" id="aiBudgetStats">Budget — · Projected — · Spent —</span>
+            </div>
+            <p id="aiServeSummary" class="hint" style="margin-bottom:12px;"></p>
+            <div id="aiPlanLoading" class="loading hidden">Loading plan…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>AF balance</th>
+                    <th>Tier · %</th>
+                    <th>Window</th>
+                    <th>Projected</th>
+                    <th>Potential now</th>
+                    <th>Drops (plan day)</th>
+                    <th>Week</th>
+                    <th>Service status</th>
+                  </tr>
+                </thead>
+                <tbody id="aiAllocRows"></tbody>
+              </table>
+            </div>
+            <p class="hint" style="margin-top:10px;">
+              <strong>Projected</strong> = estimate at plan time. <strong>Potential now</strong> = profit if balance is in window today.
+              <strong>Drops (plan day)</strong> = due or paid on this UTC date. <strong>Served</strong> = paid drop on plan date with profit credited.
+            </p>
+          </div>
+        </div>
+
+        <div id="panelTiers" class="hidden">
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">What each drop tier means</h3>
+            <p class="hint" style="margin-bottom:12px;">
+              Every new scheduled drop is assigned <strong>one tier (0–3)</strong> automatically. That tier defines the
+              <strong>airfarming balance window</strong> the user must be in to qualify, and the <strong>default drop %</strong>.
+              Users do not pick a tier — it is set per drop. Use this page to see and edit what each tier contains.
+            </p>
+            <p id="tiersSummary" class="hint"></p>
+            <div id="tiersLoading" class="loading hidden">Loading tiers…</div>
+            <div style="overflow-x:auto;">
+              <table class="tier-ref-table">
+                <thead>
+                  <tr>
+                    <th>Tier #</th>
+                    <th>Name</th>
+                    <th>Balance required</th>
+                    <th>Drop %</th>
+                    <th>Example profit</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="tierRefRows"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Platform caps (all tiers)</h3>
+            <p class="hint" style="margin-bottom:12px;">Hard limits applied on top of each tier’s percent and payout.</p>
+            <div class="row" style="margin-bottom:12px;">
+              <div>
+                <label>Max drop percent (%)</label>
+                <input id="capMaxPercent" type="number" step="0.01" min="0.01" max="100" />
+              </div>
+              <div>
+                <label>Max profit per drop (USD)</label>
+                <input id="capMaxProfit" type="number" step="0.01" min="0.01" />
+              </div>
+              <div style="flex:0;">
+                <button type="button" class="btn-primary" id="saveDropCapsBtn" style="width:auto;margin-bottom:16px;">Save caps</button>
+              </div>
+            </div>
+            <p id="dropCapsOk" class="hint hidden" style="color:var(--ok);"></p>
+            <p id="dropCapsErr" class="err hidden"></p>
+          </div>
+          <div id="tierCards" class="tier-grid"></div>
+          <p id="tiersErr" class="err hidden"></p>
+        </div>
+
+        <div id="panelDrops" class="hidden">
+          <p class="hint" style="margin:0 0 12px;">Tier rules and percentages are configured under <strong>Drop tiers</strong> in the sidebar.</p>
+          <div class="card">
+            <h3 style="margin:0 0 12px;font-size:1rem;">Pause all users (global)</h3>
+            <p class="hint">Stops drop settlement and new scheduling for every user during the window. Optionally limit to balance tiers 0–3.</p>
+            <p id="globalPauseActive" class="warn-box hidden"></p>
+            <div class="row">
+              <div>
+                <label>From (local)</label>
+                <input id="globalPauseFrom" type="datetime-local" />
+              </div>
+              <div>
+                <label>Until (local)</label>
+                <input id="globalPauseUntil" type="datetime-local" />
+              </div>
+            </div>
+            <div class="band-picks" id="globalBandPicks">
+              <span style="font-size:0.72rem;color:var(--muted);font-weight:700;">Tiers (empty = all):</span>
+              <label><input type="checkbox" class="global-band" value="0" /><span data-band-label="0">Tier 0</span></label>
+              <label><input type="checkbox" class="global-band" value="1" /><span data-band-label="1">Tier 1</span></label>
+              <label><input type="checkbox" class="global-band" value="2" /><span data-band-label="2">Tier 2</span></label>
+              <label><input type="checkbox" class="global-band" value="3" /><span data-band-label="3">Tier 3</span></label>
+            </div>
+            <label>Note (optional)</label>
+            <input id="globalPauseNote" type="text" placeholder="Maintenance, holiday, etc." />
+            <div class="row" style="margin-top:8px;">
+              <button type="button" class="btn-warn" id="saveGlobalPauseBtn" style="width:auto;">Schedule global pause</button>
+              <button type="button" class="btn-ghost" id="refreshGlobalPauseBtn" style="width:auto;">Refresh status</button>
+            </div>
+            <div id="globalPauseList" style="margin-top:12px;font-size:0.82rem;"></div>
+            <p id="globalPauseErr" class="err hidden"></p>
+          </div>
+          <div class="card">
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:0.9rem;color:var(--text);text-transform:none;letter-spacing:0;">
+              <input type="checkbox" id="upcomingOnly" checked style="width:auto;margin:0;" />
+              Upcoming only (due in future)
+            </label>
+            <p id="stats" class="hint"></p>
+            <p id="dropsNote" class="warn-box hidden"></p>
+            <div id="dropsLoading" class="loading hidden">Loading drops…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Due (UTC)</th>
+                    <th>Countdown</th>
+                    <th>%</th>
+                    <th>Min $</th>
+                    <th>Max $</th>
+                    <th>Tier</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="dropRows"></tbody>
+              </table>
+            </div>
+            <p id="loadErr" class="err hidden"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="ticketModal" class="modal-backdrop hidden" data-modal>
+    <div class="card modal modal-wide">
+      <div class="modal-header">
+        <h2 id="ticketModalTitle">Support ticket</h2>
+        <button type="button" class="modal-close" data-close-modal="ticketModal" aria-label="Close">×</button>
+      </div>
+      <p id="ticketModalMeta" class="hint"></p>
+      <label>Status</label>
+      <select id="ticketStatusEdit">
+        <option value="under_review">Under review</option>
+        <option value="in_progress">In progress</option>
+        <option value="resolved">Resolved</option>
+        <option value="closed">Closed</option>
+      </select>
+      <h3 style="font-size:0.95rem;margin:12px 0 8px;">Details</h3>
+      <pre id="ticketPayload" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.75rem;overflow:auto;max-height:280px;color:var(--text);white-space:pre-wrap;"></pre>
+      <p id="ticketModalErr" class="err hidden"></p>
+      <div class="row" style="margin-top:16px;">
+        <button type="button" class="btn-primary" id="saveTicketBtn" style="width:auto;">Update status</button>
+        <button type="button" class="btn-ghost" id="closeTicketBtn" style="width:auto;">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="editModal" class="modal-backdrop hidden" data-modal>
+    <div class="card modal">
+      <div class="modal-header">
+        <h2>Edit drop</h2>
+        <button type="button" class="modal-close" data-close-modal="editModal" aria-label="Close">×</button>
+      </div>
+      <p id="editMeta" class="hint"></p>
+      <label>Percent (max <span id="maxPct">57.9</span>%)</label>
+      <input id="editPercent" type="number" step="0.01" min="0.01" />
+      <div class="grid-2">
+        <div>
+          <label>Min balance ($)</label>
+          <input id="editMin" type="number" step="0.01" />
+        </div>
+        <div>
+          <label>Max balance ($)</label>
+          <input id="editMax" type="number" step="0.01" />
+        </div>
+      </div>
+      <label>Due at (local → UTC)</label>
+      <input id="editDue" type="datetime-local" />
+      <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;">
+        <input id="editLocked" type="checkbox" style="width:auto;margin:0;" checked />
+        Lock percent
+      </label>
+      <div class="row" style="margin-top:12px;">
+        <button type="button" class="btn-primary" id="saveBtn" style="width:auto;">Save</button>
+        <button type="button" class="btn-ghost" id="cancelBtn" style="width:auto;">Cancel</button>
+      </div>
+      <p id="editErr" class="err hidden"></p>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    const TOKEN_KEY = 'ema_admin_token';
+    const PAGE_TITLES = {
+      users: 'Users',
+      support: 'Support tickets',
+      withdrawals: 'Withdrawals',
+      aiearnings: 'AI earnings',
+      tiers: 'Drop tiers',
+      drops: 'Airfarming drops',
+      announce: 'Announce & notify',
+    };
+    let drops = [];
+    let users = [];
+    let tickets = [];
+    let editingId = null;
+    let maxPercent = 57.9;
+    let maxProfitPerDrop = 5000;
+    let activeTab = 'users';
+    let viewingUserId = null;
+    let viewingUserDetail = null;
+    let chartDepositsInst = null;
+    let chartProfitsInst = null;
+    let userJournalYear = null;
+    let userJournalMonth = null;
+    let userJournalSelectedDate = null;
+    let userJournalMonthData = null;
+    let userDropPlanView = null;
+    let viewingTicketId = null;
+    let pendingWithdrawals = [];
+    let aiPlan = null;
+    let aiAllocations = [];
+    let aiPlanSummary = null;
+    let aiPlansList = [];
+
+    function api(path, opts = {}) {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+      if (token) headers.Authorization = 'Bearer ' + token;
+      return fetch(path, { ...opts, headers }).then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          localStorage.removeItem(TOKEN_KEY);
+          showLogin();
+          throw new Error(data.message || 'Session expired — sign in again');
+        }
+        if (!res.ok) throw new Error(data.message || res.statusText);
+        return data;
+      });
+    }
+
+    function showLogin() {
+      document.getElementById('loginScreen').classList.remove('hidden');
+      document.getElementById('appShell').classList.add('hidden');
+    }
+
+    function showDash() {
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('appShell').classList.remove('hidden');
+    }
+
+    function closeSidebar() {
+      document.getElementById('sidebar').classList.remove('open');
+      document.getElementById('sidebarOverlay').classList.remove('open');
+    }
+
+    function fmtMoney(n) {
+      return '$' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function fmtCountdown(sec) {
+      if (sec <= 0) return 'Due now';
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      return h + 'h ' + m + 'm';
+    }
+
+    function toLocalInput(iso) {
+      const d = new Date(iso);
+      const pad = (n) => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function clearUserPageAlert() {
+      const el = document.getElementById('userPageBanner');
+      if (!el) return;
+      el.classList.add('hidden');
+      el.textContent = '';
+    }
+
+    function showUserPageAlert(message, type) {
+      const el = document.getElementById('userPageBanner');
+      if (!el) return;
+      el.textContent = message;
+      el.className = 'user-page-banner ' + (type === 'success' ? 'banner-ok' : 'banner-err');
+      el.classList.remove('hidden');
+      const content = document.querySelector('.content');
+      if (content) content.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function closeUserPage() {
+      clearUserPageAlert();
+      const detail = document.getElementById('panelUserDetail');
+      const list = document.getElementById('panelUsersList');
+      if (detail) detail.classList.add('hidden');
+      if (list) list.classList.remove('hidden');
+      document.getElementById('pageTitle').textContent = PAGE_TITLES.users;
+      viewingUserId = null;
+      viewingUserDetail = null;
+      chartDepositsInst = destroyChart(chartDepositsInst);
+      chartProfitsInst = destroyChart(chartProfitsInst);
+    }
+
+    function setTab(tab) {
+      closeUserPage();
+      activeTab = tab;
+      document.querySelectorAll('.nav-item').forEach((el) => {
+        el.classList.toggle('active', el.getAttribute('data-tab') === tab);
+      });
+      document.getElementById('panelUsers').classList.toggle('hidden', tab !== 'users');
+      document.getElementById('panelSupport').classList.toggle('hidden', tab !== 'support');
+      document.getElementById('panelWithdrawals').classList.toggle('hidden', tab !== 'withdrawals');
+      document.getElementById('panelAiEarnings').classList.toggle('hidden', tab !== 'aiearnings');
+      document.getElementById('panelTiers').classList.toggle('hidden', tab !== 'tiers');
+      document.getElementById('panelDrops').classList.toggle('hidden', tab !== 'drops');
+      document.getElementById('panelAnnounce').classList.toggle('hidden', tab !== 'announce');
+      document.getElementById('pageTitle').textContent = PAGE_TITLES[tab] || 'Admin';
+      closeSidebar();
+      refreshActive().catch((e) => {
+        if (tab === 'users') showUsersErr(e);
+        else if (tab === 'support') showTicketsErr(e);
+        else if (tab === 'withdrawals') showWithdrawalsErr(e);
+        else if (tab === 'aiearnings') showAiPlanErr(e);
+        else if (tab === 'tiers') showTiersErr(e);
+        else if (tab === 'drops') showDropsErr(e);
+        else if (tab === 'announce') {
+          document.getElementById('announceErr').textContent = e.message;
+          document.getElementById('announceErr').classList.remove('hidden');
+        }
+      });
+    }
+
+    function renderUsersTable() {
+      const tbody = document.getElementById('userRows');
+      tbody.innerHTML = '';
+      if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted);">No users found</td></tr>';
+      }
+      users.forEach((u) => {
+        const tr = document.createElement('tr');
+        let pausePill = u.dropsPaused
+          ? '<span class="pill pill-paused">paused</span>'
+          : '<span class="pill pill-ok">active</span>';
+        const vipCell = u.vipActive
+          ? '<span class="pill pill-ok">active</span><br><span style="color:var(--muted);font-size:0.7rem;">' + fmtMoney(u.vipPrincipalUsd || 0) + '</span>'
+          : '<span style="color:var(--muted);">—</span>';
+        if (u.dropsPaused && u.dropsPauseUntil) {
+          pausePill += '<br><span style="color:var(--muted);font-size:0.65rem;">until ' + new Date(u.dropsPauseUntil).toLocaleString() + '</span>';
+        }
+        tr.innerHTML =
+          '<td>' + escapeHtml(u.email) + '<br><span style="color:var(--muted);font-size:0.7rem;">' + escapeHtml(u.id.slice(0, 8)) + '…</span></td>' +
+          '<td>' + fmtMoney(u.cashBalance) + '</td>' +
+          '<td>' + fmtMoney(u.airfarmingBalance) + '</td>' +
+          '<td>' + vipCell + '</td>' +
+          '<td>' + pausePill + '</td>' +
+          '<td style="white-space:nowrap;">' +
+          '<button type="button" class="' + (u.dropsPaused ? 'btn-primary' : 'btn-warn') + '" data-pause-user="' + u.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">' +
+          (u.dropsPaused ? 'Resume' : 'Pause') + '</button>' +
+          '<button type="button" class="btn-ghost" data-user="' + u.id + '">View</button></td>';
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-user]').forEach((btn) => {
+        btn.onclick = () => openUser(btn.getAttribute('data-user'));
+      });
+      tbody.querySelectorAll('button[data-pause-user]').forEach((btn) => {
+        btn.onclick = () => quickTogglePause(btn.getAttribute('data-pause-user'), btn);
+      });
+      document.getElementById('userStats').textContent = users.length + ' user(s)';
+    }
+
+    async function loadUsers() {
+      document.getElementById('usersErr').classList.add('hidden');
+      document.getElementById('usersLoading').classList.remove('hidden');
+      try {
+        const q = document.getElementById('userSearch').value.trim();
+        const data = await api('/admin/api/users?q=' + encodeURIComponent(q));
+        users = data.users || [];
+        renderUsersTable();
+      } finally {
+        document.getElementById('usersLoading').classList.add('hidden');
+      }
+    }
+
+    function readBandIndexes(className) {
+      const checked = [...document.querySelectorAll('.' + className + ':checked')].map((el) => Number(el.value));
+      return checked.length ? checked : null;
+    }
+
+    function setBandCheckboxes(className, bands) {
+      const set = new Set((bands || []).map(Number));
+      document.querySelectorAll('.' + className).forEach((el) => {
+        el.checked = set.size ? set.has(Number(el.value)) : false;
+      });
+    }
+
+    function fillDatetimeLocal(id, iso) {
+      const el = document.getElementById(id);
+      if (!iso) { el.value = ''; return; }
+      el.value = toLocalInput(iso);
+    }
+
+    function renderUserDetail(d) {
+      viewingUserDetail = d;
+      document.getElementById('userModalTitle').textContent = d.user.email;
+      document.getElementById('userModalMeta').textContent =
+        'Joined ' + new Date(d.user.createdAt).toLocaleString() +
+        (d.user.transferCode ? ' · Transfer ' + d.user.transferCode : '');
+      const af = d.airfarming;
+      const vip = d.vipInvestment;
+      document.getElementById('userStatsGrid').innerHTML =
+        '<div class="stat"><div class="val">' + fmtMoney(d.cashBalance) + '</div><div class="lbl">Cash</div></div>' +
+        '<div class="stat"><div class="val">' + fmtMoney(d.airfarmingBalance) + '</div><div class="lbl">Airfarming</div></div>' +
+        '<div class="stat"><div class="val">' + fmtMoney(d.usdtBalance || 0) + '</div><div class="lbl">USDT</div></div>' +
+        '<div class="stat"><div class="val">' + (vip ? fmtMoney(vip.principalUsd || 0) : '—') + '</div><div class="lbl">VIP principal</div></div>' +
+        '<div class="stat"><div class="val">' + (vip ? (vip.matured ? 'Matured' : (vip.daysLeft + 'd left')) : 'No active') + '</div><div class="lbl">VIP status</div></div>' +
+        '<div class="stat"><div class="val">' + (af?.dropsPaused ? 'Paused' : 'Active') + '</div><div class="lbl">Drops</div></div>' +
+        '<div class="stat"><div class="val" id="statDeposits90">—</div><div class="lbl">Deposits 90d</div></div>' +
+        '<div class="stat"><div class="val" id="statProfits90">—</div><div class="lbl">Profits 90d</div></div>' +
+        '<div class="stat"><div class="val">' + (af?.autoFundEnabled ? 'On' : 'Off') + '</div><div class="lbl">Auto-fund</div></div>';
+      document.getElementById('userPauseStatus').textContent =
+        af?.dropsPaused
+          ? 'Drops are paused for this user. Tap Resume to unpause.'
+          : 'Drops are active. Tap Pause to stop scheduled payouts for this user.';
+      updatePauseButton(af);
+      const txBody = document.getElementById('userTxRows');
+      txBody.innerHTML = '';
+      (d.transactions || []).forEach((t) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + escapeHtml(t.type) + '</td><td>' + fmtMoney(t.amount) + '</td>' +
+          '<td>' + escapeHtml(t.status) + '</td><td>' + new Date(t.createdAt).toLocaleString() + '</td>';
+        txBody.appendChild(tr);
+      });
+      if (!(d.transactions || []).length) {
+        txBody.innerHTML = '<tr><td colspan="4" style="color:var(--muted);">No transactions</td></tr>';
+      }
+      const dropBody = document.getElementById('userDropRows');
+      dropBody.innerHTML = '';
+      (d.scheduledDrops || []).forEach((drop) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + drop.dropIndex + '</td><td>' + new Date(drop.dueAt).toLocaleString() + '</td>' +
+          '<td>' + drop.percent + '%</td>' +
+          '<td>' + escapeHtml(bandTierLabel(drop.bandIndex)) + '<br><span style="color:var(--muted);font-size:0.7rem;">$' +
+          drop.minBalance + ' – $' + drop.maxBalance + '</span></td>';
+        dropBody.appendChild(tr);
+      });
+      if (!(d.scheduledDrops || []).length) {
+        dropBody.innerHTML = '<tr><td colspan="4" style="color:var(--muted);">No scheduled drops</td></tr>';
+      }
+    }
+
+    function closeModal(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('hidden');
+    }
+
+    function setupDismissibleModals() {
+      document.querySelectorAll('[data-modal]').forEach((backdrop) => {
+        backdrop.addEventListener('click', (e) => {
+          if (e.target === backdrop) closeModal(backdrop.id);
+        });
+      });
+      document.querySelectorAll('[data-close-modal]').forEach((btn) => {
+        btn.addEventListener('click', () => closeModal(btn.getAttribute('data-close-modal')));
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        document.querySelectorAll('[data-modal]:not(.hidden)').forEach((m) => closeModal(m.id));
+      });
+    }
+
+    async function saveUserPassword() {
+      clearUserPageAlert();
+      document.getElementById('userPasswordOk').classList.add('hidden');
+      const password = document.getElementById('userNewPassword').value;
+      const confirm = document.getElementById('userNewPasswordConfirm').value;
+      if (password.length < 6) {
+        showUserPageAlert('Password must be at least 6 characters', 'error');
+        return;
+      }
+      if (password !== confirm) {
+        showUserPageAlert('Passwords do not match', 'error');
+        return;
+      }
+      try {
+        const res = await api('/admin/api/users/' + viewingUserId + '/password', {
+          method: 'POST',
+          body: JSON.stringify({ password, confirmPassword: confirm }),
+        });
+        document.getElementById('userNewPassword').value = '';
+        document.getElementById('userNewPasswordConfirm').value = '';
+        showUserPageAlert(res.message || 'Password updated.', 'success');
+      } catch (e) {
+        showUserPageAlert(e.message, 'error');
+      }
+    }
+
+    function destroyChart(inst) {
+      if (inst) inst.destroy();
+      return null;
+    }
+
+    const CHART_OPTS = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#8b9bb4', maxTicksLimit: 10 }, grid: { color: 'rgba(42,53,72,0.4)' } },
+        y: { ticks: { color: '#8b9bb4' }, grid: { color: 'rgba(42,53,72,0.4)' } },
+      },
+    };
+
+    function renderBarChart(canvasId, existingInst, points, color) {
+      const ctx = document.getElementById(canvasId);
+      const labels = (points || []).map((p) => p.date.slice(5));
+      const values = (points || []).map((p) => p.amount);
+      if (existingInst) {
+        existingInst.data.labels = labels;
+        existingInst.data.datasets[0].data = values;
+        existingInst.update();
+        return existingInst;
+      }
+      return new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{ data: values, backgroundColor: color, borderRadius: 4 }],
+        },
+        options: CHART_OPTS,
+      });
+    }
+
+    async function loadUserCharts(userId) {
+      document.getElementById('chartTotals').textContent = 'Loading charts…';
+      try {
+        const data = await api('/admin/api/users/' + userId + '/charts');
+        document.getElementById('chartTotals').textContent =
+          'Totals (90 days): deposits ' + fmtMoney(data.deposits.total) +
+          ' · drop profits ' + fmtMoney(data.profits.total);
+        const depEl = document.getElementById('statDeposits90');
+        const profEl = document.getElementById('statProfits90');
+        if (depEl) depEl.textContent = fmtMoney(data.deposits.total);
+        if (profEl) profEl.textContent = fmtMoney(data.profits.total);
+        chartDepositsInst = renderBarChart(
+          'chartDeposits',
+          chartDepositsInst,
+          data.deposits.points,
+          'rgba(201, 162, 39, 0.8)'
+        );
+        chartProfitsInst = renderBarChart(
+          'chartProfits',
+          chartProfitsInst,
+          data.profits.points,
+          'rgba(74, 222, 128, 0.75)'
+        );
+      } catch (e) {
+        document.getElementById('chartTotals').textContent = 'Charts unavailable: ' + e.message;
+        chartDepositsInst = destroyChart(chartDepositsInst);
+        chartProfitsInst = destroyChart(chartProfitsInst);
+      }
+    }
+
+    const JOURNAL_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    function journalSourceLabel(source) {
+      if (source === 'airfarming') return 'Airfarming';
+      if (source === 'vip') return 'VIP Farmers';
+      if (source === 'contracts') return 'Contracts';
+      return source;
+    }
+
+    function journalMonthLabel(year, month) {
+      return new Date(Date.UTC(year, month - 1, 1)).toLocaleString(undefined, {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
+    }
+
+    function buildJournalCalendarCells(year, month) {
+      const first = new Date(Date.UTC(year, month - 1, 1));
+      const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      const startDow = (first.getUTCDay() + 6) % 7;
+      const cells = [];
+      for (let i = 0; i < startDow; i += 1) cells.push({ day: null, ymd: null });
+      for (let d = 1; d <= daysInMonth; d += 1) {
+        const ymd = year + '-' + String(month).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+        cells.push({ day: d, ymd });
+      }
+      return cells;
+    }
+
+    function renderUserJournalGrid() {
+      const grid = document.getElementById('userJournalGrid');
+      if (!grid || userJournalYear == null || userJournalMonth == null) return;
+      document.getElementById('userJournalMonthLabel').textContent =
+        journalMonthLabel(userJournalYear, userJournalMonth);
+      const cells = buildJournalCalendarCells(userJournalYear, userJournalMonth);
+      let html = JOURNAL_WEEKDAYS.map((w) => '<div class="journal-weekday">' + w + '</div>').join('');
+      for (const cell of cells) {
+        if (!cell.day || !cell.ymd) {
+          html += '<div class="journal-cell empty"></div>';
+          continue;
+        }
+        const info = userJournalMonthData?.days?.[cell.ymd];
+        const hasProfit = Boolean(info?.hasProfit);
+        const selected = cell.ymd === userJournalSelectedDate;
+        const cls = ['journal-cell', hasProfit ? 'profit' : '', selected ? 'selected' : ''].filter(Boolean).join(' ');
+        const amt = hasProfit ? fmtMoney(info.totalUsd).replace('$', '') : '';
+        html += '<button type="button" class="' + cls + '" data-journal-date="' + cell.ymd + '">' +
+          '<span class="day-num">' + cell.day + '</span>' +
+          (amt ? '<span class="day-amt">' + amt + '</span>' : '') +
+          '</button>';
+      }
+      grid.innerHTML = html;
+      grid.querySelectorAll('[data-journal-date]').forEach((btn) => {
+        btn.onclick = () => {
+          userJournalSelectedDate = btn.getAttribute('data-journal-date');
+          renderUserJournalGrid();
+          void loadUserJournalDay();
+        };
+      });
+    }
+
+    async function loadUserJournalDay() {
+      const titleEl = document.getElementById('userJournalDayTitle');
+      const rowsEl = document.getElementById('userJournalDayRows');
+      if (!viewingUserId || !userJournalSelectedDate) {
+        if (titleEl) titleEl.textContent = '';
+        if (rowsEl) rowsEl.innerHTML = '';
+        return;
+      }
+      if (titleEl) titleEl.textContent = userJournalSelectedDate + ' (UTC) — loading…';
+      if (rowsEl) rowsEl.innerHTML = '';
+      try {
+        const day = await api('/admin/api/users/' + viewingUserId + '/journal/day?date=' + userJournalSelectedDate);
+        if (titleEl) {
+          titleEl.textContent = userJournalSelectedDate + ' (UTC) — ' +
+            (day.hasProfit ? fmtMoney(day.totalUsd) : 'No earnings');
+        }
+        if (rowsEl) {
+          if (!day.items || day.items.length === 0) {
+            rowsEl.innerHTML = '<tr><td colspan="3" class="hint">No line items</td></tr>';
+          } else {
+            rowsEl.innerHTML = day.items.map((item) =>
+              '<tr><td>' + escapeHtml(journalSourceLabel(item.source)) + '</td>' +
+              '<td>' + escapeHtml(item.label || '—') + '</td>' +
+              '<td>' + fmtMoney(item.amountUsd) + '</td></tr>'
+            ).join('');
+          }
+        }
+      } catch (e) {
+        if (titleEl) titleEl.textContent = userJournalSelectedDate + ' (UTC) — unavailable';
+        if (rowsEl) rowsEl.innerHTML = '<tr><td colspan="3" class="hint">' + escapeHtml(e.message) + '</td></tr>';
+      }
+    }
+
+    async function loadUserJournal(userId) {
+      const summaryEl = document.getElementById('userJournalSummary');
+      const grid = document.getElementById('userJournalGrid');
+      if (!grid) return;
+      const now = new Date();
+      if (userJournalYear == null) userJournalYear = now.getUTCFullYear();
+      if (userJournalMonth == null) userJournalMonth = now.getUTCMonth() + 1;
+      if (!userJournalSelectedDate) userJournalSelectedDate = now.toISOString().slice(0, 10);
+      if (summaryEl) summaryEl.textContent = 'Loading journal…';
+      grid.innerHTML = '';
+      try {
+        const data = await api('/admin/api/users/' + userId + '/journal/month?year=' + userJournalYear + '&month=' + userJournalMonth);
+        userJournalMonthData = data;
+        if (summaryEl) {
+          let text = 'Month total ' + fmtMoney(data.monthTotalUsd) + ' · ' + data.profitDays + ' profit day' +
+            (data.profitDays === 1 ? '' : 's');
+          if (data.bestDay) text += ' · Best ' + fmtMoney(data.bestDay.totalUsd) + ' on ' + data.bestDay.date;
+          summaryEl.textContent = text;
+        }
+        renderUserJournalGrid();
+        await loadUserJournalDay();
+      } catch (e) {
+        userJournalMonthData = null;
+        if (summaryEl) summaryEl.textContent = 'Journal unavailable: ' + e.message;
+        grid.innerHTML = '';
+      }
+    }
+
+    function shiftUserJournalMonth(delta) {
+      let m = userJournalMonth + delta;
+      let y = userJournalYear;
+      if (m < 1) {
+        m = 12;
+        y -= 1;
+      } else if (m > 12) {
+        m = 1;
+        y += 1;
+      }
+      userJournalYear = y;
+      userJournalMonth = m;
+      userJournalSelectedDate = y + '-' + String(m).padStart(2, '0') + '-01';
+      if (viewingUserId) void loadUserJournal(viewingUserId);
+    }
+
+    function mondayUtcYmdClient(d) {
+      const dt = d ? new Date(d) : new Date();
+      const utc = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()));
+      const dow = utc.getUTCDay();
+      const offset = (dow + 6) % 7;
+      utc.setUTCDate(utc.getUTCDate() - offset);
+      return utc.toISOString().slice(0, 10);
+    }
+
+    function readUserDropPlanInputs() {
+      const dropCount = Number(document.getElementById('userDropPlanCount').value);
+      const targetTotalUsd = Number(document.getElementById('userDropPlanTarget').value);
+      const weekStart = document.getElementById('userDropPlanWeek').value || mondayUtcYmdClient();
+      return { dropCount, targetTotalUsd, weekStart };
+    }
+
+    function renderUserDropPlan() {
+      const metaEl = document.getElementById('userDropPlanMeta');
+      const summaryEl = document.getElementById('userDropPlanSummary');
+      const rowsEl = document.getElementById('userDropPlanRows');
+      const applyBtn = document.getElementById('userDropPlanApplyBtn');
+      if (!metaEl || !rowsEl) return;
+
+      const view = userDropPlanView;
+      const bal = view?.airfarmingBalance ?? viewingUserDetail?.airfarmingBalance ?? 0;
+      metaEl.textContent = 'Airfarming balance ' + fmtMoney(bal) +
+        (view?.weekStart ? ' · Week ' + view.weekStart : '');
+
+      const schedule = view?.schedule;
+      if (schedule) {
+        document.getElementById('userDropPlanCount').value = schedule.dropCount;
+        document.getElementById('userDropPlanTarget').value = schedule.targetTotalUsd;
+        if (schedule.weekStart) document.getElementById('userDropPlanWeek').value = schedule.weekStart;
+      } else if (!document.getElementById('userDropPlanWeek').value) {
+        document.getElementById('userDropPlanWeek').value = mondayUtcYmdClient();
+      }
+
+      if (summaryEl) {
+        if (schedule?.planSummary) {
+          let text = schedule.planSummary;
+          if (schedule.plannerMode) text += ' (' + schedule.plannerMode + ')';
+          if (schedule.status === 'applied') text += ' · Applied';
+          summaryEl.textContent = text;
+        } else {
+          summaryEl.textContent = '';
+        }
+      }
+
+      const items = schedule?.items || [];
+      if (!items.length) {
+        rowsEl.innerHTML = '<tr><td colspan="5" style="color:var(--muted);">Run AI suggest to preview drops</td></tr>';
+      } else {
+        let total = 0;
+        rowsEl.innerHTML = items.map((it, idx) => {
+          total += Number(it.projectedProfit || 0);
+          return '<tr><td>' + (idx + 1) + '</td><td>' + Number(it.percent).toFixed(2) + '%</td>' +
+            '<td>' + Number(it.intervalHours) + 'h</td><td>' + fmtMoney(it.projectedProfit || 0) + '</td>' +
+            '<td>' + escapeHtml(formatDropTierWindow(it)) + '</td></tr>';
+        }).join('') +
+          '<tr><td colspan="3"><strong>Total projected</strong></td><td colspan="2"><strong>' + fmtMoney(total) + '</strong></td></tr>';
+      }
+
+      if (applyBtn) {
+        applyBtn.disabled = !items.length || schedule?.status === 'applied';
+      }
+    }
+
+    async function loadUserDropPlan(userId) {
+      const weekStart = document.getElementById('userDropPlanWeek').value || mondayUtcYmdClient();
+      document.getElementById('userDropPlanWeek').value = weekStart;
+      try {
+        userDropPlanView = await api('/admin/api/users/' + userId + '/drop-schedule?weekStart=' + weekStart);
+      } catch (e) {
+        userDropPlanView = { weekStart, airfarmingBalance: viewingUserDetail?.airfarmingBalance ?? 0, schedule: null };
+        showUserPageAlert('Drop plan unavailable: ' + e.message, 'error');
+      }
+      renderUserDropPlan();
+    }
+
+    async function aiSuggestUserDropPlan() {
+      clearUserPageAlert();
+      const { dropCount, targetTotalUsd, weekStart } = readUserDropPlanInputs();
+      if (!Number.isInteger(dropCount) || dropCount < 1 || dropCount > 12) {
+        showUserPageAlert('Drop count must be 1–12', 'error');
+        return;
+      }
+      if (!Number.isFinite(targetTotalUsd) || targetTotalUsd < 0) {
+        showUserPageAlert('Enter a valid target total', 'error');
+        return;
+      }
+      try {
+        const data = await api('/admin/api/users/' + viewingUserId + '/drop-schedule/ai-suggest', {
+          method: 'POST',
+          body: JSON.stringify({ dropCount, targetTotalUsd, weekStart }),
+        });
+        userDropPlanView = {
+          weekStart: data.schedule.weekStart,
+          airfarmingBalance: data.schedule.referenceBalance,
+          schedule: data.schedule,
+        };
+        renderUserDropPlan();
+        showUserPageAlert('AI drop plan ready. Review the table, then Apply to schedule.', 'success');
+      } catch (e) {
+        showUserPageAlert(e.message, 'error');
+      }
+    }
+
+    async function applyUserDropPlan() {
+      clearUserPageAlert();
+      const { weekStart } = readUserDropPlanInputs();
+      if (!confirm('Replace this user\'s scheduled drops for week ' + weekStart + ' with this plan?')) return;
+      try {
+        const res = await api('/admin/api/users/' + viewingUserId + '/drop-schedule/apply', {
+          method: 'POST',
+          body: JSON.stringify({ weekStart }),
+        });
+        const d = await api('/admin/api/users/' + viewingUserId);
+        renderUserDetail(d);
+        await loadUserDropPlan(viewingUserId);
+        showUserPageAlert(
+          'Drop plan applied' + (res.dropsCreated ? ' (' + res.dropsCreated + ' scheduled).' : '.'),
+          'success'
+        );
+      } catch (e) {
+        showUserPageAlert(e.message, 'error');
+      }
+    }
+
+    function updatePauseButton(af) {
+      const btn = document.getElementById('toggleUserPauseBtn');
+      if (!btn) return;
+      if (af?.dropsPaused) {
+        btn.textContent = 'Resume drops';
+        btn.className = 'btn-primary';
+      } else {
+        btn.textContent = 'Pause drops';
+        btn.className = 'btn-warn';
+      }
+    }
+
+    async function openUser(id) {
+      clearUserPageAlert();
+      document.getElementById('userPasswordOk').classList.add('hidden');
+      document.getElementById('adjustOk').classList.add('hidden');
+      document.getElementById('userNewPassword').value = '';
+      document.getElementById('userNewPasswordConfirm').value = '';
+      viewingUserId = id;
+      userJournalYear = null;
+      userJournalMonth = null;
+      userJournalSelectedDate = null;
+      userJournalMonthData = null;
+      userDropPlanView = null;
+      document.getElementById('userDropPlanWeek').value = mondayUtcYmdClient();
+      chartDepositsInst = destroyChart(chartDepositsInst);
+      chartProfitsInst = destroyChart(chartProfitsInst);
+      document.getElementById('panelUsersList').classList.add('hidden');
+      document.getElementById('panelUserDetail').classList.remove('hidden');
+      const d = await api('/admin/api/users/' + id);
+      renderUserDetail(d);
+      document.getElementById('pageTitle').textContent = d.user.email;
+      document.querySelector('.content').scrollTop = 0;
+      void loadUserCharts(id);
+      void loadUserJournal(id);
+      void loadUserDropPlan(id);
+    }
+
+    async function applyWalletAdjust() {
+      clearUserPageAlert();
+      document.getElementById('adjustOk').classList.add('hidden');
+      const amount = Number(document.getElementById('adjustAmount').value);
+      const reason = document.getElementById('adjustReason').value.trim();
+      const mode = document.getElementById('adjustMode').value;
+      const wallet = document.getElementById('adjustWallet').value;
+      const direction = document.getElementById('adjustDirection').value === 'remove' ? 'remove' : 'add';
+      if (!Number.isFinite(amount)) {
+        showUserPageAlert('Enter a valid amount', 'error');
+        return;
+      }
+      if (mode === 'adjust' && amount <= 0) {
+        showUserPageAlert('Enter an amount greater than 0', 'error');
+        return;
+      }
+      if (!reason) {
+        showUserPageAlert('Reason is required', 'error');
+        return;
+      }
+      const signedAmount = mode === 'adjust'
+        ? (direction === 'remove' ? -Math.abs(amount) : Math.abs(amount))
+        : amount;
+      const label = mode === 'adjust'
+        ? (direction === 'remove' ? 'Remove ' : 'Add ') +
+          fmtMoney(Math.abs(signedAmount)) +
+          (direction === 'remove' ? ' from ' : ' to ') +
+          wallet +
+          '?'
+        : 'Set ' + wallet + ' balance to ' + fmtMoney(amount) + '?';
+      if (!confirm(label + '\n\nReason: ' + reason)) return;
+      try {
+        const res = await api('/admin/api/users/' + viewingUserId + '/wallets/adjust', {
+          method: 'POST',
+          body: JSON.stringify({ wallet, mode, direction, amount: signedAmount, reason }),
+        });
+        const adj = res.adjustment;
+        showUserPageAlert(
+          'Wallet updated: ' + fmtMoney(adj.previousBalance) + ' → ' + fmtMoney(adj.newBalance) +
+          (adj.change !== 0 ? ' (change ' + (adj.change > 0 ? '+' : '') + fmtMoney(adj.change) + ')' : ''),
+          'success'
+        );
+        document.getElementById('adjustAmount').value = '';
+        document.getElementById('adjustReason').value = '';
+        const d = await api('/admin/api/users/' + viewingUserId);
+        renderUserDetail(d);
+        const u = users.find((x) => x.id === viewingUserId);
+        if (u) {
+          u.cashBalance = d.cashBalance;
+          u.airfarmingBalance = d.airfarmingBalance;
+        }
+        renderUsersTable();
+      } catch (e) {
+        showUserPageAlert(e.message, 'error');
+      }
+    }
+
+    function refreshAdjustDirectionVisibility() {
+      const mode = document.getElementById('adjustMode').value;
+      const wrap = document.getElementById('adjustDirection')?.closest('div');
+      if (!wrap) return;
+      wrap.style.display = mode === 'adjust' ? '' : 'none';
+    }
+
+    async function moveToAirfarming() {
+      clearUserPageAlert();
+      const amount = Number(document.getElementById('moveAmount').value);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        showUserPageAlert('Enter a valid amount', 'error');
+        return;
+      }
+      try {
+        await api('/admin/api/users/' + viewingUserId + '/wallets/move-to-airfarming', {
+          method: 'POST',
+          body: JSON.stringify({ amount }),
+        });
+        showUserPageAlert('Moved ' + fmtMoney(amount) + ' to airfarming.', 'success');
+        document.getElementById('moveAmount').value = '';
+        const d = await api('/admin/api/users/' + viewingUserId);
+        renderUserDetail(d);
+        const u = users.find((x) => x.id === viewingUserId);
+        if (u) {
+          u.cashBalance = d.cashBalance;
+          u.airfarmingBalance = d.airfarmingBalance;
+        }
+        renderUsersTable();
+      } catch (e) {
+        showUserPageAlert(e.message, 'error');
+      }
+    }
+
+    function renderTicketsTable() {
+      const tbody = document.getElementById('ticketRows');
+      tbody.innerHTML = '';
+      if (!tickets.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);">No tickets</td></tr>';
+      }
+      tickets.forEach((t) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + escapeHtml(t.userEmail) + '</td>' +
+          '<td>' + escapeHtml(t.category.replace(/_/g, ' ')) + '</td>' +
+          '<td><span class="pill">' + escapeHtml(t.status.replace(/_/g, ' ')) + '</span></td>' +
+          '<td>' + new Date(t.createdAt).toLocaleString() + '</td>' +
+          '<td><button type="button" class="btn-ghost" data-ticket="' + t.id + '">View</button></td>';
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-ticket]').forEach((btn) => {
+        btn.onclick = () => openTicket(btn.getAttribute('data-ticket'));
+      });
+      document.getElementById('ticketStats').textContent = tickets.length + ' ticket(s)';
+    }
+
+    async function loadTickets() {
+      document.getElementById('ticketsErr').classList.add('hidden');
+      document.getElementById('ticketsLoading').classList.remove('hidden');
+      try {
+        const q = document.getElementById('ticketSearch').value.trim();
+        const status = document.getElementById('ticketStatus').value;
+        const category = document.getElementById('ticketCategory').value;
+        let url = '/admin/api/support/tickets?';
+        if (q) url += 'q=' + encodeURIComponent(q) + '&';
+        if (status) url += 'status=' + encodeURIComponent(status) + '&';
+        if (category) url += 'category=' + encodeURIComponent(category) + '&';
+        const data = await api(url);
+        tickets = data.tickets || [];
+        renderTicketsTable();
+      } finally {
+        document.getElementById('ticketsLoading').classList.add('hidden');
+      }
+    }
+
+    function renderTicketDetail(t) {
+      document.getElementById('ticketModalTitle').textContent = t.category.replace(/_/g, ' ') + ' · ' + t.status.replace(/_/g, ' ');
+      document.getElementById('ticketModalMeta').textContent =
+        t.userEmail + ' · ' + new Date(t.createdAt).toLocaleString();
+      document.getElementById('ticketStatusEdit').value = t.status;
+      document.getElementById('ticketPayload').textContent = JSON.stringify(t.payload, null, 2);
+    }
+
+    async function openTicket(id) {
+      document.getElementById('ticketModalErr').classList.add('hidden');
+      viewingTicketId = id;
+      const data = await api('/admin/api/support/tickets/' + id);
+      renderTicketDetail(data.ticket);
+      document.getElementById('ticketModal').classList.remove('hidden');
+    }
+
+    async function saveTicketStatus() {
+      document.getElementById('ticketModalErr').classList.add('hidden');
+      try {
+        const status = document.getElementById('ticketStatusEdit').value;
+        const data = await api('/admin/api/support/tickets/' + viewingTicketId, {
+          method: 'PATCH',
+          body: JSON.stringify({ status }),
+        });
+        renderTicketDetail(data.ticket);
+        const idx = tickets.findIndex((x) => x.id === viewingTicketId);
+        if (idx >= 0) tickets[idx] = data.ticket;
+        renderTicketsTable();
+      } catch (e) {
+        document.getElementById('ticketModalErr').textContent = e.message;
+        document.getElementById('ticketModalErr').classList.remove('hidden');
+      }
+    }
+
+    async function patchUserPause(body) {
+      clearUserPageAlert();
+      await api('/admin/api/users/' + viewingUserId + '/airfarming', {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      const d = await api('/admin/api/users/' + viewingUserId);
+      renderUserDetail(d);
+      const u = users.find((x) => x.id === viewingUserId);
+      if (u) {
+        u.dropsPaused = Boolean(d.airfarming?.dropsPaused);
+        u.dropsPauseUntil = d.airfarming?.dropsPauseUntil || null;
+      }
+      renderUsersTable();
+    }
+
+    async function toggleUserPause() {
+      const paused = Boolean(viewingUserDetail?.airfarming?.dropsPaused);
+      try {
+        await patchUserPause(paused ? { clearPause: true } : { dropsPaused: true });
+        showUserPageAlert(paused ? 'Drops resumed for this user.' : 'Drops paused for this user.', 'success');
+      } catch (e) {
+        showUserPageAlert(e.message, 'error');
+      }
+    }
+
+    async function quickTogglePause(userId, btnEl) {
+      const u = users.find((x) => x.id === userId);
+      const paused = Boolean(u?.dropsPaused);
+      try {
+        if (btnEl) btnEl.disabled = true;
+        await api('/admin/api/users/' + userId + '/airfarming', {
+          method: 'PATCH',
+          body: JSON.stringify(paused ? { clearPause: true } : { dropsPaused: true }),
+        });
+        const d = await api('/admin/api/users/' + userId);
+        const idx = users.findIndex((x) => x.id === userId);
+        if (idx >= 0) {
+          users[idx].dropsPaused = Boolean(d.airfarming?.dropsPaused);
+          users[idx].dropsPauseUntil = d.airfarming?.dropsPauseUntil || null;
+        }
+        renderUsersTable();
+        if (viewingUserId === userId) {
+          renderUserDetail(d);
+          void loadUserCharts(userId);
+        }
+      } catch (e) {
+        alert(e.message || 'Failed to update pause');
+      } finally {
+        if (btnEl) btnEl.disabled = false;
+      }
+    }
+
+    function renderGlobalPause(data) {
+      const activeEl = document.getElementById('globalPauseActive');
+      const listEl = document.getElementById('globalPauseList');
+      if (data.active && data.active.length) {
+        activeEl.classList.remove('hidden');
+        activeEl.textContent =
+          'ACTIVE NOW: ' +
+          data.active
+            .map((p) => {
+              const bands = p.bandIndexes.length ? ' tiers ' + p.bandIndexes.join(',') : ' all tiers';
+              return new Date(p.startsAt).toLocaleString() + ' → ' + new Date(p.endsAt).toLocaleString() + bands;
+            })
+            .join(' | ');
+      } else {
+        activeEl.classList.add('hidden');
+      }
+      listEl.innerHTML = '';
+      (data.recent || []).slice(0, 8).forEach((p) => {
+        const div = document.createElement('div');
+        div.style.marginBottom = '8px';
+        div.style.paddingBottom = '8px';
+        div.style.borderBottom = '1px solid var(--border)';
+        const bands = p.bandIndexes.length ? ' tiers ' + p.bandIndexes.join(',') : ' all tiers';
+        div.innerHTML =
+          '<span>' + new Date(p.startsAt).toLocaleString() + ' → ' + new Date(p.endsAt).toLocaleString() + bands +
+          (p.activeNow ? ' <span class="pill pill-paused">active</span>' : '') + '</span>';
+        if (p.activeNow) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn-ghost';
+          btn.style.marginLeft = '8px';
+          btn.textContent = 'End now';
+          btn.onclick = () => endGlobalPause(p.id);
+          div.appendChild(btn);
+        }
+        listEl.appendChild(div);
+      });
+    }
+
+    async function loadGlobalPause() {
+      document.getElementById('globalPauseErr').classList.add('hidden');
+      try {
+        const data = await api('/admin/api/airfarming/global-pause');
+        renderGlobalPause(data);
+      } catch (e) {
+        document.getElementById('globalPauseErr').textContent = e.message;
+        document.getElementById('globalPauseErr').classList.remove('hidden');
+      }
+    }
+
+    async function saveGlobalPause() {
+      document.getElementById('globalPauseErr').classList.add('hidden');
+      try {
+        const from = document.getElementById('globalPauseFrom').value;
+        const until = document.getElementById('globalPauseUntil').value;
+        if (!from || !until) throw new Error('Set global from and until');
+        await api('/admin/api/airfarming/global-pause', {
+          method: 'POST',
+          body: JSON.stringify({
+            startsAt: new Date(from).toISOString(),
+            endsAt: new Date(until).toISOString(),
+            bandIndexes: readBandIndexes('global-band'),
+            note: document.getElementById('globalPauseNote').value.trim() || undefined,
+          }),
+        });
+        await loadGlobalPause();
+      } catch (e) {
+        document.getElementById('globalPauseErr').textContent = e.message;
+        document.getElementById('globalPauseErr').classList.remove('hidden');
+      }
+    }
+
+    async function endGlobalPause(id) {
+      document.getElementById('globalPauseErr').classList.add('hidden');
+      try {
+        await api('/admin/api/airfarming/global-pause/' + id + '/end', { method: 'POST' });
+        await loadGlobalPause();
+      } catch (e) {
+        document.getElementById('globalPauseErr').textContent = e.message;
+        document.getElementById('globalPauseErr').classList.remove('hidden');
+      }
+    }
+
+    function renderDropsTable() {
+      const tbody = document.getElementById('dropRows');
+      tbody.innerHTML = '';
+      if (!drops.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);">No scheduled drops</td></tr>';
+      }
+      drops.forEach((d) => {
+        const tr = document.createElement('tr');
+        const paused = d.dropsPaused ? ' <span class="pill pill-paused">paused</span>' : '';
+        tr.innerHTML =
+          '<td>' + escapeHtml(d.userEmail) + paused + '<br><span style="color:var(--muted);font-size:0.7rem;">#' + d.dropIndex + ' · ' + d.weekStart + '</span></td>' +
+          '<td>' + new Date(d.dueAt).toLocaleString() + '</td>' +
+          '<td>' + fmtCountdown(d.secondsRemaining) + '</td>' +
+          '<td><strong>' + d.percent + '%</strong>' + (d.percentLocked ? ' <span class="pill">locked</span>' : '') + '</td>' +
+          '<td>$' + d.minBalance + '</td><td>$' + d.maxBalance + '</td>' +
+          '<td>' + escapeHtml(bandTierLabel(d.bandIndex)) + '</td>' +
+          '<td><button type="button" class="btn-ghost" data-id="' + d.id + '">Edit</button></td>';
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-id]').forEach((btn) => {
+        btn.onclick = () => openEdit(btn.getAttribute('data-id'));
+      });
+      document.getElementById('stats').textContent = drops.length + ' scheduled drop(s) · max ' + maxPercent + '%';
+    }
+
+    let dropBands = [];
+
+    function inferBandFromRange(minBalance, maxBalance) {
+      const minN = Number(minBalance);
+      const maxN = Number(maxBalance);
+      if (minN >= 10000) return 3;
+      if (minN >= 1000) return 2;
+      if (minN >= 100 && maxN <= 112) return 1;
+      if (minN >= 100) return 0;
+      return null;
+    }
+
+    function getBandMeta(bandIndex, minBalance, maxBalance) {
+      let idx = bandIndex != null && bandIndex !== '' ? Number(bandIndex) : null;
+      if (idx == null || Number.isNaN(idx)) idx = inferBandFromRange(minBalance, maxBalance);
+      if (idx == null) return null;
+      return dropBands.find((x) => x.bandIndex === idx) || { bandIndex: idx, label: 'Tier ' + idx, percent: '—', minBalance: 0, maxBalance: 0 };
+    }
+
+    function formatDropTierWindow(it) {
+      const idx = it.bandIndex != null ? it.bandIndex : '—';
+      const min = it.minBalance != null ? it.minBalance : '—';
+      const max = it.maxBalance != null ? it.maxBalance : '—';
+      return 'Tier ' + idx + ' · $' + min + ' – $' + max;
+    }
+
+    function bandTierLabel(bandIndex, minBalance, maxBalance) {
+      const b = getBandMeta(bandIndex, minBalance, maxBalance);
+      if (!b) return '—';
+      return 'Tier ' + b.bandIndex + ' · ' + b.label;
+    }
+
+    function exampleProfit(balance, percent) {
+      const raw = (Number(balance) * Number(percent)) / 100;
+      return Math.min(raw, maxProfitPerDrop || 5000);
+    }
+
+    function updateGlobalBandLabels() {
+      dropBands.forEach((b) => {
+        const span = document.querySelector('[data-band-label="' + b.bandIndex + '"]');
+        if (span) {
+          span.textContent = 'Tier ' + b.bandIndex + ' · ' + b.label + ' (' + b.percent + '%)';
+        }
+      });
+    }
+
+    function renderTierReferenceTable() {
+      const tbody = document.getElementById('tierRefRows');
+      tbody.innerHTML = '';
+      const sorted = [...dropBands].sort((a, b) => a.bandIndex - b.bandIndex);
+      if (!sorted.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);">No tiers loaded. Run migration 20260603 in Supabase.</td></tr>';
+        return;
+      }
+      sorted.forEach((b) => {
+        const profitMin = exampleProfit(b.minBalance, b.percent);
+        const profitMax = exampleProfit(b.maxBalance, b.percent);
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td><strong>Tier ' + b.bandIndex + '</strong></td>' +
+          '<td>' + escapeHtml(b.label) + '<br><span style="color:var(--muted);font-size:0.72rem;">' + escapeHtml(b.balanceHint) + '</span></td>' +
+          '<td>' + fmtMoney(b.minBalance) + ' – ' + fmtMoney(b.maxBalance) + '</td>' +
+          '<td><span class="tier-pct-big">' + b.percent + '%</span></td>' +
+          '<td>' + fmtMoney(profitMin) + ' – ' + fmtMoney(profitMax) + '<br><span style="color:var(--muted);font-size:0.7rem;">at min / max balance</span></td>' +
+          '<td>' + (b.active ? '<span class="pill pill-ok">active</span>' : '<span class="pill pill-paused">off</span>') + '</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderTierCards() {
+      const grid = document.getElementById('tierCards');
+      grid.innerHTML = '';
+      const sorted = [...dropBands].sort((a, b) => a.bandIndex - b.bandIndex);
+      sorted.forEach((b) => {
+        const profitMin = exampleProfit(b.minBalance, b.percent);
+        const profitMax = exampleProfit(b.maxBalance, b.percent);
+        const card = document.createElement('div');
+        card.className = 'tier-card';
+        card.innerHTML =
+          '<div class="tier-index">Tier ' + b.bandIndex + ' (band index ' + b.bandIndex + ')</div>' +
+          '<h4>' + escapeHtml(b.label) + '</h4>' +
+          '<p class="tier-hint">' + escapeHtml(b.balanceHint) + '</p>' +
+          '<dl class="tier-kv">' +
+          '<dt>Drop percent</dt><dd class="tier-pct-big" style="font-size:1.1rem;">' + b.percent + '%</dd>' +
+          '<dt>Min balance</dt><dd>' + fmtMoney(b.minBalance) + '</dd>' +
+          '<dt>Max balance</dt><dd>' + fmtMoney(b.maxBalance) + '</dd>' +
+          '<dt>Profit if at min</dt><dd>' + fmtMoney(profitMin) + '</dd>' +
+          '<dt>Profit if at max</dt><dd>' + fmtMoney(profitMax) + '</dd>' +
+          '</dl>' +
+          '<p class="hint" style="margin:0 0 10px;font-size:0.78rem;">User must hold airfarming balance between min and max when the drop settles. New drops assigned to this tier use a random max within this window.</p>' +
+          '<div class="tier-edit">' +
+          '<label>Min balance (USD)</label><input type="number" step="0.01" min="0" data-band-min="' + b.bandIndex + '" value="' + b.minBalance + '" />' +
+          '<label>Max balance (USD)</label><input type="number" step="0.01" min="0" data-band-max="' + b.bandIndex + '" value="' + b.maxBalance + '" />' +
+          '<label>Drop percent (%)</label><input type="number" step="0.01" min="0.01" data-band-pct="' + b.bandIndex + '" value="' + b.percent + '" />' +
+          '<button type="button" class="btn-primary" data-save-band="' + b.bandIndex + '" style="width:auto;margin-top:4px;">Save tier ' + b.bandIndex + '</button>' +
+          '</div>';
+        grid.appendChild(card);
+      });
+      grid.querySelectorAll('button[data-save-band]').forEach((btn) => {
+        btn.onclick = () => saveBand(Number(btn.getAttribute('data-save-band')));
+      });
+    }
+
+    async function loadDropSettings() {
+      document.getElementById('dropCapsErr').classList.add('hidden');
+      document.getElementById('tiersErr').classList.add('hidden');
+      try {
+        const data = await api('/admin/api/airfarming/settings');
+        document.getElementById('capMaxPercent').value = data.settings.maxPercent;
+        document.getElementById('capMaxProfit').value = data.settings.maxProfitPerDrop;
+        maxPercent = data.effectiveCaps?.maxPercent || data.settings.maxPercent || 57.9;
+        maxProfitPerDrop = data.settings.maxProfitPerDrop || 5000;
+        document.getElementById('maxPct').textContent = maxPercent;
+        dropBands = data.bands || [];
+        document.getElementById('tiersSummary').textContent =
+          dropBands.length +
+          ' tiers configured · platform max ' + maxPercent + '% · max profit ' + fmtMoney(maxProfitPerDrop) + ' per drop';
+        renderTierReferenceTable();
+        renderTierCards();
+        updateGlobalBandLabels();
+        if (activeTab === 'drops' && drops.length) renderDropsTable();
+      } catch (e) {
+        document.getElementById('tiersErr').textContent = e.message;
+        document.getElementById('tiersErr').classList.remove('hidden');
+      }
+    }
+
+    async function loadTiers() {
+      document.getElementById('tiersLoading').classList.remove('hidden');
+      try {
+        await loadDropSettings();
+      } finally {
+        document.getElementById('tiersLoading').classList.add('hidden');
+      }
+    }
+
+    async function saveDropCaps() {
+      document.getElementById('dropCapsErr').classList.add('hidden');
+      document.getElementById('dropCapsOk').classList.add('hidden');
+      try {
+        const maxPercent = Number(document.getElementById('capMaxPercent').value);
+        const maxProfitPerDrop = Number(document.getElementById('capMaxProfit').value);
+        await api('/admin/api/airfarming/settings', {
+          method: 'PATCH',
+          body: JSON.stringify({ maxPercent, maxProfitPerDrop }),
+        });
+        document.getElementById('dropCapsOk').textContent = 'Platform caps saved.';
+        document.getElementById('dropCapsOk').classList.remove('hidden');
+        await loadDropSettings();
+        if (activeTab === 'drops') await loadDrops();
+      } catch (e) {
+        document.getElementById('dropCapsErr').textContent = e.message;
+        document.getElementById('dropCapsErr').classList.remove('hidden');
+      }
+    }
+
+    async function saveBand(bandIndex) {
+      document.getElementById('bandsErr').classList.add('hidden');
+      try {
+        const minBalance = Number(document.querySelector('[data-band-min="' + bandIndex + '"]').value);
+        const maxBalance = Number(document.querySelector('[data-band-max="' + bandIndex + '"]').value);
+        const percent = Number(document.querySelector('[data-band-pct="' + bandIndex + '"]').value);
+        await api('/admin/api/airfarming/bands/' + bandIndex, {
+          method: 'PATCH',
+          body: JSON.stringify({ minBalance, maxBalance, percent }),
+        });
+        await loadDropSettings();
+      } catch (e) {
+        document.getElementById('tiersErr').textContent = e.message;
+        document.getElementById('tiersErr').classList.remove('hidden');
+      }
+    }
+
+    async function loadDrops() {
+      document.getElementById('loadErr').classList.add('hidden');
+      document.getElementById('dropsNote').classList.add('hidden');
+      document.getElementById('dropsLoading').classList.remove('hidden');
+      void loadGlobalPause();
+      if (!dropBands.length) void loadDropSettings();
+      try {
+        const upcoming = document.getElementById('upcomingOnly').checked ? '1' : '0';
+        const data = await api('/admin/api/airfarming/drops?upcoming=' + upcoming);
+        drops = data.drops || [];
+        maxPercent = data.maxPercent || 57.9;
+        document.getElementById('maxPct').textContent = maxPercent;
+        if (data.schemaNote) {
+          document.getElementById('dropsNote').textContent = data.schemaNote;
+          document.getElementById('dropsNote').classList.remove('hidden');
+        }
+        renderDropsTable();
+      } finally {
+        document.getElementById('dropsLoading').classList.add('hidden');
+      }
+    }
+
+    function openEdit(id) {
+      const d = drops.find((x) => x.id === id);
+      if (!d) return;
+      editingId = id;
+      document.getElementById('editMeta').textContent = d.userEmail + ' · drop #' + d.dropIndex;
+      document.getElementById('editPercent').value = d.percent;
+      document.getElementById('editMin').value = d.minBalance;
+      document.getElementById('editMax').value = d.maxBalance;
+      document.getElementById('editDue').value = toLocalInput(d.dueAt);
+      document.getElementById('editLocked').checked = d.percentLocked;
+      document.getElementById('editErr').classList.add('hidden');
+      document.getElementById('editModal').classList.remove('hidden');
+    }
+
+    async function saveEdit() {
+      document.getElementById('editErr').classList.add('hidden');
+      try {
+        const body = {
+          percent: Number(document.getElementById('editPercent').value),
+          minBalance: Number(document.getElementById('editMin').value),
+          maxBalance: Number(document.getElementById('editMax').value),
+          dueAt: new Date(document.getElementById('editDue').value).toISOString(),
+          percentLocked: document.getElementById('editLocked').checked,
+        };
+        const data = await api('/admin/api/airfarming/drops/' + editingId, {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        });
+        const idx = drops.findIndex((x) => x.id === editingId);
+        if (idx >= 0) drops[idx] = data.drop;
+        renderDropsTable();
+        closeModal('editModal');
+        editingId = null;
+      } catch (e) {
+        document.getElementById('editErr').textContent = e.message;
+        document.getElementById('editErr').classList.remove('hidden');
+      }
+    }
+
+    async function loadAnnouncements() {
+      document.getElementById('announceErr').classList.add('hidden');
+      document.getElementById('announceOk').classList.add('hidden');
+      try {
+        const data = await api('/admin/api/announcements');
+        const activeEl = document.getElementById('announceActive');
+        if (data.active) {
+          activeEl.classList.remove('hidden');
+          activeEl.textContent = 'Live: “' + data.active.title + '” — ' + data.active.body;
+        } else {
+          activeEl.classList.add('hidden');
+        }
+      } catch (e) {
+        document.getElementById('announceErr').textContent = e.message;
+        document.getElementById('announceErr').classList.remove('hidden');
+      }
+    }
+
+    async function publishAnnouncement() {
+      document.getElementById('announceErr').classList.add('hidden');
+      try {
+        const title = document.getElementById('announceTitle').value.trim();
+        const body = document.getElementById('announceBody').value.trim();
+        if (!title || !body) throw new Error('Title and message are required');
+        await api('/admin/api/announcements', {
+          method: 'POST',
+          body: JSON.stringify({ title, body }),
+        });
+        document.getElementById('announceOk').textContent = 'Published. Users will see it until dismissed.';
+        document.getElementById('announceOk').classList.remove('hidden');
+        await loadAnnouncements();
+      } catch (e) {
+        document.getElementById('announceErr').textContent = e.message;
+        document.getElementById('announceErr').classList.remove('hidden');
+      }
+    }
+
+    async function clearAnnouncement() {
+      document.getElementById('announceErr').classList.add('hidden');
+      try {
+        await api('/admin/api/announcements/active', { method: 'DELETE' });
+        document.getElementById('announceTitle').value = '';
+        document.getElementById('announceBody').value = '';
+        document.getElementById('announceOk').textContent = 'Announcement cleared.';
+        document.getElementById('announceOk').classList.remove('hidden');
+        await loadAnnouncements();
+      } catch (e) {
+        document.getElementById('announceErr').textContent = e.message;
+        document.getElementById('announceErr').classList.remove('hidden');
+      }
+    }
+
+    function showWithdrawalsErr(e) {
+      document.getElementById('withdrawalsErr').textContent = e.message;
+      document.getElementById('withdrawalsErr').classList.remove('hidden');
+    }
+
+    function formatWithdrawAmount(w) {
+      const n = Number(w.amount);
+      if (w.source === 'cash_wallet') return fmtMoney(n);
+      if (w.fiatAmount && w.fiatCurrency) {
+        return n.toLocaleString(undefined, { maximumFractionDigits: 6 }) + ' ' + w.asset +
+          ' (~' + w.fiatAmount + ' ' + w.fiatCurrency + ')';
+      }
+      return n.toLocaleString(undefined, { maximumFractionDigits: 6 }) + ' ' + (w.asset || '');
+    }
+
+    function renderWithdrawalsTable() {
+      const tbody = document.getElementById('withdrawRows');
+      tbody.innerHTML = '';
+      if (!pendingWithdrawals.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);">No pending withdrawals</td></tr>';
+      }
+      pendingWithdrawals.forEach((w) => {
+        const tr = document.createElement('tr');
+        const dest = w.source === 'local_money'
+          ? escapeHtml(String(w.destination || '')) + (w.countryCode ? ' · ' + w.countryCode : '')
+          : escapeHtml(String(w.destination || '—').slice(0, 48));
+        tr.innerHTML =
+          '<td>' + escapeHtml(w.userEmail) + '</td>' +
+          '<td><span class="pill">' + escapeHtml(w.sourceLabel) + '</span></td>' +
+          '<td><strong>' + formatWithdrawAmount(w) + '</strong></td>' +
+          '<td style="font-size:0.78rem;max-width:220px;word-break:break-all;">' + dest + '</td>' +
+          '<td>' + new Date(w.createdAt).toLocaleString() + '</td>' +
+          '<td style="white-space:nowrap;">' +
+          '<button type="button" class="btn-primary" data-approve-withdraw="' + w.source + ':' + w.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Approve</button>' +
+          '<button type="button" class="btn-danger" data-reject-withdraw="' + w.source + ':' + w.id + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Reject</button></td>';
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-approve-withdraw]').forEach((btn) => {
+        btn.onclick = () => actOnWithdraw(btn.getAttribute('data-approve-withdraw'), 'approve', btn);
+      });
+      tbody.querySelectorAll('button[data-reject-withdraw]').forEach((btn) => {
+        btn.onclick = () => actOnWithdraw(btn.getAttribute('data-reject-withdraw'), 'reject', btn);
+      });
+      document.getElementById('withdrawStats').textContent =
+        pendingWithdrawals.length + ' withdrawal(s) awaiting your approval';
+    }
+
+    async function loadPendingWithdrawals() {
+      document.getElementById('withdrawalsErr').classList.add('hidden');
+      document.getElementById('withdrawalsLoading').classList.remove('hidden');
+      try {
+        const data = await api('/admin/api/withdrawals/pending');
+        pendingWithdrawals = data.withdrawals || [];
+        renderWithdrawalsTable();
+      } finally {
+        document.getElementById('withdrawalsLoading').classList.add('hidden');
+      }
+    }
+
+    async function actOnWithdraw(key, action, btnEl) {
+      const colon = key.indexOf(':');
+      const source = key.slice(0, colon);
+      const id = key.slice(colon + 1);
+      if (!source || !id) return;
+
+      let rejectNote = '';
+      if (action === 'reject') {
+        const noteInput = window.prompt('Optional note for rejection:', '');
+        if (noteInput === null) return;
+        rejectNote = noteInput;
+      } else if (!window.confirm('Approve this withdrawal?')) {
+        return;
+      }
+
+      document.getElementById('withdrawalsErr').classList.add('hidden');
+      try {
+        if (btnEl) btnEl.disabled = true;
+        await api('/admin/api/withdrawals/' + source + '/' + id + '/' + action, {
+          method: 'POST',
+          body: action === 'reject' ? JSON.stringify({ note: rejectNote }) : undefined,
+        });
+        await loadPendingWithdrawals();
+      } catch (e) {
+        showWithdrawalsErr(e);
+      } finally {
+        if (btnEl) btnEl.disabled = false;
+      }
+    }
+
+    async function refreshActive() {
+      if (activeTab === 'users') await loadUsers();
+      else if (activeTab === 'support') await loadTickets();
+      else if (activeTab === 'withdrawals') await loadPendingWithdrawals();
+      else if (activeTab === 'aiearnings') await loadAiPlan();
+      else if (activeTab === 'tiers') await loadTiers();
+      else if (activeTab === 'drops') await loadDrops();
+      else if (activeTab === 'announce') await loadAnnouncements();
+    }
+
+    function showTiersErr(e) {
+      document.getElementById('tiersErr').textContent = e.message;
+      document.getElementById('tiersErr').classList.remove('hidden');
+    }
+
+    function showAiPlanErr(e) {
+      document.getElementById('aiPlanErr').textContent = e.message;
+      document.getElementById('aiPlanErr').classList.remove('hidden');
+    }
+
+    function aiPlanDateValue() {
+      const el = document.getElementById('aiPlanDate');
+      if (el.value) return el.value;
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    function statusPillClass(status) {
+      if (status === 'active') return 'badge ok';
+      if (status === 'pending_approval') return 'badge warn';
+      if (status === 'planning') return 'badge';
+      return 'badge muted';
+    }
+
+    const AI_SERVICE_LABELS = {
+      served: 'Served',
+      missed: 'Missed',
+      due_today: 'Due today',
+      scheduled: 'Scheduled',
+      applied: 'Applied',
+      waiting: 'Waiting',
+      not_eligible: 'Not eligible',
+      paused: 'Paused',
+    };
+
+    function renderAiPlansList() {
+      const tbody = document.getElementById('aiPlansListRows');
+      const selected = aiPlanDateValue();
+      if (!aiPlansList.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="hint">No plans yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = aiPlansList.map((p) => {
+        const sel = p.planDate === selected ? ' style="background:rgba(234,179,8,0.12);cursor:pointer;"' : ' style="cursor:pointer;"';
+        return '<tr data-plan-date="' + escapeHtml(p.planDate) + '"' + sel + '>' +
+          '<td><strong>' + escapeHtml(p.planDate) + '</strong></td>' +
+          '<td>' + escapeHtml(String(p.status).replace(/_/g, ' ')) + '</td>' +
+          '<td>' + fmtMoney(p.budgetUsd) + '</td>' +
+          '<td>' + fmtMoney(p.projectedPayoutUsd) + '</td>' +
+          '<td>' + fmtMoney(p.budgetSpentUsd) + '</td>' +
+          '<td>' + fmtMoney(p.budgetRemainingUsd != null ? p.budgetRemainingUsd : Math.max(0, p.budgetUsd - p.budgetSpentUsd)) + '</td>' +
+          '</tr>';
+      }).join('');
+      tbody.querySelectorAll('tr[data-plan-date]').forEach((tr) => {
+        tr.onclick = () => {
+          document.getElementById('aiPlanDate').value = tr.getAttribute('data-plan-date');
+          loadAiPlan().catch(showAiPlanErr);
+        };
+      });
+    }
+
+    function dropsPlanDayLabel(a) {
+      const parts = [];
+      if (a.dropsDueOnPlanDate > 0) parts.push(a.dropsDueOnPlanDate + ' due');
+      if (a.dropsPaidOnPlanDate > 0) parts.push(a.dropsPaidOnPlanDate + ' paid');
+      if (a.profitPaidOnPlanDate > 0) parts.push(fmtMoney(a.profitPaidOnPlanDate) + ' earned');
+      if (!parts.length) return a.eligible ? '0 (waiting)' : '—';
+      return parts.join(' · ');
+    }
+
+    function renderAiPlan() {
+      const pill = document.getElementById('aiStatusPill');
+      const stats = document.getElementById('aiBudgetStats');
+      const approveBtn = document.getElementById('aiApprovePlanBtn');
+      const summaryEl = document.getElementById('aiPlanSummary');
+      const serveEl = document.getElementById('aiServeSummary');
+      if (!aiPlan) {
+        pill.textContent = 'No plan';
+        pill.className = 'badge muted';
+        stats.textContent = 'Set a budget and run the planner.';
+        summaryEl.textContent = '';
+        serveEl.textContent = '';
+        approveBtn.disabled = true;
+        document.getElementById('aiAllocRows').innerHTML = '<tr><td colspan="9" class="hint">No allocations yet.</td></tr>';
+        renderAiPlansList();
+        return;
+      }
+      pill.textContent = aiPlan.status.replace(/_/g, ' ');
+      pill.className = statusPillClass(aiPlan.status);
+      const remaining = aiPlan.budgetRemainingUsd != null
+        ? aiPlan.budgetRemainingUsd
+        : Math.max(0, aiPlan.budgetUsd - aiPlan.budgetSpentUsd);
+      stats.textContent =
+        'Budget ' + fmtMoney(aiPlan.budgetUsd) +
+        ' · Projected ' + fmtMoney(aiPlan.projectedPayoutUsd) +
+        ' · Spent ' + fmtMoney(aiPlan.budgetSpentUsd) +
+        ' · Remaining ' + fmtMoney(remaining);
+      summaryEl.textContent = aiPlan.planSummary || '';
+      if (aiPlanSummary) {
+        serveEl.textContent =
+          aiPlanSummary.eligibleCount + ' eligible · ' +
+          aiPlanSummary.servedCount + ' served on plan date · ' +
+          aiPlanSummary.appliedCount + ' applied to scheduled drops · ' +
+          aiPlanSummary.waitingCount + ' waiting';
+      } else {
+        serveEl.textContent = '';
+      }
+      approveBtn.disabled = aiPlan.status !== 'pending_approval';
+      if (aiPlan.marketSnapshot?.regime) {
+        document.getElementById('aiRegime').value = aiPlan.marketSnapshot.regime;
+      }
+      if (aiPlan.marketSnapshot?.notes) {
+        document.getElementById('aiMarketNotes').value = aiPlan.marketSnapshot.notes;
+      }
+      document.getElementById('aiBudgetUsd').value = aiPlan.budgetUsd;
+      renderAiPlansList();
+      const tbody = document.getElementById('aiAllocRows');
+      if (!aiAllocations.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="hint">No allocations yet. Run the planner.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = aiAllocations.map((a) => {
+        const tierPct = (a.bandIndex != null ? 'T' + a.bandIndex : '—') +
+          (a.percent != null ? ' · ' + Number(a.percent).toFixed(2) + '%' : '');
+        const range = a.minBalance != null
+          ? fmtMoney(a.minBalance) + ' – ' + fmtMoney(a.maxBalance)
+          : '—';
+        const winHint = a.inBalanceWindow ? '' : ' <span style="color:var(--muted);font-size:11px;">(out of window)</span>';
+        const week = (a.weekDrops ? a.weekDrops.paid : 0) + ' paid / ' +
+          (a.weekDrops ? a.weekDrops.scheduled : 0) + ' sched';
+        const statusLabel = AI_SERVICE_LABELS[a.serviceStatus] || a.serviceStatus || '—';
+        const statusClass = a.serviceStatus === 'served' ? 'color:var(--ok);font-weight:700;' :
+          a.serviceStatus === 'missed' || a.serviceStatus === 'paused' ? 'color:#f87171;' :
+          a.serviceStatus === 'due_today' ? 'color:#fbbf24;font-weight:700;' : '';
+        return '<tr><td>' + escapeHtml(a.email) + '</td>' +
+          '<td>' + fmtMoney(a.airfarmingBalance || 0) + '</td>' +
+          '<td>' + tierPct + '</td>' +
+          '<td>' + range + winHint + '</td>' +
+          '<td>' + fmtMoney(a.projectedProfit) + '</td>' +
+          '<td>' + fmtMoney(a.potentialProfitNow || 0) + '</td>' +
+          '<td>' + dropsPlanDayLabel(a) + '</td>' +
+          '<td>' + week + '</td>' +
+          '<td style="' + statusClass + '">' + escapeHtml(statusLabel) + '</td></tr>';
+      }).join('');
+    }
+
+    async function loadAiPlansList() {
+      const data = await api('/admin/api/ai/plans?limit=45');
+      aiPlansList = data.plans || [];
+      renderAiPlansList();
+    }
+
+    async function loadAiPlan() {
+      document.getElementById('aiPlanErr').classList.add('hidden');
+      document.getElementById('aiPlanOk').classList.add('hidden');
+      document.getElementById('aiPlanLoading').classList.remove('hidden');
+      try {
+        const date = aiPlanDateValue();
+        document.getElementById('aiPlanDate').value = date;
+        const [planData] = await Promise.all([
+          api('/admin/api/ai/daily-plan?date=' + encodeURIComponent(date)),
+          loadAiPlansList().catch(() => {}),
+        ]);
+        aiPlan = planData.plan;
+        aiAllocations = planData.allocations || [];
+        aiPlanSummary = planData.summary || null;
+        renderAiPlan();
+      } finally {
+        document.getElementById('aiPlanLoading').classList.add('hidden');
+      }
+    }
+
+    async function saveAiBudget() {
+      document.getElementById('aiPlanErr').classList.add('hidden');
+      const data = await api('/admin/api/ai/daily-plan/budget', {
+        method: 'POST',
+        body: JSON.stringify({
+          planDate: aiPlanDateValue(),
+          budgetUsd: Number(document.getElementById('aiBudgetUsd').value),
+          regime: document.getElementById('aiRegime').value,
+          notes: document.getElementById('aiMarketNotes').value.trim(),
+        }),
+      });
+      aiPlan = data.plan;
+      aiAllocations = data.allocations || [];
+      aiPlanSummary = data.summary || null;
+      document.getElementById('aiPlanOk').textContent = 'Budget saved.';
+      document.getElementById('aiPlanOk').classList.remove('hidden');
+      renderAiPlan();
+    }
+
+    async function fetchAiMarket() {
+      document.getElementById('aiPlanErr').classList.add('hidden');
+      const data = await api('/admin/api/ai/daily-plan/fetch-market', {
+        method: 'POST',
+        body: JSON.stringify({ planDate: aiPlanDateValue() }),
+      });
+      aiPlan = data.plan;
+      aiAllocations = data.allocations || [];
+      aiPlanSummary = data.summary || null;
+      if (data.indicators?.suggestedRegime) {
+        document.getElementById('aiRegime').value = data.indicators.suggestedRegime;
+      }
+      document.getElementById('aiPlanOk').textContent = data.indicators?.note || 'Market snapshot updated.';
+      document.getElementById('aiPlanOk').classList.remove('hidden');
+      renderAiPlan();
+    }
+
+    async function runAiPlanner() {
+      document.getElementById('aiPlanErr').classList.add('hidden');
+      document.getElementById('aiRunPlannerBtn').disabled = true;
+      try {
+        const data = await api('/admin/api/ai/daily-plan/run', {
+          method: 'POST',
+          body: JSON.stringify({ planDate: aiPlanDateValue() }),
+        });
+        aiPlan = data.plan;
+        aiAllocations = data.allocations || [];
+        aiPlanSummary = data.summary || null;
+        if (data.plans) aiPlansList = data.plans;
+        document.getElementById('aiPlanOk').textContent = 'Planner finished (' + (data.plannerMode || 'ok') + '). Status: ' + aiPlan.status;
+        document.getElementById('aiPlanOk').classList.remove('hidden');
+        renderAiPlan();
+      } finally {
+        document.getElementById('aiRunPlannerBtn').disabled = false;
+      }
+    }
+
+    async function approveAiPlan() {
+      document.getElementById('aiPlanErr').classList.add('hidden');
+      const data = await api('/admin/api/ai/daily-plan/approve', {
+        method: 'POST',
+        body: JSON.stringify({ planDate: aiPlanDateValue() }),
+      });
+      aiPlan = data.plan;
+      aiAllocations = data.allocations || [];
+      aiPlanSummary = data.summary || null;
+      document.getElementById('aiPlanOk').textContent = 'Plan approved and applied to scheduled drops.';
+      document.getElementById('aiPlanOk').classList.remove('hidden');
+      await loadAiPlan();
+    }
+
+    function showUsersErr(e) {
+      document.getElementById('usersErr').textContent = e.message;
+      document.getElementById('usersErr').classList.remove('hidden');
+    }
+    function showDropsErr(e) {
+      document.getElementById('loadErr').textContent = e.message;
+      document.getElementById('loadErr').classList.remove('hidden');
+    }
+    function showTicketsErr(e) {
+      document.getElementById('ticketsErr').textContent = e.message;
+      document.getElementById('ticketsErr').classList.remove('hidden');
+    }
+
+    document.querySelectorAll('.nav-item').forEach((el) => {
+      el.onclick = () => setTab(el.getAttribute('data-tab'));
+    });
+
+    document.getElementById('menuToggle').onclick = () => {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('sidebarOverlay').classList.toggle('open');
+    };
+    document.getElementById('sidebarOverlay').onclick = closeSidebar;
+
+    document.getElementById('loginBtn').onclick = async () => {
+      document.getElementById('loginErr').classList.add('hidden');
+      try {
+        const data = await api('/admin/api/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: document.getElementById('username').value.trim(),
+            password: document.getElementById('password').value,
+          }),
+        });
+        localStorage.setItem(TOKEN_KEY, data.token);
+        showDash();
+        setTab('users');
+      } catch (e) {
+        document.getElementById('loginErr').textContent = e.message;
+        document.getElementById('loginErr').classList.remove('hidden');
+      }
+    };
+
+    document.getElementById('logoutBtn').onclick = () => {
+      localStorage.removeItem(TOKEN_KEY);
+      location.reload();
+    };
+
+    document.getElementById('refreshBtn').onclick = () => refreshActive().catch((e) => {
+      if (activeTab === 'users') showUsersErr(e);
+      else if (activeTab === 'support') showTicketsErr(e);
+      else if (activeTab === 'announce') {
+        document.getElementById('announceErr').textContent = e.message;
+        document.getElementById('announceErr').classList.remove('hidden');
+      } else showDropsErr(e);
+    });
+
+    document.getElementById('searchUsersBtn').onclick = () => loadUsers().catch(showUsersErr);
+    document.getElementById('userSearch').onkeydown = (e) => { if (e.key === 'Enter') loadUsers().catch(showUsersErr); };
+    document.getElementById('searchTicketsBtn').onclick = () => loadTickets().catch(showTicketsErr);
+    document.getElementById('ticketSearch').onkeydown = (e) => { if (e.key === 'Enter') loadTickets().catch(showTicketsErr); };
+    document.getElementById('upcomingOnly').onchange = () => loadDrops().catch(showDropsErr);
+    document.getElementById('saveBtn').onclick = () => saveEdit();
+    setupDismissibleModals();
+    document.getElementById('cancelBtn').onclick = () => closeModal('editModal');
+    document.getElementById('backToUsersBtn').onclick = () => closeUserPage();
+    document.getElementById('toggleUserPauseBtn').onclick = () => toggleUserPause();
+    document.getElementById('saveDropCapsBtn').onclick = () => saveDropCaps();
+    document.getElementById('saveGlobalPauseBtn').onclick = () => saveGlobalPause();
+    document.getElementById('aiPlanDate').onchange = () => loadAiPlan().catch(showAiPlanErr);
+    document.getElementById('aiSaveBudgetBtn').onclick = () => saveAiBudget().catch(showAiPlanErr);
+    document.getElementById('aiFetchMarketBtn').onclick = () => fetchAiMarket().catch(showAiPlanErr);
+    document.getElementById('aiRunPlannerBtn').onclick = () => runAiPlanner().catch(showAiPlanErr);
+    document.getElementById('aiApprovePlanBtn').onclick = () => approveAiPlan().catch(showAiPlanErr);
+    document.getElementById('refreshGlobalPauseBtn').onclick = () => loadGlobalPause();
+    document.getElementById('applyAdjustBtn').onclick = () => applyWalletAdjust();
+    document.getElementById('adjustMode').onchange = () => refreshAdjustDirectionVisibility();
+    refreshAdjustDirectionVisibility();
+    document.getElementById('userJournalPrev').onclick = () => shiftUserJournalMonth(-1);
+    document.getElementById('userJournalNext').onclick = () => shiftUserJournalMonth(1);
+    document.getElementById('userDropPlanAiBtn').onclick = () => aiSuggestUserDropPlan();
+    document.getElementById('userDropPlanApplyBtn').onclick = () => applyUserDropPlan();
+    document.getElementById('moveToAfBtn').onclick = () => moveToAirfarming();
+    document.getElementById('saveTicketBtn').onclick = () => saveTicketStatus();
+    document.getElementById('closeTicketBtn').onclick = () => closeModal('ticketModal');
+    document.getElementById('saveUserPasswordBtn').onclick = () => saveUserPassword();
+    async function sendAdminNotification() {
+      document.getElementById('notifyErr').classList.add('hidden');
+      document.getElementById('notifyOk').classList.add('hidden');
+      const broadcast = document.getElementById('notifyBroadcast').checked;
+      const title = document.getElementById('notifyTitle').value.trim();
+      const body = document.getElementById('notifyBody').value.trim();
+      const userEmail = document.getElementById('notifyUserEmail').value.trim();
+      if (!title || !body) {
+        document.getElementById('notifyErr').textContent = 'Title and message are required.';
+        document.getElementById('notifyErr').classList.remove('hidden');
+        return;
+      }
+      if (!broadcast && !userEmail) {
+        document.getElementById('notifyErr').textContent = 'Enter a user email or enable broadcast.';
+        document.getElementById('notifyErr').classList.remove('hidden');
+        return;
+      }
+      try {
+        const data = await api('/admin/api/notifications', {
+          method: 'POST',
+          body: JSON.stringify({ broadcast, userEmail, title, body }),
+        });
+        const aud = data.notification?.audience === 'broadcast' ? 'all users' : (userEmail || 'user');
+        document.getElementById('notifyOk').textContent = 'Sent to ' + aud + '.';
+        document.getElementById('notifyOk').classList.remove('hidden');
+        document.getElementById('notifyTitle').value = '';
+        document.getElementById('notifyBody').value = '';
+        if (!broadcast) document.getElementById('notifyUserEmail').value = '';
+      } catch (e) {
+        document.getElementById('notifyErr').textContent = e.message;
+        document.getElementById('notifyErr').classList.remove('hidden');
+      }
+    }
+
+    document.getElementById('notifyBroadcast').onchange = () => {
+      const on = document.getElementById('notifyBroadcast').checked;
+      document.getElementById('notifyUserEmail').disabled = on;
+      if (on) document.getElementById('notifyUserEmail').value = '';
+    };
+
+    document.getElementById('sendNotifyBtn').onclick = () => sendAdminNotification();
+    document.getElementById('publishAnnounceBtn').onclick = () => publishAnnouncement();
+    document.getElementById('clearAnnounceBtn').onclick = () => clearAnnouncement();
+
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token) {
+      api('/admin/api/me')
+        .then((me) => {
+          document.getElementById('adminUserLabel').textContent = me.username || 'admin';
+          showDash();
+          setTab('users');
+        })
+        .catch(() => localStorage.removeItem(TOKEN_KEY));
+    }
+  </script>
+</body>
+</html>

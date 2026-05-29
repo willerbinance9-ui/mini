@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: mini-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: JWT_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: ALPACA_BASE_URL
+        value: https://paper-api.alpaca.markets
+      - key: ALPACA_LIVE_URL
+        value: https://api.alpaca.markets
+      - key: DEV_RESET_TOKEN
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: NOWPAYMENTS_API_KEY
+        sync: false
+      - key: NOWPAYMENTS_IPN_SECRET
+        sync: false
+      - key: NOWPAYMENTS_API_BASE
+        value: https://api.nowpayments.io/v1
+      - key: AI_PROVIDER
+        value: deepseek
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: deepseek-chat
+      - key: INTERNAL_CRON_SECRET
+        sync: false
