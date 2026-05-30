@@ -58,7 +58,7 @@ export function CryptoDepositPaymentScreen() {
       setStatus(next);
       if (next.ledgerCredited && !creditedToastShown.current) {
         creditedToastShown.current = true;
-        showToast('Deposit credited to your wallet');
+        showToast('Funds added to your wallet');
       }
     } catch {
       // keep last status
@@ -90,7 +90,7 @@ export function CryptoDepositPaymentScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Card>
-        <Text style={styles.caption}>Pay exactly</Text>
+        <Text style={styles.caption}>Send this exact amount</Text>
         <Text style={styles.amount}>
           {payAmount || '—'} {formatNetworkLabel(payCurrency)}
         </Text>
@@ -98,7 +98,7 @@ export function CryptoDepositPaymentScreen() {
       </Card>
 
       <Card style={styles.statusCard}>
-        <Text style={styles.sectionTitle}>Payment status</Text>
+        <Text style={styles.sectionTitle}>Where things stand</Text>
         <View style={styles.stepsRow}>
           {PHASES.map((p) => (
             <PhaseStep key={p} phase={p} current={phase} />
@@ -106,12 +106,12 @@ export function CryptoDepositPaymentScreen() {
         </View>
         <Text style={styles.statusDetail}>
           {phase === 'failed'
-            ? `Payment ${rawStatus}. Contact support if funds were sent.`
+            ? `Transfer ${rawStatus}. If you already paid, contact support with your receipt.`
             : phase === 'processed'
-              ? 'Your deposit has been credited to your wallet.'
+              ? 'The coins are in your wallet — you are all set.'
               : phase === 'processing'
-                ? 'Payment detected on-chain. Confirming and crediting your wallet…'
-                : 'Send crypto to the address below. Status updates automatically.'}
+                ? 'We see your payment on-chain and are adding it to your balance…'
+                : 'Use the address below. This page updates on its own.'}
         </Text>
         <Pressable onPress={() => void poll()} style={styles.refreshRow}>
           <Ionicons name='refresh' size={16} color={palette.primary} />
@@ -121,7 +121,7 @@ export function CryptoDepositPaymentScreen() {
 
       {payAddress ? (
         <Card>
-          <Text style={styles.fieldLabel}>Deposit address</Text>
+          <Text style={styles.fieldLabel}>Send to this address</Text>
           <Text style={styles.mono} selectable>
             {payAddress}
           </Text>
@@ -132,7 +132,7 @@ export function CryptoDepositPaymentScreen() {
         </Card>
       ) : (
         <Card>
-          <Text style={styles.hint}>Generating deposit address…</Text>
+          <Text style={styles.hint}>Creating your payment address…</Text>
         </Card>
       )}
 

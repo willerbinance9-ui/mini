@@ -100,7 +100,6 @@ export function JournalScreen() {
       contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
     >
-      <Text style={styles.title}>Journal</Text>
       <Text style={styles.sub}>Daily earnings (UTC). Green = profit day.</Text>
 
       {error ? (
@@ -207,8 +206,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.background },
   title: { color: palette.textPrimary, fontSize: 24, fontWeight: '800', marginBottom: 4 },
   sub: { color: palette.textSecondary, marginBottom: 12 },
-  errCard: { marginBottom: 12, borderColor: palette.warning },
-  err: { color: palette.warning },
+  errCard: { marginBottom: 12, borderColor: palette.danger },
+  err: { color: palette.danger },
   summaryCard: { marginBottom: 12 },
   summaryText: { color: palette.textSecondary, fontSize: 13 },
   monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },

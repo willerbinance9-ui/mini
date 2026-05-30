@@ -240,7 +240,6 @@ export function AirfarmingTradeScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: fabBottom + 72 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
       >
-        <Text style={styles.title}>Airfarming</Text>
         <Text style={styles.subtitle}>Earn on scheduled drops when your balance is in range.</Text>
 
         {error ? (
@@ -754,13 +753,13 @@ const styles = StyleSheet.create({
   dotStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   dotModalCardWrap: { position: 'absolute', left: 16, right: 16, top: '32%' },
   dotModalCard: { marginBottom: 0 },
-  noticeCard: { borderColor: palette.primary, borderLeftWidth: 3, marginBottom: 12 },
+  noticeCard: { borderColor: palette.noticeBorder, borderLeftWidth: 3, marginBottom: 12 },
   trustHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 },
-  trustCardWarn: { borderColor: palette.warning, borderLeftWidth: 3 },
+  trustCardWarn: { borderColor: palette.noticeBorder, borderLeftWidth: 3 },
   trustScoreRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginBottom: 10 },
   trustScoreValue: { fontSize: 32, fontWeight: '800' },
   trustExcellent: { color: palette.primary },
-  trustFair: { color: palette.warning },
+  trustFair: { color: palette.textSecondary },
   trustPoor: { color: palette.danger },
   trustBand: { color: palette.textSecondary, fontSize: 15, fontWeight: '700' },
   trustBarTrack: {
@@ -772,9 +771,9 @@ const styles = StyleSheet.create({
   },
   trustBarFill: { height: '100%', borderRadius: 4 },
   trustBarExcellent: { backgroundColor: palette.primary },
-  trustBarFair: { backgroundColor: palette.warning },
+  trustBarFair: { backgroundColor: 'rgba(255, 68, 79, 0.45)' },
   trustBarPoor: { backgroundColor: palette.danger },
-  trustIllegal: { color: palette.warning, fontSize: 12, lineHeight: 17, marginTop: 6 },
+  trustIllegal: { color: palette.danger, fontSize: 12, lineHeight: 17, marginTop: 6 },
   trustAdjust: { color: palette.textPrimary, fontSize: 12, lineHeight: 17, marginTop: 6, fontWeight: '600' },
   balanceLine: { marginBottom: 6 },
   balanceValue: { color: palette.textPrimary, fontWeight: '700', fontSize: 18 },

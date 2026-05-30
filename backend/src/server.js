@@ -8,7 +8,6 @@ const {
   getUserByEmail,
   getUserById,
   createUser,
-  updateAlpacaKeys,
   updateUserTotpSecretEnc,
   setTotpEnabled,
   clearTotp,
@@ -36,7 +35,6 @@ const { authMiddleware, totpPendingMiddleware, TOTP_PENDING_PURPOSE } = require(
 const { encryptTotpSecret, decryptTotpSecret } = require('./totpCrypto');
 const { mapTotpConfigurationError } = require('./totpErrors');
 const { generateSecret, generateURI, verifySync } = require('otplib');
-const { getClient, getAuthorizedClient } = require('./services/alpacaClient');
 const {
   ensureMetaApiAccount,
   fetchMt5Balance,
@@ -70,6 +68,7 @@ const { registerNotificationPreferencesRoutes } = require('./notificationPrefere
 const { registerSupportRoutes } = require('./supportRoutes');
 const { notifyPeerTransfer } = require('./peerTransferNotifications');
 const { registerLocalMoneyRoutes, handleFlutterwaveWebhook } = require('./localMoneyRoutes');
+const { registerP2pRoutes } = require('./p2pRoutes');
 const { requireComplianceProfile } = require('./middleware/requireComplianceProfile');
 const { isComplianceProfileComplete } = require('./complianceProfile');
 
@@ -116,15 +115,6 @@ app.post('/webhooks/flutterwave', express.json({ limit: '2mb' }), (req, res, nex
   handleFlutterwaveWebhook(req, res).catch(next);
 });
 app.use(express.json());
-
-function alpacaErrorMessage(error, fallback) {
-  const upstream =
-    error?.response?.data?.message ||
-    error?.response?.data?.error ||
-    error?.message;
-  if (process.env.NODE_ENV === 'production') return fallback;
-  return upstream || fallback;
-}
 
 function mt5SafeErrorMessage(error, fallback) {
   const raw = String(extractErrorMessage(error, fallback) || fallback);
@@ -445,189 +435,11 @@ app.get('/profile', authMiddleware, async (req, res) => {
   });
 });
 
-app.post('/alpaca/validate-keys', authMiddleware, async (req, res) => {
-  try {
-    const { apiKey, secretKey } = req.body;
-    const { client, environment } = await getAuthorizedClient(apiKey, secretKey);
-    const account = await client.validateKeys();
-    return res.json({ valid: true, environment, account: account.data });
-  } catch (error) {
-    return res.status(400).json({ valid: false, message: alpacaErrorMessage(error, 'Invalid Alpaca API keys') });
-  }
-});
-
-app.post('/alpaca/keys', authMiddleware, async (req, res) => {
-  try {
-    const { apiKey, secretKey } = req.body;
-    if (!apiKey || !secretKey) return res.status(400).json({ message: 'Missing keys' });
-    await updateAlpacaKeys(req.userId, apiKey, secretKey);
-    return res.json({ success: true });
-  } catch {
-    return res.status(500).json({ message: 'Failed to update Alpaca keys' });
-  }
-});
-
-app.get('/alpaca/status', authMiddleware, async (req, res) => {
-  const user = await currentUser(req);
-  return res.json({
-    configured: Boolean(user?.alpaca_api_key && user?.alpaca_secret_key),
-  });
-});
-
-app.use('/alpaca', authMiddleware, async (req, res, next) => {
-  const user = await currentUser(req);
-  if (!user?.alpaca_api_key || !user?.alpaca_secret_key) return res.status(400).json({ message: 'Alpaca keys not configured in Settings' });
-  try {
-    const { client, environment } = await getAuthorizedClient(user.alpaca_api_key, user.alpaca_secret_key);
-    req.alpaca = client;
-    req.alpacaEnvironment = environment;
-    return next();
-  } catch (error) {
-    return res.status(401).json({ message: alpacaErrorMessage(error, 'Alpaca credentials unauthorized') });
-  }
-});
-
-app.get('/alpaca/account', async (req, res) => {
-  try {
-    const data = await req.alpaca.account();
-    return res.json(data.data);
-  } catch (error) {
-    return res.status(500).json({ message: alpacaErrorMessage(error, 'Failed to fetch account') });
-  }
-});
-
-app.get('/alpaca/portfolio/history', async (req, res) => {
-  try {
-    const period = req.query.period || '1M';
-    const timeframe = req.query.timeframe || '1D';
-    const data = await req.alpaca.portfolioHistory(period, timeframe);
-    return res.json(data.data);
-  } catch (error) {
-    return res.status(500).json({ message: alpacaErrorMessage(error, 'Failed to fetch portfolio history') });
-  }
-});
-
-app.get('/alpaca/market/overview', async (req, res) => {
-  try {
-    const stockSymbols = ['AAPL', 'TSLA', 'NVDA', 'SPY'];
-    const [barsResponse, btcQuote] = await Promise.all([
-      req.alpaca.stockBars(stockSymbols.join(',')),
-      req.alpaca.cryptoQuote('BTC/USD'),
-    ]);
-
-    const bars = barsResponse.data?.bars || {};
-    const markets = stockSymbols.map((symbol) => {
-      const bar = bars[symbol] || {};
-      const close = Number(bar.c || 0);
-      const open = Number(bar.o || close);
-      const high = Number(bar.h || close);
-      const low = Number(bar.l || close);
-      const changePercent = open > 0 ? ((close - open) / open) * 100 : 0;
-      return { symbol, price: close, open, high, low, close, changePercent };
-    });
-
-    const btc = btcQuote.data?.quotes?.['BTC/USD'];
-    const btcPrice = Number(btc?.ap || btc?.bp || 0);
-    markets.push({
-      symbol: 'BTC/USD',
-      price: btcPrice,
-      open: btcPrice,
-      high: btcPrice,
-      low: btcPrice,
-      close: btcPrice,
-      changePercent: 0,
-    });
-
-    return res.json(markets);
-  } catch (error) {
-    return res.status(500).json({ message: alpacaErrorMessage(error, 'Failed to fetch market overview') });
-  }
-});
-
-app.get('/alpaca/assets/search', async (req, res) => {
-  try {
-    const q = req.query.q || '';
-    const assetClass = req.query.assetClass || 'us_equity';
-    const data = await req.alpaca.assets(String(q), String(assetClass));
-    return res.json(data);
-  } catch (error) {
-    return res.status(500).json({ message: alpacaErrorMessage(error, 'Failed to search assets') });
-  }
-});
-
-app.get('/alpaca/quote/:symbol', async (req, res) => {
-  try {
-    const symbol = req.params.symbol.toUpperCase();
-    const data = await req.alpaca.stockQuote(symbol);
-    const quote = data.data.quotes?.[symbol] || {};
-    const price = Number(quote.ap || quote.bp || 0);
-    return res.json({
-      symbol,
-      price,
-      bid: Number(quote.bp || 0),
-      ask: Number(quote.ap || 0),
-      spread: Number((quote.ap || 0) - (quote.bp || 0)),
-    });
-  } catch (error) {
-    return res.status(500).json({ message: alpacaErrorMessage(error, 'Failed to fetch quote') });
-  }
-});
-
-app.get('/alpaca/positions', async (req, res) => {
-  try {
-    const data = await req.alpaca.positions();
-    return res.json(data.data);
-  } catch (error) {
-    return res.status(500).json({ message: alpacaErrorMessage(error, 'Failed to fetch positions') });
-  }
-});
-
-app.post('/alpaca/positions/:symbol/close', async (req, res) => {
-  try {
-    const data = await req.alpaca.closePosition(req.params.symbol);
-    return res.json(data.data);
-  } catch (error) {
-    return res.status(500).json({ message: alpacaErrorMessage(error, 'Failed to close position') });
-  }
-});
-
-app.get('/alpaca/orders', async (req, res) => {
-  try {
-    const data = await req.alpaca.orders();
-    return res.json(data.data);
-  } catch (error) {
-    return res.status(500).json({ message: alpacaErrorMessage(error, 'Failed to fetch orders') });
-  }
-});
-
-app.post('/alpaca/orders', async (req, res) => {
-  const { symbol, qty, side, type, limit_price, stop_price, take_profit, stop_loss } = req.body;
-  if (!symbol || !qty || !side || !type) return res.status(400).json({ message: 'Invalid order payload' });
-
-  const payload = {
-    symbol: symbol.toUpperCase(),
-    qty,
-    side,
-    type,
-    time_in_force: 'day',
-    ...(type === 'limit' ? { limit_price } : {}),
-    ...(type === 'stop' ? { stop_price } : {}),
-    ...(take_profit ? { take_profit: { limit_price: Number(take_profit) } } : {}),
-    ...(stop_loss ? { stop_loss: { stop_price: Number(stop_loss) } } : {}),
-  };
-
-  try {
-    const data = await req.alpaca.order(payload);
-    return res.json(data.data);
-  } catch (error) {
-    return res.status(500).json({ message: alpacaErrorMessage(error, 'Failed to place order') });
-  }
-});
-
 registerCryptoRoutes(app, { authMiddleware });
 registerNowpaymentsRoutes(app, { authMiddleware });
 registerComplianceRoutes(app, { authMiddleware });
 registerLocalMoneyRoutes(app, { authMiddleware });
+registerP2pRoutes(app, { authMiddleware });
 registerWhitelistWalletRoutes(app, { authMiddleware });
 registerNotificationRoutes(app, { authMiddleware });
 registerNotificationPreferencesRoutes(app, { authMiddleware });
@@ -1193,4 +1005,4 @@ app.post('/mt5/accounts/:id/orders', authMiddleware, async (req, res) => {
 });
 
 const port = Number(process.env.PORT || 4000);
-app.listen(port, () => console.log(`EMA backend listening on :${port}`));
+app.listen(port, () => console.log(`Min backend listening on :${port}`));

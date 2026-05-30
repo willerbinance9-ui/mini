@@ -7,26 +7,26 @@ import { JournalScreen } from '../screens/JournalScreen';
 import { TradesHubScreen } from '../screens/TradesHubScreen';
 import { WalletScreen } from '../screens/WalletScreen';
 import { navigateToTransactionHistory } from '../utils/navigationHelpers';
-import { ExtraStackNavigator } from './ExtraStackNavigator';
+import { SettingsStackNavigator } from './SettingsStackNavigator';
 import { palette } from '../theme/colors';
 import { RootTabParamList } from '../types';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
 const focusedIconMap: Record<keyof RootTabParamList, keyof typeof Ionicons.glyphMap> = {
-  Home: 'home',
-  Journal: 'calendar',
-  Trades: 'stats-chart',
-  Wallet: 'wallet',
-  Extra: 'grid',
+  Home: 'sparkles',
+  Journal: 'book',
+  Trades: 'trending-up',
+  Wallet: 'briefcase',
+  Settings: 'settings',
 };
 
 const unfocusedIconMap: Record<keyof RootTabParamList, keyof typeof Ionicons.glyphMap> = {
-  Home: 'home-outline',
-  Journal: 'calendar-outline',
-  Trades: 'stats-chart-outline',
-  Wallet: 'wallet-outline',
-  Extra: 'grid-outline',
+  Home: 'sparkles-outline',
+  Journal: 'book-outline',
+  Trades: 'trending-up-outline',
+  Wallet: 'briefcase-outline',
+  Settings: 'settings-outline',
 };
 
 export function MainTabNavigator() {
@@ -59,6 +59,9 @@ export function MainTabNavigator() {
         component={HomeScreen}
         options={({ navigation }) => ({
           tabBarLabel: 'Home',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'sparkles' : 'sparkles-outline'} color={color} size={size} />
+          ),
           headerRight: () => (
             <Pressable
               onPress={() => navigation.getParent()?.navigate('Notifications')}
@@ -70,13 +73,37 @@ export function MainTabNavigator() {
           ),
         })}
       />
-      <Tab.Screen name='Journal' component={JournalScreen} options={{ tabBarLabel: 'Journal', title: 'Journal' }} />
-      <Tab.Screen name='Trades' component={TradesHubScreen} options={{ tabBarLabel: 'Trades' }} />
+      <Tab.Screen
+        name='Trades'
+        component={TradesHubScreen}
+        options={{
+          tabBarLabel: 'Earn',
+          title: 'Earn',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'trending-up' : 'trending-up-outline'} color={color} size={size} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name='Journal'
+        component={JournalScreen}
+        options={{
+          tabBarLabel: 'journal',
+          title: 'journal',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'book' : 'book-outline'} color={color} size={size} />
+          ),
+        }}
+      />
       <Tab.Screen
         name='Wallet'
         component={WalletScreen}
         options={({ navigation }) => ({
-          tabBarLabel: 'Wallet',
+          tabBarLabel: 'Asset',
+          title: 'Asset',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'briefcase' : 'briefcase-outline'} color={color} size={size} />
+          ),
           headerRight: () => (
             <Pressable
               onPress={() => navigateToTransactionHistory(navigation)}
@@ -84,15 +111,23 @@ export function MainTabNavigator() {
               hitSlop={12}
               accessibilityLabel='Transaction history'
             >
-              <Ionicons name='receipt-outline' size={24} color={palette.primary} />
+              <Ionicons name='list-outline' size={24} color={palette.primary} />
             </Pressable>
           ),
         })}
       />
       <Tab.Screen
-        name='Extra'
-        component={ExtraStackNavigator}
-        options={{ tabBarLabel: 'Extra', headerShown: false }}
+        name='Settings'
+        component={SettingsStackNavigator}
+        options={{
+          tabBarLabel: 'Settings',
+          headerShown: false,
+        }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('Settings', { screen: 'Settings' });
+          },
+        })}
       />
     </Tab.Navigator>
   );

@@ -33,6 +33,15 @@ function addDaysUtc(iso, days) {
   return d.toISOString();
 }
 
+/** Saturday/Sunday UTC — no VIP daily payout. */
+function isUtcWeekendYmd(ymd) {
+  const parts = String(ymd || '').slice(0, 10).split('-').map(Number);
+  if (parts.length < 3 || parts.some((n) => !Number.isFinite(n))) return false;
+  const [y, m, d] = parts;
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return dow === 0 || dow === 6;
+}
+
 async function getVipSummary(userId) {
   const wallet = await ensureWalletForUser(userId);
   const cash = roundUsd(wallet?.balance);
@@ -200,6 +209,17 @@ async function earlyWithdrawVip(userId) {
 }
 
 async function runVipDailyAccrual(planDate = utcTodayYmd()) {
+  if (isUtcWeekendYmd(planDate)) {
+    return {
+      ok: true,
+      planDate,
+      weekendSkipped: true,
+      investmentsChecked: 0,
+      accrualsApplied: 0,
+      skipped: 0,
+    };
+  }
+
   const rows = await listActiveVipInvestments();
   let applied = 0;
   let skipped = 0;

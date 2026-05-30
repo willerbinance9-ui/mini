@@ -11,5 +11,8 @@ export const palette = {
   success: '#00B324',
   danger: '#FF444F',
   warning: '#FFAD3A',
+  /** Info / legal notices (Deriv coral accent, not gold). */
+  noticeBorder: '#FF444F',
+  noticeBackground: '#242828',
   shadow: '#000000',
 };

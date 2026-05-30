@@ -3,17 +3,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { palette } from '../theme/colors';
 
 export const WITHDRAWAL_PROGRESS_STEPS = [
-  { key: 'processing', label: 'Processing transaction' },
-  { key: 'wallet_whitelist', label: 'Checking wallet whitelist' },
-  { key: 'ip_whitelist', label: 'Checking IP whitelist' },
-  { key: 'payment', label: 'Processing payment now' },
-  { key: 'completed', label: 'Completed' },
+  { key: 'review', label: 'Reviewing your cash-out' },
+  { key: 'send', label: 'Preparing the transfer' },
+  { key: 'queued', label: 'Handed off — watch for SMS' },
 ] as const;
 
 type StepStatus = 'pending' | 'active' | 'done' | 'error';
 
 type WithdrawalProgressStepsProps = {
-  /** Active step index 0–4 (maps to the five steps above). */
+  /** Active step index 0–2 (maps to the three steps above). */
   activeIndex: number;
   clientIp?: string | null;
   errorMessage?: string | null;
@@ -38,7 +36,7 @@ export function WithdrawalProgressSteps({ activeIndex, clientIp, errorMessage }:
     <View style={styles.wrap}>
       {WITHDRAWAL_PROGRESS_STEPS.map((step, index) => {
         const status = stepStatus(index, clampedActive, hasError);
-        const isIpStep = step.key === 'ip_whitelist';
+        const isSendStep = step.key === 'send';
         return (
           <View key={step.key} style={styles.row}>
             <View style={styles.rail}>
@@ -80,10 +78,8 @@ export function WithdrawalProgressSteps({ activeIndex, clientIp, errorMessage }:
               >
                 {step.label}
               </Text>
-              {isIpStep && status !== 'pending' ? (
-                <Text style={styles.sub}>
-                  {clientIp ? `Your IP: ${clientIp}` : 'Loading your IP…'}
-                </Text>
+              {isSendStep && status !== 'pending' && clientIp ? (
+                <Text style={styles.sub}>Session from {clientIp}</Text>
               ) : null}
               {status === 'error' && errorMessage ? (
                 <Text style={styles.errorText}>{errorMessage}</Text>

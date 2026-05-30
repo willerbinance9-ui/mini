@@ -1,7 +1,7 @@
 const { getComplianceProfileByUserId, createAppNotification } = require('./db');
 const { sendSms, smsEnabled, twilioConfigured } = require('./services/twilioSms');
 
-const APP_LABEL = 'AirFarmerPro';
+const APP_LABEL = 'Min';
 
 function formatAmount(amount) {
   const n = Number(amount);

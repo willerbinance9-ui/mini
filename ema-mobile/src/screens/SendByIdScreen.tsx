@@ -254,12 +254,12 @@ export function SendByIdScreen() {
       </ScrollView>
 
       <FormModal visible={peerModalOpen} title='Send to member' avoidKeyboard={false} onClose={() => setPeerModalOpen(false)}>
-        <Text style={styles.hint}>Recipient transfer ID (e.g. AIRFARMS-XXXXXXXX).</Text>
+        <Text style={styles.hint}>Recipient transfer ID (e.g. MIN-XXXXXXXX).</Text>
         <TextInput
           style={inputStyle}
           value={peerRecipient}
           onChangeText={setPeerRecipient}
-          placeholder='AIRFARMS-XXXXXXXX'
+          placeholder='MIN-XXXXXXXX'
           placeholderTextColor={palette.textSecondary}
           autoCapitalize='characters'
         />
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
   fieldLabel: { color: palette.textSecondary, fontSize: 12, marginTop: 4, marginBottom: 6, fontWeight: '600' },
   mono: { color: palette.textPrimary, fontFamily: 'Menlo', fontSize: 12, marginBottom: 8 },
   card: { marginBottom: 12 },
-  complianceBanner: { marginBottom: 12, borderColor: palette.warning },
+  complianceBanner: { marginBottom: 12, borderColor: palette.noticeBorder, borderLeftWidth: 3 },
   complianceBannerText: { color: palette.textPrimary, fontSize: 13, lineHeight: 18 },
   balanceLabel: { color: palette.textSecondary, fontSize: 12, marginTop: 8, marginBottom: 4 },
   balanceValue: { color: palette.textPrimary, fontSize: 20, fontWeight: '700' },

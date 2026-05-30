@@ -67,7 +67,7 @@ async function fulfillLocalMoneyOrder(order, nextStatus, providerPayload) {
         userId: updated.user_id,
         amount: updated.crypto_amount,
         asset: updated.crypto_asset || 'usdt',
-        body: `Your deposit of ${updated.fiat_amount} ${label} is complete. ${formatAmount(updated.crypto_amount)} USDT added to your wallet.`,
+        body: `${updated.fiat_amount} ${label} pay-in complete. ${formatAmount(updated.crypto_amount)} USDT added.`,
       });
     }
   }
@@ -83,7 +83,7 @@ async function fulfillLocalMoneyOrder(order, nextStatus, providerPayload) {
     });
     await notifyOrderSms(
       updated,
-      `Your withdrawal of ${formatAmount(updated.crypto_amount)} USDT (~${updated.fiat_amount} ${label}) to ${maskPhone(updated.phone)} is complete.`
+      `Cash-out complete: ${formatAmount(updated.crypto_amount)} USDT (~${updated.fiat_amount} ${label}) sent to ${maskPhone(updated.phone)}.`
     );
   }
 

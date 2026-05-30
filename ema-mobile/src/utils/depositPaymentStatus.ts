@@ -23,8 +23,8 @@ export function mapDepositPaymentPhase(
 }
 
 export const DEPOSIT_PHASE_LABELS: Record<DepositPaymentPhase, string> = {
-  waiting: 'Waiting',
-  processing: 'Processing',
-  processed: 'Processed',
-  failed: 'Failed',
+  waiting: 'Awaiting transfer',
+  processing: 'On the way',
+  processed: 'In your wallet',
+  failed: 'Not completed',
 };

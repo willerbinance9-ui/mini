@@ -1,10 +1,9 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, View } from 'react-native';
 import { MainTabNavigator } from './MainTabNavigator';
-import { AlpacaTradeScreen } from '../screens/AlpacaTradeScreen';
+import { P2PStackNavigator } from './P2PStackNavigator';
 import { AirfarmingTradeScreen } from '../screens/AirfarmingTradeScreen';
 import { VipFarmersTradeScreen } from '../screens/VipFarmersTradeScreen';
-import { ContractsTradeScreen } from '../screens/ContractsTradeScreen';
 import { ExpertAutoTradingScreen } from '../screens/ExpertAutoTradingScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { TransactionHistoryScreen } from '../screens/TransactionHistoryScreen';
@@ -43,10 +42,9 @@ export function RootNavigator() {
       }}
     >
       <Stack.Screen name='MainTabs' component={MainTabNavigator} options={{ headerShown: false }} />
-      <Stack.Screen name='AlpacaTrade' component={AlpacaTradeScreen} options={{ title: 'Forex market' }} />
+      <Stack.Screen name='P2P' component={P2PStackNavigator} options={{ headerShown: false }} />
       <Stack.Screen name='AirfarmingTrade' component={AirfarmingTradeScreen} options={{ title: 'Airfarmers' }} />
       <Stack.Screen name='VipFarmersTrade' component={VipFarmersTradeScreen} options={{ title: 'Live VIP Farmers' }} />
-      <Stack.Screen name='ContractsTrade' component={ContractsTradeScreen} options={{ title: 'Contracts' }} />
       <Stack.Screen name='ExpertAutoTrading' component={ExpertAutoTradingScreen} options={{ title: 'Expert Account Manager' }} />
       <Stack.Screen name='Notifications' component={NotificationsScreen} options={{ title: 'Notifications' }} />
       <Stack.Screen name='TransactionHistory' component={TransactionHistoryScreen} options={{ title: 'Asset history' }} />
@@ -56,16 +54,16 @@ export function RootNavigator() {
         options={({ route }) => ({
           title:
             route.params.row.category === 'withdraw'
-              ? 'Withdrawal details'
+              ? 'Cash-out details'
               : route.params.row.category === 'deposit'
-                ? 'Deposit details'
+                ? 'Add funds details'
                 : 'Transaction details',
         })}
       />
       <Stack.Screen
         name='CryptoDepositPayment'
         component={CryptoDepositPaymentScreen}
-        options={{ title: 'Complete payment' }}
+        options={{ title: 'Pay with crypto' }}
       />
       <Stack.Screen name='Support' component={SupportScreen} options={{ title: 'Help & support' }} />
     </Stack.Navigator>

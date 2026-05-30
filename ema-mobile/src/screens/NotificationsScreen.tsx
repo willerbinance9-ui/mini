@@ -132,8 +132,8 @@ const styles = StyleSheet.create({
   infoTitle: { color: palette.textPrimary, fontSize: 17, fontWeight: '700' },
   sub: { color: palette.textSecondary, lineHeight: 20, fontSize: 13 },
   meta: { color: palette.textSecondary, fontSize: 13 },
-  warn: { color: palette.warning, marginBottom: 6, fontSize: 14 },
-  errorCard: { borderColor: palette.warning, marginBottom: 10 },
+  warn: { color: palette.danger, marginBottom: 6, fontSize: 14 },
+  errorCard: { borderColor: palette.danger, marginBottom: 10 },
   emptyTitle: { color: palette.textPrimary, fontWeight: '700', marginBottom: 6 },
   noticeCardBroadcast: {
     marginBottom: 10,

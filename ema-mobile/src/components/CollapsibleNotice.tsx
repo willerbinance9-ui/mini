@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
@@ -13,7 +13,7 @@ type CollapsibleNoticeProps = {
   dismissible?: boolean;
   storageKeyPrefix?: string;
   defaultExpanded?: boolean;
-  style?: object;
+  style?: StyleProp<ViewStyle>;
 };
 
 const DEFAULT_PREFIX = 'ema_notice_dismissed_';
@@ -44,7 +44,7 @@ export function CollapsibleNotice({
   if (dismissible && dismissed) return null;
 
   return (
-    <Card style={style}>
+    <Card style={StyleSheet.flatten([styles.noticeCard, style])}>
       <Pressable
         style={styles.header}
         onPress={() => setExpanded((v) => !v)}
@@ -72,6 +72,12 @@ export function CollapsibleNotice({
 }
 
 const styles = StyleSheet.create({
+  noticeCard: {
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: palette.noticeBorder,
+    backgroundColor: palette.noticeBackground,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

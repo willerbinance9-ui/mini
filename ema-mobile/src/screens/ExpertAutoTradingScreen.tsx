@@ -39,7 +39,7 @@ const DEFAULT_RISK_REWARD = '1:2';
 
 const DISCLAIMER_TEXT =
   'Trading involves substantial risk. Market outcomes are unpredictable — funds on your account can be lost or gained.\n\n' +
-  'Airfarms is not responsible for any market deals, trade results, or losses incurred while expert management is active on your MT5 account. ' +
+  'Min is not responsible for any market deals, trade results, or losses incurred while expert management is active on your MT5 account. ' +
   'By enabling Expert Account Manager you acknowledge that a third-party expert strategy may execute trades on your behalf.\n\n' +
   'You must perform your own due diligence, understand the risks, and only allocate capital you can afford to lose. ' +
   'Past performance does not guarantee future results.';
@@ -326,7 +326,7 @@ export function ExpertAutoTradingScreen() {
   };
 
   const goMt5 = () => {
-    navigation.navigate('MainTabs', { screen: 'Extra', params: { screen: 'MT5' } });
+    navigation.navigate('MainTabs', { screen: 'Settings', params: { screen: 'MT5' } });
   };
 
   const inputStyle = styles.input;
@@ -339,7 +339,6 @@ export function ExpertAutoTradingScreen() {
         keyboardShouldPersistTaps='handled'
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
       >
-        <Text style={styles.title}>Expert Account Manager</Text>
         <Text style={styles.sub}>
           Connect MT5, set your risk limits, then enable expert management. The expert may place trades on your linked account
           within the parameters you define.
@@ -610,7 +609,7 @@ export function ExpertAutoTradingScreen() {
           <View style={{ gap: 8, marginTop: 12 }}>
             <View style={styles.row}>
               <Text style={[styles.meta, { flex: 1, marginRight: 8 }]}>
-                I accept that Airfarms is not responsible for losses and I will perform due diligence.
+                I accept that Min is not responsible for losses and I will perform due diligence.
               </Text>
               <Switch
                 value={disclaimerAccepted}

@@ -20,7 +20,7 @@ import {
 type Route = RouteProp<RootStackParamList, 'TransactionDetail'>;
 
 function methodLabelForRow(row: import('../types').WalletActivityRow): string {
-  return row.methodLabel || (row.category === 'transfer' ? 'Member transfer' : row.kind === 'payment' ? 'On-chain deposit' : row.kind === 'payout' ? 'On-chain withdrawal' : 'Internal');
+  return row.methodLabel || (row.category === 'transfer' ? 'Member transfer' : row.kind === 'payment' ? 'Crypto pay-in' : row.kind === 'payout' ? 'Crypto cash-out' : 'Internal');
 }
 
 function DetailRow({ label, value, copyable }: { label: string; value: string; copyable?: boolean }) {
@@ -58,9 +58,9 @@ export function TransactionDetailScreen() {
 
   const title =
     row.category === 'deposit'
-      ? 'Deposit details'
+      ? 'Add funds details'
       : row.category === 'withdraw'
-        ? 'Withdrawal details'
+        ? 'Cash-out details'
         : row.category === 'transfer'
           ? 'Transfer details'
           : 'Transaction details';
@@ -79,13 +79,13 @@ export function TransactionDetailScreen() {
       <View style={styles.card}>
         <DetailRow label='Type' value={title.replace(' details', '')} />
         <DetailRow label='Method' value={methodLabelForRow(row)} />
-        <DetailRow label='Account' value='Funding account' />
+        <DetailRow label='Wallet' value='Main balance' />
         {row.fee != null && Number.isFinite(row.fee) ? (
           <DetailRow label='Fees' value={String(row.fee)} />
         ) : (
           <DetailRow label='Fees' value='—' />
         )}
-        <DetailRow label='Chain type' value={formatAssetDisplay(row.asset)} />
+        <DetailRow label='Network' value={formatAssetDisplay(row.asset)} />
         <DetailRow label='Time' value={activityTimestamp(row.createdAt)} />
         <DetailRow label='Status' value={formatActivityStatus(row.status)} />
         {row.address ? <DetailRow label='Address' value={row.address} copyable /> : null}
@@ -95,7 +95,7 @@ export function TransactionDetailScreen() {
 
       {explorer ? (
         <PrimaryButton
-          label='View in blockchain explorer'
+          label='Open in block explorer'
           onPress={() => void Linking.openURL(explorer)}
           style={styles.explorerBtn}
         />

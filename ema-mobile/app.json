@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "AirFarmerPro",
-    "slug": "ema",
-    "version": "1.0.0",
+    "name": "PureHarvest",
+    "slug": "pureharvest",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -10,27 +10,29 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0E0E0E"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "bundleIdentifier": "com.willer256.emamobile",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "AirFarmerPro uses your location to show local currency rates for P2P and mobile money.",
-        "NSFaceIDUsageDescription": "AirFarmerPro uses Face ID to sign in quickly and unlock the app after inactivity."
+        "NSLocationWhenInUseUsageDescription": "PureHarvest uses your location to show local currency rates for P2P and phone money.",
+        "NSFaceIDUsageDescription": "PureHarvest uses Face ID to sign in quickly and unlock the app after inactivity."
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0E0E0E"
+        "backgroundColor": "#000000"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -41,23 +43,23 @@
     },
     "extra": {
       "eas": {
-        "projectId": "29fed882-ad53-4349-8a4f-f8d3a542cc1f"
+        "projectId": "4a7f7d1f-e587-494a-9d63-289593ba0400"
       }
     },
-    "owner": "willer256",
+    "owner": "willerbinance",
     "plugins": [
       "expo-font",
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "AirFarmerPro uses your location to show local currency rates for P2P and mobile money in your country."
+          "locationWhenInUsePermission": "PureHarvest uses your location to show local currency rates for P2P and phone money in your country."
         }
       ],
       "expo-secure-store",
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Allow AirFarmerPro to use Face ID for quick sign-in and app unlock."
+          "faceIDPermission": "Allow PureHarvest to use Face ID for quick sign-in and app unlock."
         }
       ]
     ],
@@ -65,7 +67,7 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/29fed882-ad53-4349-8a4f-f8d3a542cc1f"
+      "url": "https://u.expo.dev/4a7f7d1f-e587-494a-9d63-289593ba0400"
     }
   }
 }

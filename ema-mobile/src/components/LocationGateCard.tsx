@@ -51,5 +51,5 @@ const styles = StyleSheet.create({
   title: { color: palette.textPrimary, fontSize: 17, fontWeight: '700', marginBottom: 8 },
   body: { color: palette.textSecondary, fontSize: 13, lineHeight: 19 },
   meta: { color: palette.textSecondary, marginTop: 12, fontSize: 13 },
-  error: { color: palette.warning, marginTop: 8, fontSize: 12, lineHeight: 17 },
+  error: { color: palette.danger, marginTop: 8, fontSize: 12, lineHeight: 17 },
 });

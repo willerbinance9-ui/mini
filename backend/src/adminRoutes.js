@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const {
@@ -27,11 +28,20 @@ const {
   getAirfarmingPlatformSettings,
   updateAirfarmingPlatformSettings,
   listPendingWithdrawalsAdmin,
+  listP2pTradesDisputedAdmin,
+  getP2pTradeById,
+  updateP2pTrade,
+  incrementP2pMerchantCompletedTrades,
   createAppNotification,
   getUserByEmail,
 } = require('./db');
 const { normalizeTargetUserId } = require('./notificationRoutes');
 const { approveWithdrawal, rejectWithdrawal } = require('./adminWithdrawals');
+const { releaseP2pEscrow, refundP2pEscrow } = require('./p2pEscrow');
+
+function newId() {
+  return crypto.randomUUID();
+}
 const { adminAuthMiddleware, ADMIN_PURPOSE } = require('./middleware/adminAuth');
 const {
   clampAirfarmingPercent,
@@ -708,6 +718,71 @@ function registerAdminRoutes(app) {
     } catch (e) {
       console.error('[admin/withdrawals/pending]', e);
       return res.status(500).json({ message: e.message || 'Failed to load pending withdrawals' });
+    }
+  });
+
+  app.get('/admin/api/p2p/disputed', adminAuthMiddleware, async (req, res) => {
+    try {
+      const trades = await listP2pTradesDisputedAdmin(Number(req.query.limit) || 100);
+      return res.json({ trades, count: trades.length });
+    } catch (e) {
+      if (isMissingTableError(e)) {
+        return res.json({ trades: [], count: 0, schemaMissing: true });
+      }
+      console.error('[admin/p2p/disputed]', e);
+      return res.status(500).json({ message: e.message || 'Failed to load disputed P2P trades' });
+    }
+  });
+
+  app.post('/admin/api/p2p/trades/:id/resolve-release', adminAuthMiddleware, async (req, res) => {
+    try {
+      const row = await getP2pTradeById(req.params.id);
+      if (!row) return res.status(404).json({ message: 'Trade not found' });
+      if (row.status !== 'disputed') {
+        return res.status(400).json({ message: 'Trade is not disputed.' });
+      }
+      if (!row.ledger_escrow_posted) {
+        return res.status(400).json({ message: 'Escrow was not posted for this trade.' });
+      }
+      await releaseP2pEscrow({
+        receiverId: row.usdt_receiver_id,
+        amount: row.crypto_amount,
+        tradeId: row.id,
+        newId,
+      });
+      const updated = await updateP2pTrade(row.id, {
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      });
+      await incrementP2pMerchantCompletedTrades(row.merchant_user_id);
+      return res.json({ ok: true, trade: updated });
+    } catch (e) {
+      console.error('[admin/p2p/resolve-release]', e);
+      return res.status(500).json({ message: e.message || 'Failed to release escrow' });
+    }
+  });
+
+  app.post('/admin/api/p2p/trades/:id/resolve-refund', adminAuthMiddleware, async (req, res) => {
+    try {
+      const row = await getP2pTradeById(req.params.id);
+      if (!row) return res.status(404).json({ message: 'Trade not found' });
+      if (row.status !== 'disputed') {
+        return res.status(400).json({ message: 'Trade is not disputed.' });
+      }
+      if (!row.ledger_escrow_posted) {
+        return res.status(400).json({ message: 'Escrow was not posted for this trade.' });
+      }
+      await refundP2pEscrow({
+        senderId: row.usdt_sender_id,
+        amount: row.crypto_amount,
+        tradeId: row.id,
+        newId,
+      });
+      const updated = await updateP2pTrade(row.id, { status: 'cancelled' });
+      return res.json({ ok: true, trade: updated });
+    } catch (e) {
+      console.error('[admin/p2p/resolve-refund]', e);
+      return res.status(500).json({ message: e.message || 'Failed to refund escrow' });
     }
   });
 

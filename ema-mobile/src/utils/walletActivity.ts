@@ -51,12 +51,12 @@ function methodLabelFor(row: WalletActivityRow): string {
   if (row.methodLabel) return row.methodLabel;
   if (row.kind === 'cash') {
     if (row.category === 'transfer') return 'Member transfer';
-    return row.category === 'deposit' ? 'Trading wallet deposit' : 'Trading wallet withdrawal';
+    return row.category === 'deposit' ? 'Wallet top-up' : 'Wallet cash-out';
   }
-  if (row.category === 'fiat') return 'Mobile money';
+  if (row.category === 'fiat') return 'Phone money';
   if (row.category === 'transfer') return 'Internal transfer';
-  if (row.kind === 'payment') return 'On-chain deposit';
-  if (row.kind === 'payout') return 'On-chain withdrawal';
+  if (row.kind === 'payment') return 'Crypto pay-in';
+  if (row.kind === 'payout') return 'Crypto cash-out';
   return formatLedgerSource(row.source);
 }
 
@@ -106,7 +106,7 @@ function mergeFromParts(summary: NowpaymentsSummary): WalletActivityRow[] {
     items.push({
       ...base,
       category,
-      methodLabel: 'On-chain withdrawal',
+      methodLabel: 'Crypto cash-out',
       address: p.address,
     });
   }
@@ -130,7 +130,7 @@ function mergeFromParts(summary: NowpaymentsSummary): WalletActivityRow[] {
     items.push({
       ...base,
       category,
-      methodLabel: 'On-chain deposit',
+      methodLabel: 'Crypto pay-in',
       address: p.payAddress || undefined,
     });
   }
@@ -271,6 +271,7 @@ export function formatActivityStatus(status: string): string {
   if (s.startsWith('completed')) return 'Completed';
   if (s === 'in_progress') return 'In progress';
   if (s === 'awaiting_verify') return 'In progress';
+  if (s === 'submitted' || s === 'awaiting_approval') return 'In progress';
   if (s === 'processing' || s === 'sending' || s === 'confirming' || s === 'pending' || s === 'creating' || s === 'waiting')
     return 'In progress';
   if (s === 'waiting') return 'Waiting';
@@ -284,13 +285,13 @@ export function activityStatusLabel(row: WalletActivityRow): string {
   const settled = row.status === 'completed' || row.status === 'finished' || String(row.status).startsWith('completed');
   const prefix =
     cat === 'deposit'
-      ? 'Deposit'
+      ? 'Added funds'
       : cat === 'withdraw'
-        ? 'Withdrawal'
+        ? 'Cash out'
         : cat === 'transfer'
           ? 'Transfer'
           : cat === 'fiat'
-            ? 'Mobile money'
+            ? 'Phone money'
             : 'Transaction';
   return settled ? `${prefix} completed` : `${prefix} · ${formatActivityStatus(row.status)}`;
 }
@@ -304,7 +305,7 @@ export function activityHeadline(row: WalletActivityRow): string {
   if (row.category === 'transfer') {
     return row.direction === 'in' ? `Received ${formatAssetDisplay(row.asset)}` : `Sent ${formatAssetDisplay(row.asset)}`;
   }
-  const dir = row.direction === 'in' ? 'Deposit' : 'Withdrawal';
+  const dir = row.direction === 'in' ? 'Added' : 'Sent out';
   return `${dir} ${formatAssetDisplay(row.asset)}`;
 }
 
@@ -324,9 +325,9 @@ export function activityTypeLine(row: WalletActivityRow): string {
   const type =
     row.direction === 'in'
       ? row.kind === 'payment'
-        ? 'Deposit'
+        ? 'Pay-in'
         : formatLedgerSource(row.source)
-      : 'Withdraw';
+      : 'Cash out';
   if (row.availableBalance != null && Number.isFinite(row.availableBalance)) {
     return `Type ${type} · Available balance ${formatAmountDisplay(row.availableBalance)}`;
   }

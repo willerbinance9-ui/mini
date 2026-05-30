@@ -51,7 +51,33 @@ export function navigateToSupport(
 }
 
 export function navigateToSendById(navigation: NavLike) {
-  navigation.navigate('Extra', { screen: 'SendById' });
+  navigation.navigate('Settings', { screen: 'SendById' });
+}
+
+export function navigateToLocalMoney(navigation: NavLike, initialTab?: 'deposit' | 'withdraw') {
+  navigation.navigate('Settings', {
+    screen: 'LocalMoney',
+    params: initialTab ? { initialTab } : undefined,
+  });
+}
+
+export function navigateToSettings(navigation: NavLike, params?: { openSecurity?: boolean }) {
+  getRootNavigation(navigation).navigate('MainTabs', {
+    screen: 'Settings',
+    params: params?.openSecurity ? { screen: 'Settings', params } : undefined,
+  });
+}
+
+export function navigateToP2P(navigation: NavLike) {
+  getRootNavigation(navigation).navigate('P2P');
+}
+
+export function navigateToP2PSetup(navigation: NavLike) {
+  getRootNavigation(navigation).navigate('P2P', { screen: 'P2PSetup' });
+}
+
+export function navigateToMT5(navigation: NavLike) {
+  navigation.navigate('Settings', { screen: 'MT5' });
 }
 
 export function navigateToAirfarmingTrade(navigation: NavLike) {

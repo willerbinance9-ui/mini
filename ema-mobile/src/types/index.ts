@@ -1,12 +1,30 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
-export type ExtraStackParamList = {
-  ExtraHub: undefined;
-  P2P: undefined;
-  SendById: undefined;
-  LocalMoney: undefined;
-  MT5: undefined;
+export type SettingsStackParamList = {
   Settings: { openSecurity?: boolean } | undefined;
+  SendById: undefined;
+  LocalMoney: { initialTab?: 'deposit' | 'withdraw' } | undefined;
+  MT5: undefined;
+};
+
+export type P2PStackParamList = {
+  P2P: undefined;
+  P2PSetup: undefined;
+  P2PTrade: {
+    tradeId?: string;
+    offer?: {
+      userId: string;
+      displayName: string;
+      counterpartyAction: 'buy' | 'sell';
+      pricePerUsdt: number;
+      fiatCurrency: string;
+      countryCode: string;
+      limitMinFiat: number;
+      limitMaxFiat: number;
+      completedTrades: number;
+      merchantSide?: 'sell_usdt' | 'buy_usdt';
+    };
+  };
 };
 
 export type RootTabParamList = {
@@ -14,15 +32,14 @@ export type RootTabParamList = {
   Journal: undefined;
   Trades: undefined;
   Wallet: undefined;
-  Extra: NavigatorScreenParams<ExtraStackParamList> | undefined;
+  Settings: NavigatorScreenParams<SettingsStackParamList> | undefined;
 };
 
 export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<RootTabParamList> | undefined;
-  AlpacaTrade: undefined;
+  P2P: NavigatorScreenParams<P2PStackParamList> | undefined;
   AirfarmingTrade: undefined;
   VipFarmersTrade: undefined;
-  ContractsTrade: undefined;
   ExpertAutoTrading: undefined;
   Notifications: undefined;
   TransactionHistory: { initialTab?: TransactionHistoryTab } | undefined;
@@ -61,7 +78,7 @@ export type ActivityFeedItem = {
   amountLabel?: string;
   directionLabel?: 'incoming' | 'outgoing' | 'neutral';
   timestampLabel?: string;
-  kind: 'alpaca_order' | 'crypto_tx' | 'placeholder';
+  kind: 'crypto_tx' | 'placeholder';
 };
 
 export type TradeSide = 'buy' | 'sell';

@@ -59,9 +59,14 @@ export function AnnouncementBanner() {
 }
 
 const styles = StyleSheet.create({
-  card: { marginBottom: 12, borderColor: palette.primary, backgroundColor: palette.surface },
+  card: {
+    marginBottom: 12,
+    borderColor: palette.noticeBorder,
+    borderLeftWidth: 3,
+    backgroundColor: palette.noticeBackground,
+  },
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
   titleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { flex: 1, color: palette.primary, fontSize: 15, fontWeight: '700' },
+  title: { flex: 1, color: palette.noticeBorder, fontSize: 15, fontWeight: '700' },
   body: { color: palette.textPrimary, fontSize: 14, lineHeight: 20, marginTop: 10 },
 });

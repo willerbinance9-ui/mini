@@ -9,8 +9,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ComplianceProfileNotice } from '../components/ComplianceProfileNotice';
 import { Card } from '../components/Card';
 import { FormModal } from '../components/FormModal';
 import { LocationGateCard } from '../components/LocationGateCard';
@@ -21,7 +22,8 @@ import { authService } from '../services/authService';
 import { complianceService } from '../services/complianceService';
 import { isTotpRequiredError, localMoneyService } from '../services/localMoneyService';
 import { nowpaymentsService } from '../services/nowpaymentsService';
-import { ExtraStackParamList } from '../types';
+import { SettingsStackParamList } from '../types';
+import { navigateToSettings } from '../utils/navigationHelpers';
 import { palette } from '../theme/colors';
 import { sanitizeUserFacingError } from '../utils/userFacingError';
 import {
@@ -31,12 +33,14 @@ import {
   sumUsdtFamilyAvailable,
 } from '../utils/walletDisplay';
 
-type Nav = NativeStackNavigationProp<ExtraStackParamList, 'LocalMoney'>;
+type Nav = NativeStackNavigationProp<SettingsStackParamList, 'LocalMoney'>;
+type LocalMoneyRoute = RouteProp<SettingsStackParamList, 'LocalMoney'>;
 
 type Tab = 'deposit' | 'withdraw';
 
 export function LocalMoneyScreen() {
   const navigation = useNavigation<Nav>();
+  const route = useRoute<LocalMoneyRoute>();
   const { showToast } = useToast();
   const {
     countryCode,
@@ -51,7 +55,7 @@ export function LocalMoneyScreen() {
     error,
   } = useLocalMoneyRegion();
 
-  const [tab, setTab] = useState<Tab>('deposit');
+  const [tab, setTab] = useState<Tab>(route.params?.initialTab ?? 'deposit');
   const [phone, setPhone] = useState('');
   const [fiatAmount, setFiatAmount] = useState('');
   const [cryptoAmount, setCryptoAmount] = useState('');
@@ -83,6 +87,10 @@ export function LocalMoneyScreen() {
     loadProfile();
   }, [loadProfile]);
 
+  useEffect(() => {
+    if (route.params?.initialTab) setTab(route.params.initialTab);
+  }, [route.params?.initialTab]);
+
   const inputStyle = {
     backgroundColor: palette.surfaceElevated,
     borderWidth: 1,
@@ -102,7 +110,7 @@ export function LocalMoneyScreen() {
     if (amount < minFiat) {
       Alert.alert(
         'Amount too low',
-        `Minimum deposit is ${MIN_MOMO_USDT} USDT (~${minFiat.toLocaleString()} ${region?.fiatLabel}).`
+        `Minimum pay-in is ${MIN_MOMO_USDT} USDT (~${minFiat.toLocaleString()} ${region?.fiatLabel}).`
       );
       return;
     }
@@ -115,9 +123,9 @@ export function LocalMoneyScreen() {
       });
       setFiatAmount('');
       setConfirmOpen(false);
-      showToast(res.message || 'Deposit initiated');
+      showToast(res.message || 'Pay-in started');
     } catch (e: any) {
-      Alert.alert('Deposit failed', sanitizeUserFacingError(e?.message));
+      Alert.alert('Could not start pay-in', sanitizeUserFacingError(e?.message));
     } finally {
       setBusy(false);
     }
@@ -128,7 +136,7 @@ export function LocalMoneyScreen() {
     if (!totpEnabled) {
       Alert.alert(
         'Two-factor required',
-        'Enable two-factor authentication in Settings before withdrawing to mobile money.',
+        'Turn on two-factor authentication in Settings before cashing out to phone money.',
         [{ text: 'Open Settings', onPress: () => navigation.navigate('Settings') }]
       );
       return;
@@ -136,13 +144,13 @@ export function LocalMoneyScreen() {
     const amount = Number(cryptoAmount);
     if (!Number.isFinite(amount) || amount <= 0) return;
     if (amount < MIN_MOMO_USDT) {
-      Alert.alert('Amount too low', `Minimum withdrawal is ${MIN_MOMO_USDT} USDT.`);
+      Alert.alert('Amount too low', `Minimum cash-out is ${MIN_MOMO_USDT} USDT.`);
       return;
     }
     if (maxUsdt > 0 && amount > maxUsdt) {
       Alert.alert(
         'Insufficient balance',
-        `Maximum withdrawable: ${Math.floor(maxUsdt)} USDT (fee reserve applied).`
+        `You can cash out up to ${Math.floor(maxUsdt)} USDT right now.`
       );
       return;
     }
@@ -159,24 +167,25 @@ export function LocalMoneyScreen() {
       setCryptoAmount('');
       setTotpCode('');
       setConfirmOpen(false);
-      showToast(res.message || 'Withdrawal initiated');
+      Alert.alert('On its way', res.message || 'Your cash-out request is in.');
       await loadProfile();
     } catch (e: any) {
       if (isTotpRequiredError(e)) {
-        Alert.alert('Two-factor required', 'Enable 2FA in Settings to use mobile withdrawals.', [
+        Alert.alert('Two-factor required', 'Turn on 2FA in Settings to cash out to phone money.', [
           { text: 'Settings', onPress: () => navigation.navigate('Settings') },
         ]);
       } else {
-        Alert.alert('Withdraw failed', sanitizeUserFacingError(e?.message));
+        Alert.alert('Cash-out failed', sanitizeUserFacingError(e?.message));
       }
     } finally {
       setBusy(false);
     }
   };
 
+  const cryptoNum = Number(cryptoAmount);
   const estimatedFiat =
-    region && cryptoAmount.trim()
-      ? Math.round(Number(cryptoAmount) * region.usdtToFiatRate)
+    region && cryptoAmount.trim() && Number.isFinite(cryptoNum) && cryptoNum > 0
+      ? Math.round(cryptoNum * region.usdtToFiatRate)
       : null;
 
   if (!bootstrapComplete) {
@@ -194,7 +203,7 @@ export function LocalMoneyScreen() {
     return (
       <ScrollView style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <Text style={styles.sub}>
-          Deposit or withdraw using mobile money. Enable location to see rates for where you are.
+          Pay in or cash out with phone money. Turn on location to see rates where you are.
         </Text>
         <LocationGateCard locationStatus={locationStatus} error={error} onEnableLocation={detectLocation} />
       </ScrollView>
@@ -206,7 +215,7 @@ export function LocalMoneyScreen() {
       <ScrollView style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <Card>
           <Text style={styles.emptyTitle}>Not available in your region</Text>
-          <Text style={styles.meta}>Mobile money is not offered where you are located.</Text>
+          <Text style={styles.meta}>Phone money is not offered in your country yet.</Text>
         </Card>
       </ScrollView>
     );
@@ -215,7 +224,7 @@ export function LocalMoneyScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       <Text style={styles.sub}>
-        Rates for {region.countryName}: {usdtPairLabel}. Deposit or withdraw with mobile money.
+        Rates in {region.countryName} ({usdtPairLabel}). Pay in from your phone or cash out to your number.
       </Text>
 
       {regionLoading ? (
@@ -239,46 +248,48 @@ export function LocalMoneyScreen() {
                 onPress={() => setTab(t)}
               >
                 <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-                  {t === 'deposit' ? 'Deposit' : 'Withdraw'}
+                  {t === 'deposit' ? 'Pay in' : 'Cash out'}
                 </Text>
               </Pressable>
             ))}
           </View>
 
           {!complianceComplete ? (
-            <Card style={styles.banner}>
-              <Text style={styles.bannerText}>Complete your profile in Settings before using mobile money.</Text>
-            </Card>
+            <ComplianceProfileNotice
+              noticeId='mobile_money'
+              message='Finish your profile in Settings before using phone money.'
+              onOpenSettings={() => navigateToSettings(navigation)}
+            />
           ) : null}
 
           {tab === 'deposit' ? (
             <Card>
-              <Text style={styles.fieldLabel}>Mobile number</Text>
+              <Text style={styles.fieldLabel}>Your phone number</Text>
               <TextInput
                 style={inputStyle}
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType='phone-pad'
-                placeholder='Enter mobile number'
+                placeholder='Number that receives mobile money'
                 placeholderTextColor={palette.textSecondary}
               />
               <Text style={[styles.fieldLabel, { marginTop: 12 }]}>
-                Amount ({region?.fiatLabel})
+                How much ({region?.fiatLabel})
               </Text>
               <TextInput
                 style={inputStyle}
                 value={fiatAmount}
                 onChangeText={setFiatAmount}
                 keyboardType='decimal-pad'
-                placeholder='Enter amount'
+                placeholder='Amount in local money'
                 placeholderTextColor={palette.textSecondary}
               />
               <Text style={styles.hint}>
-                Minimum {MIN_MOMO_USDT} USDT (~{minFiat.toLocaleString()} {region?.fiatLabel}). You will receive a payment
-                prompt on your phone. We will text you when the deposit is initiated or complete.
+                At least {MIN_MOMO_USDT} USDT (~{minFiat.toLocaleString()} {region?.fiatLabel}). Your phone will
+                show a prompt to approve — we text you when it starts and when USDT lands.
               </Text>
               <PrimaryButton
-                label={busy ? 'Starting…' : 'Deposit with mobile money'}
+                label={busy ? 'Starting…' : 'Start pay-in'}
                 onPress={() => setConfirmOpen(true)}
                 disabled={busy || !complianceComplete || !phone.trim() || !fiatAmount.trim()}
                 style={{ marginTop: 14 }}
@@ -288,37 +299,48 @@ export function LocalMoneyScreen() {
             <Card>
               {!totpEnabled ? (
                 <Text style={styles.warn}>
-                  Enable two-factor authentication in Settings to withdraw to mobile money.
+                  Enable two-factor authentication in Settings to cash out to phone money.
                 </Text>
               ) : null}
-              <Text style={styles.fieldLabel}>USDT amount (from wallet)</Text>
-              <TextInput
-                style={inputStyle}
-                value={cryptoAmount}
-                onChangeText={setCryptoAmount}
-                keyboardType='decimal-pad'
-                placeholder='How much USDT to withdraw'
-                placeholderTextColor={palette.textSecondary}
-              />
-              {estimatedFiat != null && Number.isFinite(estimatedFiat) ? (
-                <Text style={styles.meta}>
-                  ≈ {estimatedFiat.toLocaleString()} {region?.fiatLabel}
-                </Text>
-              ) : null}
-              <Text style={styles.meta}>Minimum withdrawal: {MIN_MOMO_USDT} USDT</Text>
-              {maxUsdt > 0 ? (
-                <Text style={styles.meta}>Max withdrawable: {Math.floor(maxUsdt)} USDT</Text>
-              ) : null}
-              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Mobile number</Text>
+
+              <Text style={styles.fieldLabel}>Phone to receive money</Text>
               <TextInput
                 style={inputStyle}
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType='phone-pad'
-                placeholder='From your profile — edit if needed'
+                placeholder='Your mobile money number'
                 placeholderTextColor={palette.textSecondary}
               />
-              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Authenticator code</Text>
+              <Text style={styles.hint}>We send local currency to this number in {region?.countryName}.</Text>
+
+              <Text style={[styles.fieldLabel, { marginTop: 14 }]}>USDT to cash out</Text>
+              <TextInput
+                style={inputStyle}
+                value={cryptoAmount}
+                onChangeText={setCryptoAmount}
+                keyboardType='decimal-pad'
+                placeholder='From your wallet balance'
+                placeholderTextColor={palette.textSecondary}
+              />
+              <Text style={styles.meta}>At least {MIN_MOMO_USDT} USDT</Text>
+              {maxUsdt > 0 ? (
+                <Text style={styles.meta}>Available: {Math.floor(maxUsdt)} USDT</Text>
+              ) : null}
+
+              {estimatedFiat != null && region ? (
+                <View style={styles.estimateCard}>
+                  <Text style={styles.estimateLabel}>About what you receive in {region.countryName}</Text>
+                  <Text style={styles.estimateValue}>
+                    ≈ {estimatedFiat.toLocaleString()} {region.fiatLabel}
+                  </Text>
+                  <Text style={styles.estimateSub}>
+                    1 USDT ≈ {region.usdtToFiatRate.toLocaleString()} {region.fiatLabel} (approx.)
+                  </Text>
+                </View>
+              ) : null}
+
+              <Text style={[styles.fieldLabel, { marginTop: 14 }]}>Authenticator code</Text>
               <TextInput
                 style={inputStyle}
                 value={totpCode}
@@ -328,8 +350,9 @@ export function LocalMoneyScreen() {
                 placeholderTextColor={palette.textSecondary}
                 maxLength={8}
               />
+
               <PrimaryButton
-                label={busy ? 'Submitting…' : 'Confirm withdrawal'}
+                label={busy ? 'Sending…' : 'Request cash-out'}
                 onPress={() => setConfirmOpen(true)}
                 disabled={
                   busy ||
@@ -337,6 +360,8 @@ export function LocalMoneyScreen() {
                   !totpEnabled ||
                   !phone.trim() ||
                   !cryptoAmount.trim() ||
+                  !Number.isFinite(cryptoNum) ||
+                  cryptoNum < MIN_MOMO_USDT ||
                   totpCode.replace(/\s/g, '').length < 6
                 }
                 style={{ marginTop: 14 }}
@@ -348,7 +373,7 @@ export function LocalMoneyScreen() {
 
       <FormModal
         visible={confirmOpen}
-        title={tab === 'deposit' ? 'Confirm deposit' : 'Confirm withdrawal'}
+        title={tab === 'deposit' ? 'Confirm pay-in' : 'Confirm cash-out'}
         onClose={() => setConfirmOpen(false)}
         footer={
           <View style={{ gap: 8 }}>
@@ -363,14 +388,15 @@ export function LocalMoneyScreen() {
       >
         {tab === 'deposit' ? (
           <Text style={styles.confirmText}>
-            Deposit {fiatAmount} {region?.fiatLabel} from mobile number {phone}? Approve the request on your phone when
-            it arrives.
+            Pay in {fiatAmount} {region?.fiatLabel} from {phone}? Approve the prompt on your phone when it pops up.
           </Text>
         ) : (
           <Text style={styles.confirmText}>
-            Withdraw {cryptoAmount} USDT
-            {estimatedFiat != null ? ` (~${estimatedFiat} ${region?.fiatLabel})` : ''} to {phone}? You will receive an
-            SMS when it is initiated.
+            Cash out {cryptoAmount} USDT
+            {estimatedFiat != null && region
+              ? ` (about ${estimatedFiat.toLocaleString()} ${region.fiatLabel} in ${region.countryName})`
+              : ''}{' '}
+            to {phone}? We text you when the money leaves and when it hits your phone.
           </Text>
         )}
       </FormModal>
@@ -381,8 +407,6 @@ export function LocalMoneyScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.background },
   sub: { color: palette.textSecondary, lineHeight: 20, marginBottom: 14, fontSize: 13 },
-  banner: { marginBottom: 12, borderColor: palette.warning },
-  bannerText: { color: palette.textPrimary, fontSize: 13, lineHeight: 18 },
   rateCard: { marginBottom: 14 },
   rateLabel: { color: palette.textSecondary, fontSize: 12 },
   rateValue: { color: palette.primary, fontSize: 22, fontWeight: '800', marginTop: 4 },
@@ -404,4 +428,15 @@ const styles = StyleSheet.create({
   meta: { color: palette.textSecondary, fontSize: 12, marginTop: 4 },
   emptyTitle: { color: palette.textPrimary, fontWeight: '700', marginBottom: 4 },
   confirmText: { color: palette.textPrimary, lineHeight: 20 },
+  estimateCard: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.primary,
+    backgroundColor: palette.surfaceElevated,
+  },
+  estimateLabel: { color: palette.textSecondary, fontSize: 12, fontWeight: '600' },
+  estimateValue: { color: palette.primary, fontSize: 26, fontWeight: '800', marginTop: 6 },
+  estimateSub: { color: palette.textSecondary, fontSize: 11, marginTop: 8, lineHeight: 16 },
 });

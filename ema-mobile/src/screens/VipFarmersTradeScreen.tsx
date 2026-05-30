@@ -130,9 +130,8 @@ export function VipFarmersTradeScreen() {
       contentContainerStyle={{ padding: 16 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
     >
-      <Text style={styles.title}>Live VIP Farmers</Text>
       <Text style={styles.sub}>
-        30-day lock · {(summary?.dailyRate ?? 0.09) * 100}% daily on principal paid to cash · Min{' '}
+        30-day lock · {(summary?.dailyRate ?? 0.06) * 100}% daily on principal paid to cash · Min{' '}
         {fmtUsd(summary?.minInvestUsd ?? 100)}
       </Text>
 

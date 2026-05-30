@@ -41,6 +41,22 @@ function newId() {
   return crypto.randomUUID();
 }
 
+/** Map internal statuses to client-safe labels (no admin/approval wording). */
+function toClientOrderStatus(row) {
+  const s = String(row.status || '').toLowerCase();
+  if (row.type === 'withdraw') {
+    if (s === 'awaiting_approval' || s === 'pending') return 'submitted';
+    if (s === 'processing') return 'processing';
+    if (COMPLETED_STATUSES.has(s)) return 'completed';
+    if (s === 'failed' || s === 'cancelled' || s === 'canceled' || s === 'rejected') return 'failed';
+    return 'processing';
+  }
+  if (s === 'awaiting_approval') return 'pending';
+  if (COMPLETED_STATUSES.has(s)) return 'completed';
+  if (s === 'failed' || s === 'cancelled' || s === 'canceled') return 'failed';
+  return s || 'pending';
+}
+
 function toPublicOrder(row) {
   if (!row) return null;
   return {
@@ -52,43 +68,10 @@ function toPublicOrder(row) {
     cryptoAsset: row.crypto_asset,
     cryptoAmount: row.crypto_amount != null ? Number(row.crypto_amount) : null,
     phoneMasked: maskPhone(row.phone),
-    status: row.status,
+    status: toClientOrderStatus(row),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-}
-
-function sampleP2POffers(region) {
-  const rate = region.usdtToFiatRate;
-  const fiat = region.fiatLabel;
-  return [
-    {
-      id: `${region.countryCode}-sell-1`,
-      side: 'sell',
-      asset: 'USDT',
-      fiat,
-      price: rate,
-      limitMin: Math.round(rate * 10),
-      limitMax: Math.round(rate * 5000),
-      paymentMethods: ['Mobile money'],
-      trader: 'Ema Liquidity',
-      completedTrades: 0,
-      rating: 100,
-    },
-    {
-      id: `${region.countryCode}-buy-1`,
-      side: 'buy',
-      asset: 'USDT',
-      fiat,
-      price: rate * 0.998,
-      limitMin: Math.round(rate * 5),
-      limitMax: Math.round(rate * 3000),
-      paymentMethods: ['Mobile money'],
-      trader: 'Ema Desk',
-      completedTrades: 0,
-      rating: 99,
-    },
-  ];
 }
 
 function registerLocalMoneyRoutes(app, { authMiddleware }) {
@@ -104,7 +87,7 @@ function registerLocalMoneyRoutes(app, { authMiddleware }) {
         return res.json({
           supported: false,
           countryCode,
-          message: 'Local mobile money is available in Rwanda and Uganda only.',
+          message: 'Phone money is not available in your region.',
           regions: listPublicRegions(),
         });
       }
@@ -112,7 +95,6 @@ function registerLocalMoneyRoutes(app, { authMiddleware }) {
         supported: true,
         region,
         usdtPairLabel: `USDT / ${region.fiatLabel}`,
-        sampleOffers: sampleP2POffers(region),
       });
     } catch (e) {
       return res.status(500).json({ message: e.message || 'Failed to load config' });
@@ -139,14 +121,14 @@ function registerLocalMoneyRoutes(app, { authMiddleware }) {
         const regionDef = REGIONS[countryCode];
         const region = getRegion(countryCode);
         if (!region || !regionDef) {
-          return res.status(400).json({ message: 'Local deposits are only supported in Rwanda and Uganda.' });
+          return res.status(400).json({ message: 'Pay-in is not available in your region.' });
         }
 
         const fiatAmount = Number(req.body.fiatAmount);
         const minFiat = minFiatForMomo(regionDef);
         if (!Number.isFinite(fiatAmount) || fiatAmount < minFiat) {
           return res.status(400).json({
-            message: `Minimum deposit is ${MIN_MOMO_USDT} USDT (~${minFiat.toLocaleString()} ${region.fiatLabel}).`,
+            message: `Minimum pay-in is ${MIN_MOMO_USDT} USDT (~${minFiat.toLocaleString()} ${region.fiatLabel}).`,
           });
         }
 
@@ -161,7 +143,7 @@ function registerLocalMoneyRoutes(app, { authMiddleware }) {
         const cryptoAmount = usdtFromFiat(fiatAmount, regionDef);
         if (!Number.isFinite(cryptoAmount) || cryptoAmount < MIN_MOMO_USDT) {
           return res.status(400).json({
-            message: `Minimum deposit is ${MIN_MOMO_USDT} USDT (~${minFiat.toLocaleString()} ${region.fiatLabel}).`,
+            message: `Minimum pay-in is ${MIN_MOMO_USDT} USDT (~${minFiat.toLocaleString()} ${region.fiatLabel}).`,
           });
         }
         const orderId = newId();
@@ -212,7 +194,7 @@ function registerLocalMoneyRoutes(app, { authMiddleware }) {
           });
         }
 
-        const smsBody = `Ema: Deposit of ${fiatAmount} ${region.fiatLabel} initiated. Approve the payment prompt on your phone to complete.`;
+        const smsBody = `Min: Pay-in of ${fiatAmount} ${region.fiatLabel} started. Approve the prompt on your phone to finish.`;
         try {
           await sendSms(phone, smsBody);
         } catch {
@@ -226,11 +208,11 @@ function registerLocalMoneyRoutes(app, { authMiddleware }) {
         return res.status(201).json({
           order: toPublicOrder(order),
           message:
-            'Deposit initiated. Approve the payment request on your phone. We will text you when it completes.',
+            'Pay-in started. Approve the prompt on your phone. We text you when USDT is in your wallet.',
         });
       } catch (e) {
         if (isMissingTableError(e)) return res.status(503).json({ message: SCHEMA_MSG });
-        return res.status(500).json({ message: e.message || 'Deposit failed' });
+        return res.status(500).json({ message: e.message || 'Pay-in failed' });
       }
     }
   );
@@ -254,14 +236,18 @@ function registerLocalMoneyRoutes(app, { authMiddleware }) {
         const region = getRegion(countryCode);
         if (!region || !regionDef) {
           return res.status(400).json({
-            message: 'Local withdrawals are only supported in Rwanda and Uganda.',
+            message: 'Cash-out to phone money is not available in your region.',
           });
         }
 
-        const cryptoAmount = Number(req.body.cryptoAmount);
+        let cryptoAmount = Number(req.body.cryptoAmount);
+        const fiatInput = Number(req.body.fiatAmount);
+        if ((!Number.isFinite(cryptoAmount) || cryptoAmount <= 0) && Number.isFinite(fiatInput) && fiatInput > 0) {
+          cryptoAmount = usdtFromFiat(fiatInput, regionDef);
+        }
         if (!Number.isFinite(cryptoAmount) || cryptoAmount < MIN_MOMO_USDT) {
           return res.status(400).json({
-            message: `Minimum withdrawal is ${MIN_MOMO_USDT} USDT.`,
+            message: `Minimum cash-out is ${MIN_MOMO_USDT} USDT.`,
           });
         }
 
@@ -270,7 +256,7 @@ function registerLocalMoneyRoutes(app, { authMiddleware }) {
         const maxW = maxWithdrawableUsdt(available);
         if (cryptoAmount > maxW) {
           return res.status(400).json({
-            message: `Insufficient balance. Maximum withdrawable (after fee reserve): ${Math.floor(maxW)} USDT.`,
+            message: `Not enough balance. You can cash out up to ${Math.floor(maxW)} USDT.`,
           });
         }
 
@@ -312,15 +298,22 @@ function registerLocalMoneyRoutes(app, { authMiddleware }) {
         });
         order = await updateLocalMoneyOrder(orderId, { ledger_posted: true });
 
+        const smsBody = `Min: Cash-out request for about ${fiatAmount.toLocaleString()} ${region.fiatLabel} (${cryptoAmount} USDT) received. We text ${maskPhone(phone)} when the money is on the way.`;
+        try {
+          await sendSms(phone, smsBody);
+        } catch {
+          /* non-fatal */
+        }
+
         return res.status(201).json({
           order: toPublicOrder(order),
           fiatAmount,
           fiatLabel: region.fiatLabel,
-          message: `Withdrawal submitted for approval. About ${fiatAmount} ${region.fiatLabel} will be sent to ${maskPhone(phone)} after admin approval.`,
+          message: `Cash-out queued. About ${fiatAmount.toLocaleString()} ${region.fiatLabel} will go to ${maskPhone(phone)}. Watch for an SMS update.`,
         });
       } catch (e) {
         if (isMissingTableError(e)) return res.status(503).json({ message: SCHEMA_MSG });
-        return res.status(500).json({ message: e.message || 'Withdrawal failed' });
+        return res.status(500).json({ message: e.message || 'Cash-out failed' });
       }
     }
   );

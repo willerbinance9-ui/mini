@@ -54,13 +54,13 @@ function id() {
 
 const CROCKFORD_CHARS = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
-/** @returns {string} Format `EMA-` + 8 Crockford-ish chars (no I,L,O,U). */
+/** @returns {string} Format `MIN-` + 8 Crockford-ish chars (no I,L,O,U). */
 function randomTransferCode() {
   let suffix = '';
   for (let i = 0; i < 8; i++) {
     suffix += CROCKFORD_CHARS[crypto.randomInt(0, CROCKFORD_CHARS.length)];
   }
-  return `EMA-${suffix}`;
+  return `MIN-${suffix}`;
 }
 
 async function getUserByEmail(email) {
@@ -1845,6 +1845,111 @@ async function listPendingLocalMoneyWithdrawalsByUserId(userId) {
   return data || [];
 }
 
+// --- P2P marketplace ---
+
+async function getP2pMerchantProfileByUserId(userId) {
+  const { data, error } = await supabase
+    .from('p2p_merchant_profiles')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function upsertP2pMerchantProfile(row) {
+  const { data, error } = await supabase
+    .from('p2p_merchant_profiles')
+    .upsert({ ...row, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function listEnabledP2pMerchantProfiles({ excludeUserId, countryCode, limit = 100 } = {}) {
+  let q = supabase
+    .from('p2p_merchant_profiles')
+    .select('*')
+    .eq('enabled', true)
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+  if (countryCode) q = q.eq('country_code', String(countryCode).toUpperCase());
+  if (excludeUserId) q = q.neq('user_id', excludeUserId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+async function insertP2pTrade(row) {
+  const { data, error } = await supabase.from('p2p_trades').insert(row).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+async function updateP2pTrade(id, patch) {
+  const { data, error } = await supabase
+    .from('p2p_trades')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function getP2pTradeById(id) {
+  const { data, error } = await supabase.from('p2p_trades').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function listP2pTradesByUserId(userId, limit = 40) {
+  const { data, error } = await supabase
+    .from('p2p_trades')
+    .select('*')
+    .or(`merchant_user_id.eq.${userId},counterparty_user_id.eq.${userId}`)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+async function listActiveP2pTradesByUserId(userId) {
+  const { data, error } = await supabase
+    .from('p2p_trades')
+    .select('*')
+    .or(`merchant_user_id.eq.${userId},counterparty_user_id.eq.${userId}`)
+    .in('status', ['awaiting_fiat', 'fiat_sent', 'disputed'])
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+async function incrementP2pMerchantCompletedTrades(userId) {
+  const profile = await getP2pMerchantProfileByUserId(userId);
+  if (!profile) return;
+  const { error } = await supabase
+    .from('p2p_merchant_profiles')
+    .update({
+      completed_trades: Number(profile.completed_trades || 0) + 1,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
+async function listP2pTradesDisputedAdmin(limit = 100) {
+  const { data, error } = await supabase
+    .from('p2p_trades')
+    .select('*')
+    .eq('status', 'disputed')
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
 const ILLEGAL_WITHDRAW_STATUSES = new Set(['failed', 'rejected', 'refunded', 'cancelled', 'cancelled_by_user', 'expired']);
 const COMPLETED_DEPOSIT_STATUSES = new Set(['completed', 'successful', 'success', 'succeeded', 'finished', 'approved']);
 const COMPLETED_WITHDRAW_STATUSES = new Set([
@@ -2897,7 +3002,7 @@ async function listAirfarmingStatesByUserIds(userIds) {
   return res.data || [];
 }
 
-const VIP_DAILY_RATE = 0.09;
+const VIP_DAILY_RATE = 0.06;
 const VIP_LOCK_DAYS = 30;
 const VIP_MIN_INVEST_USD = 100;
 const VIP_EARLY_PENALTY_RATE = 0.3;
@@ -3317,6 +3422,16 @@ module.exports = {
   getLocalMoneyOrderByChargeId,
   listLocalMoneyOrdersByUserId,
   listPendingLocalMoneyWithdrawalsByUserId,
+  getP2pMerchantProfileByUserId,
+  upsertP2pMerchantProfile,
+  listEnabledP2pMerchantProfiles,
+  insertP2pTrade,
+  updateP2pTrade,
+  getP2pTradeById,
+  listP2pTradesByUserId,
+  listActiveP2pTradesByUserId,
+  incrementP2pMerchantCompletedTrades,
+  listP2pTradesDisputedAdmin,
   VIP_DAILY_RATE,
   VIP_LOCK_DAYS,
   VIP_MIN_INVEST_USD,

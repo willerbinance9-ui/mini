@@ -181,7 +181,6 @@ export function TradesHubScreen() {
   return (
     <>
       <ScrollView style={styles.container} contentContainerStyle={{ padding: 16 }}>
-        <Text style={styles.title}>Trading</Text>
         <Text style={styles.sub}>
           Choose a trading mode. Tap Hide to remove an option from this list — use the eye icon above to restore.
         </Text>

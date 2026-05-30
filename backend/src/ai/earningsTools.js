@@ -11,8 +11,6 @@ const {
   getAirfarmingPlatformSettings,
 } = require('../db');
 const { clampAirfarmingPercent, getEffectiveCaps } = require('../airfarmingDrops');
-const { getClient } = require('../services/alpacaClient');
-
 const REGIME_MULTIPLIER = {
   calm: 1.05,
   normal: 1,
@@ -129,43 +127,14 @@ async function setMarketSnapshot(planId, snapshotPatch) {
   return { ok: true, marketSnapshot: merged };
 }
 
-function getAlpacaMarketClient() {
-  const key = process.env.ALPACA_API_KEY;
-  const secret = process.env.ALPACA_API_SECRET_KEY || process.env.ALPACA_SECRET_KEY;
-  if (!key || !secret) return null;
-  return getClient(key, secret);
-}
-
 async function fetchMarketIndicators() {
   const out = { source: 'manual', fetchedAt: new Date().toISOString(), symbols: {} };
   try {
-    const client = getAlpacaMarketClient();
-    if (!client?.stockBars) {
-      return { ...out, note: 'Alpaca not configured; set market regime manually.' };
-    }
-    const res = await client.stockBars('SPY,QQQ');
-    const bars = res?.data?.bars || res?.data || {};
-    for (const sym of ['SPY', 'QQQ']) {
-      const b = bars[sym]?.[0] || bars[sym];
-      if (b) {
-        const c = Number(b.c || b.close);
-        const o = Number(b.o || b.open);
-        if (c && o) {
-          out.symbols[sym] = { close: c, open: o, changePct: Math.round(((c - o) / o) * 10000) / 100 };
-        }
-      }
-    }
-    out.source = 'alpaca';
-    const avg =
-      Object.values(out.symbols)
-        .map((s) => s.changePct)
-        .filter(Number.isFinite)
-        .reduce((a, v, _, arr) => a + v / arr.length, 0) || 0;
-    if (avg <= -1.5) out.suggestedRegime = 'risk_off';
-    else if (avg <= -0.5) out.suggestedRegime = 'volatile';
-    else if (avg >= 1) out.suggestedRegime = 'calm';
-    else out.suggestedRegime = 'normal';
-    return out;
+    return {
+      ...out,
+      note: 'Set market regime manually via set_market_snapshot (external market feed removed).',
+      suggestedRegime: 'normal',
+    };
   } catch (e) {
     return { ...out, error: e.message, note: 'Market fetch failed; use manual regime.' };
   }
@@ -315,7 +284,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'fetch_market_indicators',
-    description: 'Fetch optional market data from Alpaca (SPY/QQQ) for regime hints.',
+    description: 'Return manual market snapshot defaults; set regime with set_market_snapshot.',
     parameters: { type: 'object', properties: {}, additionalProperties: false },
   },
   {

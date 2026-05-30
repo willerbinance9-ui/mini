@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
@@ -21,6 +21,18 @@ type RegionCache = {
   longitude: number;
   updatedAt: number;
 };
+
+export function countryDisplayName(iso: string | null | undefined): string | null {
+  const code = String(iso || '')
+    .trim()
+    .toUpperCase();
+  if (!code) return null;
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
 
 function normalizeCountryCode(raw: string | null | undefined): string | null {
   const key = String(raw || '')
@@ -234,6 +246,11 @@ export function useLocalMoneyRegion() {
 
   const locationReady = hydrated && locationStatus === 'granted' && Boolean(countryCode);
 
+  const detectedCountryName = useMemo(() => {
+    if (config?.region?.countryName) return config.region.countryName;
+    return countryDisplayName(countryCode);
+  }, [config?.region?.countryName, countryCode]);
+
   return {
     countryCode,
     config,
@@ -243,9 +260,10 @@ export function useLocalMoneyRegion() {
     locationReady,
     bootstrapComplete: hydrated,
     detectLocation,
+    detectedCountryName,
     supported: Boolean(locationReady && config?.supported && config.region),
     region: config?.region ?? null,
     usdtPairLabel: config?.usdtPairLabel ?? 'USDT',
-    sampleOffers: config?.sampleOffers ?? [],
+    sampleOffers: [],
   };
 }

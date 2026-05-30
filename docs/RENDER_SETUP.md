@@ -12,7 +12,9 @@ After the repo is on [willerbinance9-ui/mini](https://github.com/willerbinance9-
 
 ## 2. Required environment variables
 
-Set in Render → **Environment** (secrets marked sync: false in blueprint):
+**Quick path:** copy [`backend/render.env`](../backend/render.env) (local only, gitignored), fill blanks, then Render → **Environment** → **Add from .env**.
+
+Or set manually (secrets marked sync: false in blueprint):
 
 | Variable | Notes |
 |----------|--------|

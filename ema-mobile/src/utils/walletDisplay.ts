@@ -2,13 +2,17 @@
 export function formatLedgerSource(source: string): string {
   const s = String(source || '').toLowerCase();
   if (!s || s.includes('nowpayment') || s.includes('np_')) return 'Wallet';
-  if (s.includes('local_deposit')) return 'Mobile deposit';
-  if (s.includes('local_withdraw')) return 'Mobile withdrawal';
+  if (s.includes('local_deposit')) return 'Phone pay-in';
+  if (s.includes('local_withdraw')) return 'Phone cash-out';
   if (s.includes('cash_wallet')) return 'Cash wallet';
-  if (s.includes('deposit')) return 'Deposit';
-  if (s.includes('withdraw') || s.includes('payout')) return 'Withdrawal';
+  if (s.includes('deposit')) return 'Added funds';
+  if (s.includes('withdraw') || s.includes('payout')) return 'Cash out';
   if (s.includes('airfarm')) return 'Airfarming';
   if (s.includes('contract')) return 'Contracts';
+  if (s.includes('p2p_escrow_lock')) return 'P2P escrow';
+  if (s.includes('p2p_escrow_release')) return 'P2P received';
+  if (s.includes('p2p_escrow_refund')) return 'P2P refund';
+  if (s.includes('p2p')) return 'P2P';
   return 'Transfer';
 }
 

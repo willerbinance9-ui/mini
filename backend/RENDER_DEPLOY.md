@@ -35,8 +35,6 @@ In Render service settings, add:
 - `JWT_SECRET=<strong-random-secret>`
 - `SUPABASE_URL=<your-supabase-url>`
 - `SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>`
-- `ALPACA_BASE_URL=https://paper-api.alpaca.markets`
-- `ALPACA_LIVE_URL=https://api.alpaca.markets`
 - `DEV_RESET_TOKEN=<set-random-token-or-remove-route-for-prod>`
 - `ADMIN_USERNAME=admin` (change in production)
 - `ADMIN_PASSWORD=<strong-password>` (required in production; defaults to `admin` only for local dev)

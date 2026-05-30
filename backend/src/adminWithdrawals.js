@@ -101,7 +101,7 @@ async function approveWithdrawal({ source, id }) {
     const updated = await updateLocalMoneyOrder(id, { status: 'processing' });
     const region = getRegion(updated.country_code);
     const label = region?.fiatLabel || updated.fiat_currency;
-    const smsInit = `Ema: Your withdrawal of ${updated.crypto_amount} USDT (~${updated.fiat_amount} ${label}) to ${maskPhone(updated.phone)} was approved and is being processed.`;
+    const smsInit = `Min: Your withdrawal of ${updated.crypto_amount} USDT (~${updated.fiat_amount} ${label}) to ${maskPhone(updated.phone)} is being sent to your mobile money number.`;
     try {
       await sendSms(updated.phone, smsInit);
     } catch {

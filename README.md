@@ -1,6 +1,6 @@
 # Airfarms (Ema) — Fintech Mobile + API
 
-**Airfarms** is a production-grade fintech stack: Expo React Native mobile app, Node.js Express API, Supabase Postgres, and a static admin console. Users manage internal USD cash, Airfarming yield drops, VIP Farmers, Contracts, Expert trading, crypto (USDT via NOWPayments), P2P transfers, and optional Alpaca / MT5 integrations.
+**Min** is a production-grade fintech stack: Expo React Native mobile app, Node.js Express API, Supabase Postgres, and a static admin console. Users manage crypto (USDT via NOWPayments), Airfarming yield drops, VIP Farmers, Expert MT5 trading, P2P transfers, and local-money rails.
 
 ## Repository layout
 
@@ -54,9 +54,7 @@ npm start
 | Cash + crypto wallet | `WalletScreen` | `/wallet`, `/nowpayments` |
 | Airfarming (drops) | `AirfarmingTradeScreen` | `/airfarming` |
 | VIP Farmers | `VipFarmersTradeScreen` | `/vip-farmers` |
-| Contracts | `ContractsTradeScreen` | `/contracts` |
 | Expert / MT5 | `ExpertAutoTradingScreen`, `MT5Screen` | `/expert`, `/mt5` |
-| Alpaca forex | `AlpacaTradeScreen` | `/alpaca` |
 | P2P, local money, journal | Extra tab | `/wallet/transfer`, `/local-money`, `/journal` |
 
 ## Security

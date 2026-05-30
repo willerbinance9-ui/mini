@@ -18,24 +18,27 @@ import { canUseBiometrics } from '../utils/biometrics';
 import { generatePinSalt, hashPin } from '../utils/pin';
 import { usePolling } from '../hooks/usePolling';
 import { authService, TotpStatus } from '../services/authService';
-import { alpacaService } from '../services/alpacaService';
 import { complianceService } from '../services/complianceService';
 import { whitelistWalletService } from '../services/whitelistWalletService';
 import { useToast } from '../hooks/useToast';
 import {
   ComplianceProfile,
-  ExtraStackParamList,
+  SettingsStackParamList,
   PlannedInvestmentDuration,
   RootStackParamList,
   SourceOfFunds,
   WhitelistedWallet,
 } from '../types';
-import { ABOUT_EMA, AboutSectionKey, PREMIUM_ALERTS_TERMS } from '../content/aboutEma';
+import { PREMIUM_ALERTS_TERMS } from '../content/aboutEma';
 import { notificationPreferencesService } from '../services/notificationPreferencesService';
 import type { NotificationPreferences } from '../types';
 import { palette } from '../theme/colors';
 import { formatNetworkLabel } from '../utils/userFacingError';
-import { navigateToSupport, navigateToTransactionHistory } from '../utils/navigationHelpers';
+import {
+  navigateToP2PSetup,
+  navigateToSupport,
+  navigateToTransactionHistory,
+} from '../utils/navigationHelpers';
 
 const WL_CURRENCY_OPTIONS = ['usdttrc20', 'btc', 'eth', 'ltc', 'trx'];
 
@@ -76,11 +79,11 @@ function SettingsRow({
 }
 
 type SettingsNav = CompositeNavigationProp<
-  NativeStackNavigationProp<ExtraStackParamList, 'Settings'>,
+  NativeStackNavigationProp<SettingsStackParamList, 'Settings'>,
   NativeStackNavigationProp<RootStackParamList>
 >;
 
-type SettingsRoute = RouteProp<ExtraStackParamList, 'Settings'>;
+type SettingsRoute = RouteProp<SettingsStackParamList, 'Settings'>;
 
 export function SettingsScreen() {
   const navigation = useNavigation<SettingsNav>();
@@ -88,10 +91,6 @@ export function SettingsScreen() {
   const { user, logout } = useAuth();
   const { showToast } = useToast();
   const { suspendLock, refreshSecurityPrefs, pinEnabled, biometricLoginEnabled, biometricAvailable } = useAppLock();
-  const [aboutModal, setAboutModal] = useState<AboutSectionKey | null>(null);
-  const [apiKey, setApiKey] = useState('');
-  const [secretKey, setSecretKey] = useState('');
-  const [darkMode, setDarkMode] = useState(true);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [pinStep, setPinStep] = useState<'enter' | 'confirm'>('enter');
   const [pinSetupError, setPinSetupError] = useState<string | null>(null);
@@ -102,7 +101,6 @@ export function SettingsScreen() {
 
   const [complianceModalOpen, setComplianceModalOpen] = useState(false);
   const [whitelistModalOpen, setWhitelistModalOpen] = useState(false);
-  const [alpacaModalOpen, setAlpacaModalOpen] = useState(false);
   const [securityModalOpen, setSecurityModalOpen] = useState(false);
   const [alertsModalOpen, setAlertsModalOpen] = useState(false);
   const [alertPrefs, setAlertPrefs] = useState<NotificationPreferences | null>(null);
@@ -348,22 +346,6 @@ export function SettingsScreen() {
     setRefreshing(false);
   }, [refreshAll]);
 
-  const saveKeys = async () => {
-    try {
-      await alpacaService.updateKeys(apiKey, secretKey);
-      try {
-        await alpacaService.getAccount();
-        Alert.alert('Saved', 'Alpaca keys saved and account access verified.');
-        setAlpacaModalOpen(false);
-      } catch {
-        Alert.alert('Saved', 'Keys saved. Verify account access from Home/Trades.');
-        setAlpacaModalOpen(false);
-      }
-    } catch (error: any) {
-      Alert.alert('API Key Error', String(error?.message || 'Failed to save keys'));
-    }
-  };
-
   const startTotpSetup = async () => {
     setTotpBusy(true);
     try {
@@ -560,22 +542,7 @@ export function SettingsScreen() {
         </Card>
 
         <Card style={styles.menuCard}>
-          <Text style={styles.label}>About Airfarms</Text>
-          <SettingsRow
-            title='Who we are'
-            subtitle='DAO, token holders, and community capital'
-            onPress={() => setAboutModal('who')}
-          />
-          <SettingsRow
-            title='What we do'
-            subtitle='Wallet, trading, and risk tools'
-            onPress={() => setAboutModal('what')}
-          />
-          <SettingsRow
-            title='How we profit'
-            subtitle='10% revenue share and disclosed fees'
-            onPress={() => setAboutModal('profit')}
-          />
+          <Text style={styles.label}>Account</Text>
           <SettingsRow
             title='Notifications'
             subtitle='Saved messages for you and everyone'
@@ -586,10 +553,6 @@ export function SettingsScreen() {
             subtitle='All deposits, withdrawals, and transfers'
             onPress={() => navigateToTransactionHistory(navigation)}
           />
-        </Card>
-
-        <Card style={styles.menuCard}>
-          <Text style={styles.label}>Account</Text>
           <SettingsRow
             title='Withdrawal requirements'
             subtitle={complianceSummary}
@@ -600,12 +563,16 @@ export function SettingsScreen() {
             subtitle={whitelistSummary}
             onPress={() => setWhitelistModalOpen(true)}
           />
-          <SettingsRow title='Trading account keys' subtitle='Link your broker for forex trades' onPress={() => setAlpacaModalOpen(true)} />
           <SettingsRow title='Security' subtitle={securitySummary} onPress={() => setSecurityModalOpen(true)} />
           <SettingsRow
             title='Deposit & withdrawal alerts'
             subtitle={alertsSummary}
             onPress={() => setAlertsModalOpen(true)}
+          />
+          <SettingsRow
+            title='Start P2P'
+            subtitle='Set your price and payment details to trade with others'
+            onPress={() => navigateToP2PSetup(navigation)}
           />
           <SettingsRow
             title='Help & support'
@@ -614,35 +581,10 @@ export function SettingsScreen() {
           />
         </Card>
 
-        <Card>
-          <Text style={styles.label}>Theme</Text>
-          <View style={styles.rowBetween}>
-            <Text style={styles.value}>Dark mode</Text>
-            <Switch value={darkMode} onValueChange={setDarkMode} thumbColor={darkMode ? palette.primary : '#ccc'} />
-          </View>
-          <Text style={styles.value}>Accent color: Gold</Text>
-        </Card>
-
         <PrimaryButton label='Logout' onPress={logout} variant='danger' />
           </>
         )}
       </ScrollView>
-
-      {aboutModal ? (
-        <FormModal
-          visible={Boolean(aboutModal)}
-          title={ABOUT_EMA[aboutModal].title}
-          onClose={() => setAboutModal(null)}
-          footer={<PrimaryButton label='Close' onPress={() => setAboutModal(null)} style={{ marginTop: 12 }} />}
-        >
-          <Text style={styles.modalHint}>{ABOUT_EMA[aboutModal].subtitle}</Text>
-          {ABOUT_EMA[aboutModal].paragraphs.map((p) => (
-            <Text key={p.slice(0, 40)} style={styles.aboutParagraph}>
-              {p}
-            </Text>
-          ))}
-        </FormModal>
-      ) : null}
 
       <FormModal
         visible={complianceModalOpen}
@@ -827,37 +769,6 @@ export function SettingsScreen() {
         ) : (
           <Text style={styles.value}>Maximum wallets registered. Remove one to add another.</Text>
         )}
-      </FormModal>
-
-      <FormModal
-        visible={alpacaModalOpen}
-        title='Trading account keys'
-        onClose={() => setAlpacaModalOpen(false)}
-        footer={
-          <View style={{ gap: 8, marginTop: 12 }}>
-            <PrimaryButton label='Validate & save' onPress={() => void saveKeys()} />
-            <PrimaryButton label='Close' onPress={() => setAlpacaModalOpen(false)} />
-          </View>
-        }
-      >
-        <Text style={styles.modalHint}>Keys are stored securely and used for trading features.</Text>
-        <TextInput
-          style={styles.input}
-          placeholder='API key'
-          placeholderTextColor={palette.textSecondary}
-          value={apiKey}
-          onChangeText={setApiKey}
-          autoCapitalize='none'
-        />
-        <TextInput
-          style={styles.input}
-          placeholder='Secret key'
-          placeholderTextColor={palette.textSecondary}
-          value={secretKey}
-          onChangeText={setSecretKey}
-          secureTextEntry
-          autoCapitalize='none'
-        />
       </FormModal>
 
       <FormModal

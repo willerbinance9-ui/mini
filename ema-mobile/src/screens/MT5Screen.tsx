@@ -190,7 +190,7 @@ export function MT5Screen() {
     const label = account.accountName || account.login || 'this account';
     Alert.alert(
       'Remove MT5 connection',
-      `Remove ${label} from Airfarms? Saved credentials and cached balance will be deleted. This does not close your broker account.`,
+      `Remove ${label} from Min? Saved credentials and cached balance will be deleted. This does not close your broker account.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -414,7 +414,6 @@ export function MT5Screen() {
         contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onPullRefresh} tintColor={palette.primary} />}
       >
-        <Text style={styles.title}>MT5</Text>
         <Text style={styles.sub}>Live account data from your connected broker</Text>
 
         <Card>

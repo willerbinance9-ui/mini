@@ -575,7 +575,7 @@ function registerNowpaymentsRoutes(app, { authMiddleware }) {
       const whitelisted = await isAddressWhitelistedForUser(req.userId, currency, address);
       if (!whitelisted) {
         return res.status(400).json({
-          message: 'Withdrawal address must be one of your whitelisted wallets in Settings.',
+          message: 'Use a wallet address you saved in Settings.',
           code: 'WALLET_NOT_WHITELISTED',
         });
       }
@@ -583,7 +583,7 @@ function registerNowpaymentsRoutes(app, { authMiddleware }) {
       const fundingPreview = await getCombinedWithdrawable(req.userId, currency);
       if (amount > fundingPreview.maxWithdrawable) {
         return res.status(400).json({
-          message: `Insufficient balance. Maximum withdrawable (after fee reserve): ${fundingPreview.maxWithdrawable.toFixed(6)}.`,
+          message: `Not enough balance. You can cash out up to ${fundingPreview.maxWithdrawable.toFixed(6)}.`,
           available: fundingPreview.combinedAvailable,
           maxWithdrawable: fundingPreview.maxWithdrawable,
           cryptoAvailable: fundingPreview.cryptoAvailable,
@@ -621,7 +621,7 @@ function registerNowpaymentsRoutes(app, { authMiddleware }) {
         address: payoutRow.address,
         amount: payoutRow.amount,
         cashFunded: Number(payoutRow.cash_funded_amount || 0),
-        message: 'Withdrawal submitted for approval. You will be notified when it is processed.',
+        message: 'Cash-out submitted. We notify you when it is sent.',
       });
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: schemaErrorMessage });

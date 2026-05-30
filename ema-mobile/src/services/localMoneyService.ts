@@ -14,22 +14,7 @@ export type LocalMoneyConfigResponse = {
   message?: string;
   region?: LocalMoneyRegion;
   usdtPairLabel?: string;
-  sampleOffers?: P2POfferFromApi[];
   regions?: LocalMoneyRegion[];
-};
-
-export type P2POfferFromApi = {
-  id: string;
-  side: 'buy' | 'sell';
-  asset: string;
-  fiat: string;
-  price: number;
-  limitMin: number;
-  limitMax: number;
-  paymentMethods: string[];
-  trader: string;
-  completedTrades: number;
-  rating: number;
 };
 
 export type LocalMoneyOrder = {
@@ -53,7 +38,13 @@ export const localMoneyService = {
   listOrders: () => api.get<{ orders: LocalMoneyOrder[] }>('/local-money/orders'),
   deposit: (body: { countryCode: string; phone: string; fiatAmount: number }) =>
     api.post<{ order: LocalMoneyOrder; message: string }>('/local-money/deposit', body),
-  withdraw: (body: { countryCode: string; phone: string; cryptoAmount: number; totpCode: string }) =>
+  withdraw: (body: {
+    countryCode: string;
+    phone: string;
+    cryptoAmount: number;
+    totpCode: string;
+    fiatAmount?: number;
+  }) =>
     api.post<{ order: LocalMoneyOrder; message: string; fiatAmount: number; fiatLabel: string }>(
       '/local-money/withdraw',
       body

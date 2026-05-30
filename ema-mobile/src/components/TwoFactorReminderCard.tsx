@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
-import { ExtraStackParamList, RootTabParamList } from '../types';
+import { RootTabParamList, SettingsStackParamList } from '../types';
 import { palette } from '../theme/colors';
 
 const DISMISS_KEY_PREFIX = 'ema_2fa_reminder_dismissed_';
@@ -17,7 +17,7 @@ const REMIND_LATER_MS = 7 * 24 * 60 * 60 * 1000;
 
 type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<RootTabParamList, 'Home'>,
-  NativeStackNavigationProp<ExtraStackParamList>
+  NativeStackNavigationProp<SettingsStackParamList>
 >;
 
 export function TwoFactorReminderCard() {
@@ -67,7 +67,7 @@ export function TwoFactorReminderCard() {
   };
 
   const openSecurity = () => {
-    navigation.navigate('Extra', { screen: 'Settings', params: { openSecurity: true } });
+    navigation.navigate('Settings', { screen: 'Settings', params: { openSecurity: true } });
   };
 
   if (loading || !visible) return null;

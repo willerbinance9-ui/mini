@@ -9,11 +9,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useAuth } from '../context/AuthContext';
 import { Card } from '../components/Card';
+import { ComplianceProfileNotice } from '../components/ComplianceProfileNotice';
 import { FormModal } from '../components/FormModal';
 import { NetworkGridCompact } from '../components/NetworkGridCompact';
 import { OptionGrid } from '../components/OptionGrid';
@@ -37,6 +36,7 @@ import { formatNetworkLabel, sanitizeUserFacingError } from '../utils/userFacing
 import { ActivityListSkeleton, BalanceSkeleton } from '../components/Skeleton';
 import { WalletActivityList } from '../components/WalletActivityList';
 import {
+  aggregateBalancesForDisplay,
   combinedWithdrawableForNetwork,
   maxWithdrawableAmount,
   sumUsdtFamilyAvailable,
@@ -45,6 +45,8 @@ import {
   navigateToAirfarmingTrade,
   navigateToCryptoDepositPayment,
   navigateToSendById,
+  navigateToLocalMoney,
+  navigateToSettings,
   navigateToSupport,
   navigateToTransactionDetail,
   navigateToTransactionHistory,
@@ -54,15 +56,12 @@ import { mergeAllWalletActivity } from '../utils/walletActivity';
 
 const PAY_CURRENCY_OPTIONS = ['usdttrc20', 'btc', 'eth', 'ltc', 'trx'];
 const WITHDRAW_CURRENCY_OPTIONS = ['usdttrc20', 'eth'] as const;
-const GAS_BANNER_DISMISS_PREFIX = 'ema_wallet_gas_banner_dismissed_';
-
 function delay(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
 export function WalletScreen() {
   const navigation = useNavigation();
-  const { user } = useAuth();
   const { showToast } = useToast();
 
   const [totpEnabled, setTotpEnabled] = useState(false);
@@ -91,16 +90,14 @@ export function WalletScreen() {
   const [withdrawModalMax, setWithdrawModalMax] = useState(0);
   const [withdrawModalCurrencyLabel, setWithdrawModalCurrencyLabel] = useState('USDT (TRC20)');
   const [complianceComplete, setComplianceComplete] = useState(false);
-  const [gasBannerDismissed, setGasBannerDismissed] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [withdrawMethodModalOpen, setWithdrawMethodModalOpen] = useState(false);
   const clientIpLoaded = useRef(false);
-
-  const gasDismissKey = user?.id ? `${GAS_BANNER_DISMISS_PREFIX}${user.id}` : null;
 
   const alertComplianceRequired = () => {
     Alert.alert(
-      'Profile required',
-      'Complete your compliance profile in Settings before withdrawing.',
+      'One more step',
+      'Finish your profile in Settings before you can cash out.',
       [{ text: 'OK' }]
     );
   };
@@ -155,19 +152,6 @@ export function WalletScreen() {
   usePolling(refresh, 60000, !withdrawModalOpen && !depositModalOpen && !transferModalOpen);
 
   useEffect(() => {
-    if (!gasDismissKey) {
-      setGasBannerDismissed(false);
-      return;
-    }
-    void AsyncStorage.getItem(gasDismissKey).then((v) => setGasBannerDismissed(v === '1'));
-  }, [gasDismissKey]);
-
-  const dismissGasBanner = async () => {
-    if (gasDismissKey) await AsyncStorage.setItem(gasDismissKey, '1');
-    setGasBannerDismissed(true);
-  };
-
-  useEffect(() => {
     if (clientIpLoaded.current) return;
     clientIpLoaded.current = true;
     void nowpaymentsService
@@ -185,7 +169,7 @@ export function WalletScreen() {
   const onCreateDeposit = async () => {
     const priceAmount = Number(depositUsdAmount);
     if (!Number.isFinite(priceAmount) || priceAmount <= 0) {
-      Alert.alert('Invalid amount', 'Enter a USD amount to deposit.');
+      Alert.alert('Enter an amount', 'Type how much you want to add in USD.');
       return;
     }
     try {
@@ -196,7 +180,7 @@ export function WalletScreen() {
       setDepositUsdAmount('');
       navigateToCryptoDepositPayment(navigation, created);
     } catch (e: any) {
-      Alert.alert('Deposit failed', sanitizeError(e?.message || 'Could not create payment'));
+      Alert.alert('Could not start payment', sanitizeError(e?.message || 'Try again in a moment.'));
     } finally {
       setDepositSubmitting(false);
     }
@@ -218,7 +202,7 @@ export function WalletScreen() {
   }, [clientIp]);
 
   const closeWithdrawModal = () => {
-    if (withdrawSubmitting && withdrawShowProgress && withdrawProgressStep < 4 && !withdrawProgressError) {
+    if (withdrawSubmitting && withdrawShowProgress && withdrawProgressStep < 2 && !withdrawProgressError) {
       return;
     }
     setWithdrawModalOpen(false);
@@ -235,15 +219,15 @@ export function WalletScreen() {
     }
     const selected = whitelistedWallets.find((w) => w.id === selectedWhitelistId);
     if (!selected) {
-      Alert.alert('Select wallet', 'Add and select a whitelisted wallet in Settings.');
+      Alert.alert('Pick a destination', 'Add a saved wallet address in Settings first.');
       return;
     }
     const n = Number(withdrawAmount);
     if (!Number.isFinite(n) || n <= 0) return;
     if (maxWithdraw > 0 && n > maxWithdraw) {
       Alert.alert(
-        'Gas reserve required',
-        `Keep at least 5% of your balance for network fees. Maximum withdrawable now: ${Math.floor(maxWithdraw)}.`
+        'Amount too high',
+        `You can cash out up to ${Math.floor(maxWithdraw)} ${withdrawModalCurrencyLabel || formatNetworkLabel(withdrawCurrency)} right now.`
       );
       return;
     }
@@ -261,13 +245,9 @@ export function WalletScreen() {
       await delay(650);
 
       setWithdrawProgressStep(1);
-      await delay(800);
-
-      setWithdrawProgressStep(2);
       await ensureClientIp();
       await delay(900);
 
-      setWithdrawProgressStep(3);
       await nowpaymentsService.createWithdrawal(
         selected.currency,
         selected.address,
@@ -275,8 +255,8 @@ export function WalletScreen() {
         totpEnabled ? withdrawTotpCode.replace(/\s/g, '') : undefined
       );
 
-      setWithdrawProgressStep(4);
-      await delay(1400);
+      setWithdrawProgressStep(2);
+      await delay(1200);
 
       setWithdrawAmount('');
       setSelectedWhitelistId(null);
@@ -285,13 +265,13 @@ export function WalletScreen() {
       setWithdrawShowProgress(false);
       setWithdrawProgressStep(0);
       await refreshNowpayments();
-      showToast('Withdrawal submitted');
+      showToast('Cash-out submitted');
     } catch (e: any) {
       if (isComplianceRequiredError(e)) {
         closeWithdrawModal();
         alertComplianceRequired();
       } else {
-        setWithdrawProgressError(sanitizeError(e?.message || 'Withdrawal failed'));
+        setWithdrawProgressError(sanitizeError(e?.message || 'Cash-out could not be completed'));
       }
     } finally {
       setWithdrawSubmitting(false);
@@ -305,7 +285,7 @@ export function WalletScreen() {
     }
     const forCurrency = whitelistedWallets.filter((w) => w.currency === withdrawCurrency);
     if (forCurrency.length === 0) {
-      Alert.alert('No whitelisted wallet', `Add a ${formatNetworkLabel(withdrawCurrency)} wallet in Settings first.`);
+      Alert.alert('No saved wallet', `Add a ${formatNetworkLabel(withdrawCurrency)} address in Settings first.`);
       return;
     }
     const nextId =
@@ -351,17 +331,24 @@ export function WalletScreen() {
     () => sumUsdtFamilyAvailable(npSummary?.balances, npSummary?.cashWalletUsd),
     [npSummary]
   );
-  const reservedUsd = useMemo(() => {
-    let r = 0;
-    for (const b of npSummary?.balances || []) {
-      if (b.asset.toLowerCase().includes('usdt') || b.asset === 'usdt') {
-        r += Number(b.reserved ?? 0) || 0;
-      }
-    }
-    return r;
-  }, [npSummary]);
+  const balanceRows = useMemo(
+    () => aggregateBalancesForDisplay(npSummary?.balances, npSummary?.cashWalletUsd),
+    [npSummary]
+  );
 
   const openTransferChooser = () => setTransferModalOpen(true);
+
+  const openWithdrawChooser = () => setWithdrawMethodModalOpen(true);
+
+  const chooseCryptoWithdraw = () => {
+    setWithdrawMethodModalOpen(false);
+    openWithdrawModal();
+  };
+
+  const chooseMobileMoneyWithdraw = () => {
+    setWithdrawMethodModalOpen(false);
+    navigateToLocalMoney(navigation, 'withdraw');
+  };
 
   const inputStyle = {
     backgroundColor: palette.surfaceElevated,
@@ -380,79 +367,78 @@ export function WalletScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
       >
         {!complianceComplete ? (
-          <Card style={styles.complianceBanner}>
-            <Text style={styles.complianceBannerText}>
-              Complete your compliance profile in Settings before you can withdraw.
-            </Text>
-          </Card>
+          <ComplianceProfileNotice
+            noticeId='wallet_withdraw'
+            message='Finish your profile in Settings before you can add or cash out funds.'
+            onOpenSettings={() => navigateToSettings(navigation)}
+          />
         ) : null}
 
         {npError ? (
-          <Card>
+          <Card style={styles.blockCard}>
             <Text style={styles.errorText}>{npError}</Text>
             <PrimaryButton label='Retry' onPress={() => void refreshNowpayments()} />
-          </Card>
-        ) : null}
-
-        {!gasBannerDismissed ? (
-          <Card style={styles.gasCard}>
-            <View style={styles.gasHeader}>
-              <Text style={styles.gasTitle}>Network fee reserve</Text>
-              <Pressable onPress={() => void dismissGasBanner()} hitSlop={12} accessibilityLabel='Dismiss'>
-                <Ionicons name='close' size={20} color={palette.textSecondary} />
-              </Pressable>
-            </View>
-            <Text style={styles.gasText}>
-              Leave at least 5% of your wallet balance for blockchain gas fees. If you withdraw everything at once, you may not be
-              able to deposit again until you add funds back to cover fees.
-            </Text>
-            {!totpEnabled ? (
-              <Text style={styles.gasText}>Enable two-factor authentication in Settings for stronger withdrawal protection.</Text>
-            ) : null}
           </Card>
         ) : null}
 
         {walletLoading ? (
           <BalanceSkeleton />
         ) : (
-          <Card style={styles.heroCard}>
-            <Text style={styles.heroCaption}>Total balance</Text>
-            <Text style={styles.totalBalance}>
-              {totalUsd > 0 ? `$${totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0.00'}
-            </Text>
-            <Text style={styles.totalSub}>USD · USDT</Text>
-            {reservedUsd > 0 ? (
-              <Text style={styles.assetSub}>Reserved for pending payouts: {Math.floor(reservedUsd)}</Text>
-            ) : null}
-            {totalUsd <= 0 ? (
-              <Text style={styles.item}>No balance yet. Deposit crypto to get started.</Text>
-            ) : null}
-            <View style={styles.actionRow}>
-              <Pressable
-                style={styles.actionItem}
-                onPress={openWithdrawModal}
-                disabled={!complianceComplete}
-                accessibilityLabel='Withdraw'
-              >
-                <View style={[styles.actionCircle, !complianceComplete && styles.actionCircleDisabled]}>
-                  <Ionicons name='arrow-up' size={22} color={palette.textPrimary} />
-                </View>
-                <Text style={styles.actionLabel}>Withdraw</Text>
-              </Pressable>
-              <Pressable style={styles.actionItem} onPress={() => setDepositModalOpen(true)} accessibilityLabel='Deposit'>
-                <View style={[styles.actionCircle, styles.actionCirclePrimary]}>
-                  <Ionicons name='arrow-down' size={22} color='#fff' />
-                </View>
-                <Text style={styles.actionLabel}>Deposit</Text>
-              </Pressable>
-              <Pressable style={styles.actionItem} onPress={openTransferChooser} accessibilityLabel='Transfer'>
-                <View style={styles.actionCircle}>
-                  <Ionicons name='swap-horizontal' size={22} color={palette.textPrimary} />
-                </View>
-                <Text style={styles.actionLabel}>Transfer</Text>
-              </Pressable>
-            </View>
-          </Card>
+          <>
+            <Card style={styles.totalCard}>
+              <Text style={styles.sectionLabel}>Your balance</Text>
+              <Text style={styles.totalBalance}>
+                {totalUsd > 0
+                  ? `$${totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : '$0.00'}
+              </Text>
+              <Text style={styles.totalHint}>Shown in USD · includes USDT balance</Text>
+              <View style={styles.actionRow}>
+                <Pressable
+                  style={styles.actionItem}
+                  onPress={openWithdrawChooser}
+                  accessibilityLabel='Cash out'
+                >
+                  <View style={styles.actionCircle}>
+                    <Ionicons name='arrow-up' size={22} color={palette.textPrimary} />
+                  </View>
+                  <Text style={styles.actionLabel}>Cash out</Text>
+                </Pressable>
+                <Pressable style={styles.actionItem} onPress={() => setDepositModalOpen(true)} accessibilityLabel='Add funds'>
+                  <View style={[styles.actionCircle, styles.actionCirclePrimary]}>
+                    <Ionicons name='arrow-down' size={22} color={palette.primaryContrast} />
+                  </View>
+                  <Text style={styles.actionLabel}>Add funds</Text>
+                </Pressable>
+                <Pressable style={styles.actionItem} onPress={openTransferChooser} accessibilityLabel='Transfer'>
+                  <View style={styles.actionCircle}>
+                    <Ionicons name='swap-horizontal' size={22} color={palette.textPrimary} />
+                  </View>
+                  <Text style={styles.actionLabel}>Transfer</Text>
+                </Pressable>
+              </View>
+            </Card>
+
+            <Card style={styles.holdingsCard}>
+              <Text style={styles.sectionLabel}>In your wallet</Text>
+              {balanceRows.length > 0 ? (
+                balanceRows.map((b) => (
+                  <View key={b.asset} style={styles.balanceRow}>
+                    <Text style={styles.assetCode}>{b.asset.toUpperCase()}</Text>
+                    <Text style={styles.assetAmount}>{b.available}</Text>
+                    {b.reserved && Number(b.reserved) > 0 ? (
+                      <Text style={styles.reserved}>Reserved: {b.reserved}</Text>
+                    ) : null}
+                  </View>
+                ))
+              ) : npSummary && !npError ? (
+                <Text style={styles.emptyHint}>Nothing here yet — tap Add funds to get started.</Text>
+              ) : null}
+              {npSummary && !npSummary.configured ? (
+                <Text style={styles.emptyHint}>Adding funds is paused for now. Check back soon.</Text>
+              ) : null}
+            </Card>
+          </>
         )}
 
         {walletLoading && !allActivity.length ? (
@@ -484,17 +470,17 @@ export function WalletScreen() {
         )}
       </ScrollView>
 
-      <FormModal visible={depositModalOpen} title='Deposit' onClose={() => setDepositModalOpen(false)}>
-        <Text style={styles.hint}>Amount is priced in USD; you pay in the selected network.</Text>
+      <FormModal visible={depositModalOpen} title='Add funds' onClose={() => setDepositModalOpen(false)}>
+        <Text style={styles.hint}>Choose a coin network and how much you want to add (USD).</Text>
         <TextInput
           style={inputStyle}
           value={depositUsdAmount}
           onChangeText={setDepositUsdAmount}
-          placeholder='Amount in USD'
+          placeholder='USD amount'
           placeholderTextColor={palette.textSecondary}
           keyboardType='numeric'
         />
-        <Text style={styles.fieldLabel}>Network</Text>
+        <Text style={styles.fieldLabel}>Coin network</Text>
         <NetworkGridCompact
           options={PAY_CURRENCY_OPTIONS}
           value={depositPayCurrency}
@@ -503,7 +489,7 @@ export function WalletScreen() {
           featuredOptions={['usdttrc20', 'eth']}
         />
         <PrimaryButton
-          label={depositSubmitting ? 'Creating…' : 'Create payment'}
+          label={depositSubmitting ? 'Setting up…' : 'Continue to payment'}
           onPress={() => void onCreateDeposit()}
           disabled={depositSubmitting}
         />
@@ -511,7 +497,7 @@ export function WalletScreen() {
 
       <FormModal
         visible={withdrawModalOpen}
-        title={withdrawShowProgress ? 'Withdrawing' : 'Withdraw'}
+        title={withdrawShowProgress ? 'Sending…' : 'Cash out to crypto'}
         avoidKeyboard={false}
         onClose={closeWithdrawModal}
         footer={
@@ -534,7 +520,7 @@ export function WalletScreen() {
       >
         {withdrawShowProgress ? (
           <>
-            <Text style={styles.hint}>Please wait while we process your withdrawal.</Text>
+            <Text style={styles.hint}>Hang tight — we are sending your cash-out.</Text>
             <WithdrawalProgressSteps
               activeIndex={withdrawProgressStep}
               clientIp={clientIp}
@@ -543,22 +529,15 @@ export function WalletScreen() {
           </>
         ) : (
           <>
-            <Text style={styles.hint}>Withdraw to a whitelisted address from Settings.</Text>
-            <View style={styles.ipSlot}>
-              <Text style={styles.ipText}>
-                {clientIp
-                  ? `Your IP: ${clientIp}\nIf withdrawals fail, ask support to whitelist this IP for payouts.`
-                  : 'Loading your IP…'}
+            <Text style={styles.hint}>Send to one of your saved wallet addresses from Settings.</Text>
+            {withdrawModalMax > 0 ? (
+              <Text style={styles.withdrawMaxHint}>
+                You can send up to {Math.floor(withdrawModalMax)} {withdrawModalCurrencyLabel}
               </Text>
-            </View>
-            <Text style={styles.gasTextModal}>
-              Keep 5% in your wallet for gas. Max withdrawable:{' '}
-              {withdrawModalMax > 0 ? Math.floor(withdrawModalMax) : '—'} {withdrawModalCurrencyLabel}. Emptying the wallet
-              can block future deposits.
-            </Text>
+            ) : null}
             <Pressable onPress={() => navigateToSupport(navigation, { category: 'withdraw' })} style={styles.supportLinkWrap}>
               <Text style={styles.supportLinkText}>
-                Having trouble withdrawing? <Text style={styles.supportLinkAccent}>Get help in Support</Text>
+                Stuck? <Text style={styles.supportLinkAccent}>Message support</Text>
               </Text>
             </Pressable>
             <TextInput
@@ -582,7 +561,7 @@ export function WalletScreen() {
               }}
               formatLabel={formatNetworkLabel}
             />
-            <Text style={styles.fieldLabel}>Whitelisted wallet</Text>
+            <Text style={styles.fieldLabel}>Saved wallet</Text>
             {walletsForWithdrawCurrency.length ? (
               <OptionHighlightList
                 options={walletsForWithdrawCurrency.map((w) => w.id!)}
@@ -594,7 +573,7 @@ export function WalletScreen() {
                 }}
               />
             ) : (
-              <Text style={styles.hint}>Add a {formatNetworkLabel(withdrawCurrency)} wallet in Settings.</Text>
+              <Text style={styles.hint}>Save a {formatNetworkLabel(withdrawCurrency)} address in Settings first.</Text>
             )}
             {selectedWhitelistId ? (
               <Text style={styles.mono}>{whitelistedWallets.find((w) => w.id === selectedWhitelistId)?.address}</Text>
@@ -611,12 +590,36 @@ export function WalletScreen() {
               />
             ) : null}
             <PrimaryButton
-              label='Submit withdrawal'
+              label='Send cash-out'
               onPress={() => void onWithdraw()}
               disabled={!withdrawReady || withdrawSubmitting}
             />
           </>
         )}
+      </FormModal>
+
+      <FormModal
+        visible={withdrawMethodModalOpen}
+        title='How do you want to cash out?'
+        onClose={() => setWithdrawMethodModalOpen(false)}
+      >
+        <Text style={styles.hint}>Pick where the money should go.</Text>
+        <Pressable style={styles.transferOption} onPress={chooseMobileMoneyWithdraw}>
+          <Ionicons name='phone-portrait-outline' size={22} color={palette.primary} />
+          <View style={styles.transferOptionText}>
+            <Text style={styles.transferOptionTitle}>Phone money</Text>
+            <Text style={styles.transferOptionSub}>Local currency to your mobile number</Text>
+          </View>
+          <Ionicons name='chevron-forward' size={20} color={palette.textSecondary} />
+        </Pressable>
+        <Pressable style={styles.transferOption} onPress={chooseCryptoWithdraw}>
+          <Ionicons name='wallet-outline' size={22} color={palette.primary} />
+          <View style={styles.transferOptionText}>
+            <Text style={styles.transferOptionTitle}>Crypto wallet</Text>
+            <Text style={styles.transferOptionSub}>USDT or ETH to your own address</Text>
+          </View>
+          <Ionicons name='chevron-forward' size={20} color={palette.textSecondary} />
+        </Pressable>
       </FormModal>
 
       <FormModal visible={transferModalOpen} title='Transfer' onClose={() => setTransferModalOpen(false)}>
@@ -672,19 +675,24 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.background },
   label: { color: palette.textSecondary, marginBottom: 8 },
   fieldLabel: { color: palette.textSecondary, fontSize: 12, marginTop: 4, marginBottom: 6, fontWeight: '600' },
+  sectionLabel: { color: palette.textSecondary, fontSize: 14, fontWeight: '700', marginBottom: 12 },
   sectionTitle: { color: palette.textPrimary, fontSize: 17, fontWeight: '700' },
   activityHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   moreLink: { color: palette.primary, fontSize: 14, fontWeight: '700' },
-  activityCard: { paddingTop: 16, paddingBottom: 8 },
-  item: { color: palette.textPrimary, marginBottom: 6 },
+  activityCard: { paddingTop: 16, paddingBottom: 8, marginBottom: 12 },
+  blockCard: { marginBottom: 12 },
   hint: { color: palette.textSecondary, marginTop: 4, marginBottom: 8, fontSize: 12 },
   errorText: { color: palette.danger, marginBottom: 8 },
-  heroCard: { paddingTop: 18, paddingBottom: 20 },
-  heroCaption: { color: palette.textSecondary, marginBottom: 8, fontSize: 14 },
-  totalBalance: { color: palette.textPrimary, fontSize: 34, fontWeight: '700', letterSpacing: -0.5 },
-  totalSub: { color: palette.textSecondary, fontSize: 13, marginBottom: 4 },
-  assetSub: { color: palette.textSecondary, fontSize: 12, marginBottom: 8 },
-  actionRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 20, paddingHorizontal: 4 },
+  totalCard: { marginBottom: 12, paddingTop: 18, paddingBottom: 18 },
+  holdingsCard: { marginBottom: 12, paddingTop: 16, paddingBottom: 8 },
+  totalBalance: { color: palette.textPrimary, fontSize: 32, fontWeight: '800', letterSpacing: -0.5, marginBottom: 4 },
+  totalHint: { color: palette.textSecondary, fontSize: 12, marginBottom: 4 },
+  balanceRow: { marginBottom: 14 },
+  assetCode: { color: palette.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 2 },
+  assetAmount: { color: palette.textPrimary, fontSize: 28, fontWeight: '800' },
+  reserved: { color: palette.textSecondary, fontSize: 12, marginTop: 2 },
+  emptyHint: { color: palette.textSecondary, fontSize: 13, lineHeight: 18 },
+  actionRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 18, paddingHorizontal: 4 },
   actionItem: { alignItems: 'center', minWidth: 72 },
   actionCircle: {
     width: 52,
@@ -711,14 +719,8 @@ const styles = StyleSheet.create({
   transferOptionText: { flex: 1 },
   transferOptionTitle: { color: palette.textPrimary, fontSize: 15, fontWeight: '600' },
   transferOptionSub: { color: palette.textSecondary, fontSize: 12, marginTop: 2 },
-  gasHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   mono: { color: palette.textPrimary, fontFamily: 'Menlo', fontSize: 12, marginBottom: 8 },
-  complianceBanner: { marginBottom: 12, borderColor: palette.warning },
-  complianceBannerText: { color: palette.textPrimary, fontSize: 13, lineHeight: 18 },
-  gasCard: { marginBottom: 12, borderColor: palette.primary, borderLeftWidth: 3 },
-  gasTitle: { color: palette.primary, fontWeight: '700', marginBottom: 6, fontSize: 14 },
-  gasText: { color: palette.textSecondary, fontSize: 12, lineHeight: 18, marginBottom: 6 },
-  gasTextModal: { color: palette.warning, fontSize: 12, lineHeight: 17, marginBottom: 10 },
+  withdrawMaxHint: { color: palette.textSecondary, fontSize: 12, lineHeight: 17, marginBottom: 10 },
   supportLinkWrap: { marginBottom: 8 },
   supportLinkText: { color: palette.textSecondary, fontSize: 11, lineHeight: 16 },
   supportLinkAccent: { color: palette.primary, fontWeight: '600' },

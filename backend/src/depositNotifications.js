@@ -7,7 +7,7 @@ const {
 const { sendSms, smsEnabled, twilioConfigured } = require('./services/twilioSms');
 const { sendEmail } = require('./services/emailNotify');
 
-const APP_LABEL = 'AirFarmerPro';
+const APP_LABEL = 'Min';
 
 const FAILED_PAYOUT_STATUSES = ['failed', 'rejected', 'expired', 'refunded'];
 
@@ -101,10 +101,10 @@ async function deliverUserAlert({ userId, title, body }) {
 async function notifyDepositCredited({ userId, amount, asset, body: bodyOverride }) {
   const assetLabel = formatAssetLabel(asset);
   const amountStr = formatAmount(amount);
-  const title = 'Deposit received';
+  const title = 'Funds added';
   const body =
     bodyOverride ||
-    `Your deposit of ${amountStr} ${assetLabel} has been credited to your wallet.`;
+    `${amountStr} ${assetLabel} is now in your wallet.`;
   return deliverUserAlert({ userId, title, body });
 }
 
@@ -116,10 +116,10 @@ async function notifyWithdrawalOutcome({ userId, amount, asset, status }) {
 
   if (st !== 'finished' && !failed) return { notification: false, sms: false, email: false };
 
-  const title = failed ? 'Withdrawal failed' : 'Withdrawal completed';
+  const title = failed ? 'Cash-out failed' : 'Cash-out sent';
   const body = failed
-    ? `Your withdrawal of ${amountStr} ${assetLabel} could not be completed. Funds remain in your wallet.`
-    : `Your withdrawal of ${amountStr} ${assetLabel} was processed successfully.`;
+    ? `${amountStr} ${assetLabel} could not be sent. The amount is still in your wallet.`
+    : `${amountStr} ${assetLabel} has been sent successfully.`;
 
   return deliverUserAlert({ userId, title, body });
 }
