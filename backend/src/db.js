@@ -75,6 +75,18 @@ async function getUserById(userId) {
   return data;
 }
 
+async function deleteUserAdmin(userId) {
+  const existing = await getUserById(userId);
+  if (!existing) {
+    const err = new Error('User not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  const { error } = await supabase.from('users').delete().eq('id', userId);
+  if (error) throw error;
+  return { ok: true, userId, email: existing.email };
+}
+
 async function createUser({ email, passwordHash }) {
   const userId = id();
   const walletId = id();
@@ -3204,6 +3216,13 @@ async function upsertUserDropSchedule({
     .upsert(row, { onConflict: 'user_id,week_start' })
     .select('*')
     .single();
+  if (error && isSchemaError(error)) {
+    const err = new Error(
+      'User drop schedules schema missing. Run backend/sql/migrations/20260606_user_drop_schedules.sql in Supabase.'
+    );
+    err.statusCode = 503;
+    throw err;
+  }
   if (error) throw error;
   return data;
 }
@@ -3262,6 +3281,7 @@ module.exports = {
   utcTodayYmd,
   getUserByEmail,
   getUserById,
+  deleteUserAdmin,
   updateUserPasswordHash,
   replacePasswordResetCode,
   consumePasswordResetCode,

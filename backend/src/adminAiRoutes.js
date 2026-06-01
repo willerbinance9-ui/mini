@@ -113,8 +113,10 @@ function registerAdminAiRoutes(app) {
   app.post('/admin/api/ai/daily-plan/run', adminAuthMiddleware, async (req, res) => {
     try {
       const planDate = String(req.body?.planDate || utcTodayYmd()).slice(0, 10);
+      const forceDeterministic =
+        process.env.PLANNER_FORCE_DETERMINISTIC === '1' || req.body?.deterministic !== false;
       const result = await runDailyPlanner(planDate, {
-        forceDeterministic: Boolean(req.body?.deterministic),
+        forceDeterministic,
       });
       if (!result.ok) return res.status(400).json({ message: result.error });
       const plan = await getAiDailyPlanByDate(planDate);

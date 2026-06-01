@@ -20,7 +20,8 @@ const {
 const { applyActivePlan } = require('./applyPlan');
 const { hasLlmCredentials, plannerStep, appendToolResults, aiModel } = require('./llmClient');
 
-const MAX_LLM_STEPS = 40;
+const MAX_LLM_STEPS = 12;
+const LLM_WALL_CLOCK_MS = 25_000;
 const SYSTEM_PROMPT = `You are Ema's daily airfarming earnings allocator.
 Respect the daily budget_usd, platform caps (max_percent, max_profit_per_drop), and user pause flags.
 In risk_off or volatile regimes use lower percents and tighter balance windows; in calm markets you may use higher tiers for larger balances.
@@ -64,7 +65,11 @@ async function runLlmPlanner(ctx, plan) {
     },
   ];
 
+  const startedAt = Date.now();
   for (let step = 0; step < MAX_LLM_STEPS; step += 1) {
+    if (Date.now() - startedAt > LLM_WALL_CLOCK_MS) {
+      return { steps: step, finished: false, note: 'time_budget_exceeded' };
+    }
     const result = await plannerStep({ messages, system: SYSTEM_PROMPT });
     if (result.done) return { steps: step + 1, finished: true, text: result.text };
 
@@ -106,7 +111,10 @@ async function runDailyPlanner(planDate, options = {}) {
   const ctx = { planId: plan.id, planDate: date };
   let plannerMode = 'deterministic';
 
-  if (options.forceDeterministic !== true && hasLlmCredentials()) {
+  const envForceDeterministic = process.env.PLANNER_FORCE_DETERMINISTIC === '1';
+  const useDeterministicOnly = options.forceDeterministic === true || envForceDeterministic;
+
+  if (!useDeterministicOnly && hasLlmCredentials()) {
     try {
       const indicators = await fetchMarketIndicators();
       if (indicators.suggestedRegime && !(plan.market_snapshot || {}).regime) {
@@ -116,10 +124,20 @@ async function runDailyPlanner(planDate, options = {}) {
         });
         plan = await getAiDailyPlanById(plan.id);
       }
-      await runLlmPlanner(ctx, plan);
-      plannerMode = 'llm';
+      const llmResult = await runLlmPlanner(ctx, plan);
+      if (llmResult.finalized?.ok || llmResult.finished) {
+        plannerMode = 'llm';
+      } else {
+        console.warn(
+          '[ai-planner] LLM incomplete (%s), using deterministic fallback',
+          llmResult.note || 'unknown'
+        );
+        await clearAiAllocationsForPlan(plan.id);
+        await runDeterministicPlanner(ctx, plan);
+      }
     } catch (e) {
       console.warn('[ai-planner] LLM run failed, using deterministic fallback:', e.message);
+      await clearAiAllocationsForPlan(plan.id);
       await runDeterministicPlanner(ctx, plan);
     }
   } else {

@@ -192,6 +192,8 @@ function extractJsonObject(text) {
   return JSON.parse(body.slice(start, end + 1));
 }
 
+const LLM_FETCH_TIMEOUT_MS = 20_000;
+
 async function callJsonChat(system, userPayload) {
   const cfg = providerConfig();
   const key = apiKeyForProvider(aiProvider());
@@ -199,6 +201,7 @@ async function callJsonChat(system, userPayload) {
   const url = root.endsWith('/v1') ? `${root}/chat/completions` : `${root}/v1/chat/completions`;
   const res = await fetch(url, {
     method: 'POST',
+    signal: AbortSignal.timeout(LLM_FETCH_TIMEOUT_MS),
     headers: {
       Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
@@ -245,10 +248,10 @@ Rules:
 - intervalHours: hours until the NEXT drop (first = hours from now); use different values per drop (2–24h)
 - Do NOT use identical projectedProfitUsd or bandIndex for every drop unless dropCount is 1`;
 
-async function runAiUserDropPlan(ctx) {
+async function runAiUserDropPlan(ctx, options = {}) {
   const caps = await getEffectiveCaps();
 
-  if (!hasLlmCredentials()) {
+  if (options.forceDeterministic || !hasLlmCredentials()) {
     return runDeterministicUserDropPlan(ctx);
   }
 
@@ -287,7 +290,14 @@ async function runAiUserDropPlan(ctx) {
   }
 }
 
-async function suggestUserDropPlan({ userId, weekStart, dropCount, targetTotalUsd, balance }) {
+async function suggestUserDropPlan({
+  userId,
+  weekStart,
+  dropCount,
+  targetTotalUsd,
+  balance,
+  forceDeterministic = false,
+}) {
   const n = Number(dropCount);
   const target = roundUsd(targetTotalUsd);
   const bal = roundUsd(balance);
@@ -298,7 +308,7 @@ async function suggestUserDropPlan({ userId, weekStart, dropCount, targetTotalUs
   if (bal <= 0) return { ok: false, error: 'User needs a positive airfarming balance' };
 
   const ctx = { userId, weekStart, dropCount: n, targetTotalUsd: target, balance: bal };
-  const result = await runAiUserDropPlan(ctx);
+  const result = await runAiUserDropPlan(ctx, { forceDeterministic });
   return { ok: true, ...result };
 }
 

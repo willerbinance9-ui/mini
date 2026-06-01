@@ -23,6 +23,7 @@ const {
   insertGlobalDropPause,
   endGlobalDropPauseEarly,
   isMissingTableError,
+  isSchemaError,
   listAirfarmingDropBandsAdmin,
   updateAirfarmingDropBand,
   getAirfarmingPlatformSettings,
@@ -34,6 +35,7 @@ const {
   incrementP2pMerchantCompletedTrades,
   createAppNotification,
   getUserByEmail,
+  deleteUserAdmin,
 } = require('./db');
 const { normalizeTargetUserId } = require('./notificationRoutes');
 const { approveWithdrawal, rejectWithdrawal } = require('./adminWithdrawals');
@@ -42,7 +44,13 @@ const { releaseP2pEscrow, refundP2pEscrow } = require('./p2pEscrow');
 function newId() {
   return crypto.randomUUID();
 }
-const { adminAuthMiddleware, ADMIN_PURPOSE } = require('./middleware/adminAuth');
+const {
+  adminAuthMiddleware,
+  requireSuperAdmin,
+  ADMIN_PURPOSE,
+  ROLE_SUPERADMIN,
+  ROLE_ADMIN,
+} = require('./middleware/adminAuth');
 const {
   clampAirfarmingPercent,
   MAX_AIRFARMING_PERCENT,
@@ -80,6 +88,13 @@ function adminCredentials() {
     username: String(process.env.ADMIN_USERNAME || 'admin').trim(),
     password: String(process.env.ADMIN_PASSWORD || 'admin'),
   };
+}
+
+function superadminCredentials() {
+  const username = String(process.env.SUPERADMIN_USERNAME || '').trim();
+  const password = String(process.env.SUPERADMIN_PASSWORD || '');
+  if (!username || !password) return null;
+  return { username, password };
 }
 
 function dropToAdminRow(row, emailByUserId, pausedByUserId) {
@@ -164,20 +179,33 @@ function registerAdminRoutes(app) {
   registerAdminAiRoutes(app);
   app.post('/admin/api/login', (req, res) => {
     const { username, password } = req.body || {};
+    const name = String(username || '').trim();
+    const pass = String(password || '');
+
+    const superCreds = superadminCredentials();
+    if (superCreds && name === superCreds.username && pass === superCreds.password) {
+      const token = jwt.sign(
+        { purpose: ADMIN_PURPOSE, sub: superCreds.username, role: ROLE_SUPERADMIN },
+        process.env.JWT_SECRET || 'ema-dev-secret',
+        { expiresIn: '12h' }
+      );
+      return res.json({ token, expiresInHours: 12, role: ROLE_SUPERADMIN, username: superCreds.username });
+    }
+
     const creds = adminCredentials();
-    if (String(username || '').trim() !== creds.username || String(password || '') !== creds.password) {
+    if (name !== creds.username || pass !== creds.password) {
       return res.status(401).json({ message: 'Invalid admin credentials' });
     }
     const token = jwt.sign(
-      { purpose: ADMIN_PURPOSE, sub: creds.username },
+      { purpose: ADMIN_PURPOSE, sub: creds.username, role: ROLE_ADMIN },
       process.env.JWT_SECRET || 'ema-dev-secret',
       { expiresIn: '12h' }
     );
-    return res.json({ token, expiresInHours: 12 });
+    return res.json({ token, expiresInHours: 12, role: ROLE_ADMIN, username: creds.username });
   });
 
   app.get('/admin/api/me', adminAuthMiddleware, (req, res) => {
-    return res.json({ username: req.adminUser });
+    return res.json({ username: req.adminUser, role: req.adminRole });
   });
 
   app.get('/admin/api/users', adminAuthMiddleware, async (req, res) => {
@@ -288,7 +316,9 @@ function registerAdminRoutes(app) {
       if (!result.ok) return res.status(400).json({ message: result.error });
       return res.json(result);
     } catch (e) {
-      if (isMissingTableError(e)) return res.status(503).json({ message: dropScheduleSchemaMsg });
+      if (isMissingTableError(e) || e.statusCode === 503) {
+        return res.status(503).json({ message: e.message || dropScheduleSchemaMsg });
+      }
       return res.status(500).json({ message: e.message || 'Failed to save drop schedule' });
     }
   });
@@ -304,11 +334,18 @@ function registerAdminRoutes(app) {
       if (!Number.isFinite(targetTotalUsd) || targetTotalUsd < 0) {
         return res.status(400).json({ message: 'targetTotalUsd must be a non-negative number' });
       }
-      const result = await aiSuggestUserDropSchedule(req.params.id, { weekStart, dropCount, targetTotalUsd });
+      const result = await aiSuggestUserDropSchedule(req.params.id, {
+        weekStart,
+        dropCount,
+        targetTotalUsd,
+        forceDeterministic: req.body?.deterministic !== false,
+      });
       if (!result.ok) return res.status(400).json({ message: result.error });
       return res.json(result);
     } catch (e) {
-      if (isMissingTableError(e)) return res.status(503).json({ message: dropScheduleSchemaMsg });
+      if (isMissingTableError(e) || e.statusCode === 503) {
+        return res.status(503).json({ message: e.message || dropScheduleSchemaMsg });
+      }
       console.error('[admin/drop-schedule/ai-suggest]', e);
       return res.status(500).json({ message: e.message || 'AI suggest failed' });
     }
@@ -350,7 +387,11 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/admin/api/users/:id/wallets/adjust', adminAuthMiddleware, async (req, res) => {
+  app.post(
+    '/admin/api/users/:id/wallets/adjust',
+    adminAuthMiddleware,
+    requireSuperAdmin,
+    async (req, res) => {
     try {
       const detail = await getAdminUserDetail(req.params.id);
       if (!detail) return res.status(404).json({ message: 'User not found' });
@@ -389,9 +430,14 @@ function registerAdminRoutes(app) {
       console.error('[admin/users/wallets/adjust]', e);
       return res.status(500).json({ message: e.message || 'Failed to adjust balance' });
     }
-  });
+  }
+  );
 
-  app.post('/admin/api/users/:id/wallets/move-to-airfarming', adminAuthMiddleware, async (req, res) => {
+  app.post(
+    '/admin/api/users/:id/wallets/move-to-airfarming',
+    adminAuthMiddleware,
+    requireSuperAdmin,
+    async (req, res) => {
     try {
       const detail = await getAdminUserDetail(req.params.id);
       if (!detail) return res.status(404).json({ message: 'User not found' });
@@ -414,7 +460,35 @@ function registerAdminRoutes(app) {
       console.error('[admin/users/move-to-airfarming]', e);
       return res.status(500).json({ message: 'Failed to move funds' });
     }
-  });
+  }
+  );
+
+  app.delete(
+    '/admin/api/users/:id',
+    adminAuthMiddleware,
+    requireSuperAdmin,
+    async (req, res) => {
+      try {
+        const reason = String(req.body?.reason || req.query?.reason || '').trim();
+        if (!reason) {
+          return res.status(400).json({ message: 'A reason is required to delete a user' });
+        }
+        const result = await deleteUserAdmin(req.params.id);
+        console.info(
+          '[admin/users/delete]',
+          req.adminUser,
+          result.userId,
+          result.email,
+          reason.slice(0, 200)
+        );
+        return res.json({ ok: true, ...result, reason });
+      } catch (e) {
+        if (e.statusCode === 404) return res.status(404).json({ message: e.message });
+        console.error('[admin/users/delete]', e);
+        return res.status(500).json({ message: e.message || 'Failed to delete user' });
+      }
+    }
+  );
 
   app.patch('/admin/api/users/:id/airfarming', adminAuthMiddleware, async (req, res) => {
     try {
@@ -600,6 +674,9 @@ function registerAdminRoutes(app) {
     }
   });
 
+  const dropSettingsSchemaMsg =
+    'Airfarming drop settings schema missing. Run backend/sql/migrations/20260603_airfarming_drop_settings.sql and 20260528_airfarming_drop_bands.sql in Supabase.';
+
   app.get('/admin/api/airfarming/settings', adminAuthMiddleware, async (_req, res) => {
     try {
       const [settings, bands] = await Promise.all([
@@ -614,6 +691,9 @@ function registerAdminRoutes(app) {
         effectiveCaps: caps,
       });
     } catch (e) {
+      if (isMissingTableError(e) || isSchemaError(e) || e.statusCode === 503) {
+        return res.status(503).json({ message: e.message || dropSettingsSchemaMsg });
+      }
       console.error('[admin/airfarming/settings GET]', e);
       return res.status(500).json({ message: e.message || 'Failed to load drop settings' });
     }

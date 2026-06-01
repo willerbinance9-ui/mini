@@ -681,6 +681,10 @@
                   <button type="button" class="btn-primary" id="userDropPlanAiBtn">AI suggest</button>
                   <button type="button" class="btn-warn" id="userDropPlanApplyBtn">Apply to schedule</button>
                 </div>
+                <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin-top:8px;font-size:0.85rem;color:var(--muted);">
+                  <input id="userDropFastAi" type="checkbox" checked style="width:auto;margin:0;" />
+                  Fast suggest (no AI, recommended)
+                </label>
                 <p id="userDropPlanSummary" class="hint" style="margin-top:12px;"></p>
                 <div class="table-scroll">
                   <table>
@@ -701,7 +705,7 @@
                 </div>
               </section>
 
-              <section class="card admin-section">
+              <section id="walletsSection" class="card admin-section">
                 <h3 class="admin-section-title">Wallets</h3>
                 <p class="admin-section-desc">Adjust balances (reason required) or move cash into airfarming.</p>
                 <h4 style="font-size:0.88rem;margin:0 0 10px;color:var(--muted);">Adjust balance</h4>
@@ -748,6 +752,16 @@
                 </div>
                 <div class="btn-toolbar">
                   <button type="button" class="btn-primary" id="moveToAfBtn">Move funds</button>
+                </div>
+              </section>
+
+              <section id="dangerUserSection" class="card admin-section hidden">
+                <h3 class="admin-section-title">Delete user</h3>
+                <p class="admin-section-desc">Permanently removes this account and related data. Superadmin only.</p>
+                <label>Reason (required)</label>
+                <input id="deleteUserReason" type="text" placeholder="e.g. Duplicate account per support #456" />
+                <div class="btn-toolbar">
+                  <button type="button" class="btn-warn" id="deleteUserBtn">Delete user permanently</button>
                 </div>
               </section>
 
@@ -971,6 +985,10 @@
               <button type="button" class="btn-primary" id="aiRunPlannerBtn" style="width:auto;">Run planner</button>
               <button type="button" class="btn-ghost" id="aiApprovePlanBtn" style="width:auto;" disabled>Approve plan</button>
             </div>
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin-bottom:12px;font-size:0.85rem;color:var(--muted);">
+              <input id="aiFastPlanner" type="checkbox" checked style="width:auto;margin:0;" />
+              Fast planner (no AI, recommended — avoids server timeouts)
+            </label>
             <p id="aiPlanSummary" class="hint"></p>
             <p id="aiPlanOk" class="hint hidden" style="color:var(--ok);"></p>
             <p id="aiPlanErr" class="err hidden"></p>
@@ -1230,21 +1248,58 @@
     let aiAllocations = [];
     let aiPlanSummary = null;
     let aiPlansList = [];
+    let adminRole = 'admin';
+
+    function networkErrorMessage(err) {
+      const msg = String(err?.message || '');
+      if (err?.name === 'AbortError' || /aborted|timeout/i.test(msg)) {
+        return 'Request timed out. Use Fast planner / Fast suggest, or try again in a moment.';
+      }
+      if (msg === 'Failed to fetch' || err instanceof TypeError) {
+        return 'Could not reach the server (timeout or connection lost). Open admin from your API host /admin URL, not a saved HTML file.';
+      }
+      return msg || 'Request failed';
+    }
 
     function api(path, opts = {}) {
       const token = localStorage.getItem(TOKEN_KEY);
       const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
       if (token) headers.Authorization = 'Bearer ' + token;
-      return fetch(path, { ...opts, headers }).then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (res.status === 401) {
-          localStorage.removeItem(TOKEN_KEY);
-          showLogin();
-          throw new Error(data.message || 'Session expired — sign in again');
-        }
-        if (!res.ok) throw new Error(data.message || res.statusText);
-        return data;
-      });
+      const timeoutMs = opts.timeoutMs != null ? opts.timeoutMs : 60000;
+      const { timeoutMs: _omit, ...fetchOpts } = opts;
+      const signal = fetchOpts.signal || AbortSignal.timeout(timeoutMs);
+      return fetch(path, { ...fetchOpts, headers, signal })
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (res.status === 401) {
+            localStorage.removeItem(TOKEN_KEY);
+            showLogin();
+            throw new Error(data.message || 'Session expired — sign in again');
+          }
+          if (!res.ok) throw new Error(data.message || res.statusText || 'Request failed');
+          return data;
+        })
+        .catch((err) => {
+          if (err.message && err.message !== 'Failed to fetch' && err.name !== 'TypeError') {
+            throw err;
+          }
+          throw new Error(networkErrorMessage(err));
+        });
+    }
+
+    function applyAdminRoleUI() {
+      const isSuper = adminRole === 'superadmin';
+      const wallets = document.getElementById('walletsSection');
+      if (wallets) wallets.classList.toggle('hidden', !isSuper);
+      const danger = document.getElementById('dangerUserSection');
+      if (danger) danger.classList.toggle('hidden', !isSuper);
+    }
+
+    function setAdminSession(me) {
+      adminRole = me.role || 'admin';
+      const name = me.username || 'admin';
+      document.getElementById('adminUserLabel').textContent = name + ' · ' + adminRole;
+      applyAdminRoleUI();
     }
 
     function showLogin() {
@@ -1803,9 +1858,11 @@
         return;
       }
       try {
+        const deterministic = document.getElementById('userDropFastAi')?.checked !== false;
         const data = await api('/admin/api/users/' + viewingUserId + '/drop-schedule/ai-suggest', {
           method: 'POST',
-          body: JSON.stringify({ dropCount, targetTotalUsd, weekStart }),
+          timeoutMs: 120000,
+          body: JSON.stringify({ dropCount, targetTotalUsd, weekStart, deterministic }),
         });
         userDropPlanView = {
           weekStart: data.schedule.weekStart,
@@ -1880,6 +1937,10 @@
 
     async function applyWalletAdjust() {
       clearUserPageAlert();
+      if (adminRole !== 'superadmin') {
+        showUserPageAlert('Superadmin login required to adjust balances.', 'error');
+        return;
+      }
       document.getElementById('adjustOk').classList.add('hidden');
       const amount = Number(document.getElementById('adjustAmount').value);
       const reason = document.getElementById('adjustReason').value.trim();
@@ -1942,8 +2003,41 @@
       wrap.style.display = mode === 'adjust' ? '' : 'none';
     }
 
+    async function deleteCurrentUser() {
+      clearUserPageAlert();
+      if (adminRole !== 'superadmin') {
+        showUserPageAlert('Superadmin login required to delete users.', 'error');
+        return;
+      }
+      const reason = document.getElementById('deleteUserReason')?.value.trim() || '';
+      if (!reason) {
+        showUserPageAlert('Reason is required to delete a user.', 'error');
+        return;
+      }
+      if (!viewingUserId || !viewingUserDetail?.user?.email) return;
+      const email = viewingUserDetail.user.email;
+      if (!confirm('Permanently delete ' + email + '?\n\nReason: ' + reason + '\n\nThis cannot be undone.')) return;
+      try {
+        await api('/admin/api/users/' + viewingUserId, {
+          method: 'DELETE',
+          body: JSON.stringify({ reason }),
+        });
+        users = users.filter((u) => u.id !== viewingUserId);
+        renderUsersTable();
+        closeUserPage();
+        setTab('users');
+        document.getElementById('usersErr').classList.add('hidden');
+      } catch (e) {
+        showUserPageAlert(e.message, 'error');
+      }
+    }
+
     async function moveToAirfarming() {
       clearUserPageAlert();
+      if (adminRole !== 'superadmin') {
+        showUserPageAlert('Superadmin login required to move balances.', 'error');
+        return;
+      }
       const amount = Number(document.getElementById('moveAmount').value);
       if (!Number.isFinite(amount) || amount <= 0) {
         showUserPageAlert('Enter a valid amount', 'error');
@@ -2801,9 +2895,11 @@
       document.getElementById('aiPlanErr').classList.add('hidden');
       document.getElementById('aiRunPlannerBtn').disabled = true;
       try {
+        const deterministic = document.getElementById('aiFastPlanner')?.checked !== false;
         const data = await api('/admin/api/ai/daily-plan/run', {
           method: 'POST',
-          body: JSON.stringify({ planDate: aiPlanDateValue() }),
+          timeoutMs: 120000,
+          body: JSON.stringify({ planDate: aiPlanDateValue(), deterministic }),
         });
         aiPlan = data.plan;
         aiAllocations = data.allocations || [];
@@ -2865,6 +2961,7 @@
           }),
         });
         localStorage.setItem(TOKEN_KEY, data.token);
+        setAdminSession({ username: data.username, role: data.role });
         showDash();
         setTab('users');
       } catch (e) {
@@ -2913,6 +3010,7 @@
     document.getElementById('userDropPlanAiBtn').onclick = () => aiSuggestUserDropPlan();
     document.getElementById('userDropPlanApplyBtn').onclick = () => applyUserDropPlan();
     document.getElementById('moveToAfBtn').onclick = () => moveToAirfarming();
+    document.getElementById('deleteUserBtn').onclick = () => deleteCurrentUser();
     document.getElementById('saveTicketBtn').onclick = () => saveTicketStatus();
     document.getElementById('closeTicketBtn').onclick = () => closeModal('ticketModal');
     document.getElementById('saveUserPasswordBtn').onclick = () => saveUserPassword();
@@ -2964,7 +3062,7 @@
     if (token) {
       api('/admin/api/me')
         .then((me) => {
-          document.getElementById('adminUserLabel').textContent = me.username || 'admin';
+          setAdminSession(me);
           showDash();
           setTab('users');
         })

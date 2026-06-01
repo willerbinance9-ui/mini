@@ -36,8 +36,10 @@ In Render service settings, add:
 - `SUPABASE_URL=<your-supabase-url>`
 - `SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>`
 - `DEV_RESET_TOKEN=<set-random-token-or-remove-route-for-prod>`
-- `ADMIN_USERNAME=admin` (change in production)
+- `ADMIN_USERNAME=admin` (change in production) — operational admin: withdrawals, support, drop tiers, AI planner, etc.
 - `ADMIN_PASSWORD=<strong-password>` (required in production; defaults to `admin` only for local dev)
+- `SUPERADMIN_USERNAME=<unique-name>` — can adjust/move/set/remove user balances and delete users
+- `SUPERADMIN_PASSWORD=<strong-password>` — must differ from `ADMIN_PASSWORD`
 - `MT5_METAAPI_TOKEN=<MetaApi token>` (for MT5 balance, positions, server-side orders)
 - `MT5_EA_WEBHOOK_SECRET=<optional>` (HMAC on `POST /webhooks/mt5-ea/telemetry` when EA does not use Bearer token; body must include `login` and `server`)
 
@@ -65,18 +67,32 @@ After deploy, open:
 
 - `https://your-render-service.onrender.com/admin/`
 
-Sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD`. You can view all **scheduled** airfarming drops across users and edit percent, min/max balance, and due time. Edited percent is **locked** so automatic band sync does not overwrite your change.
+Sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD` for day-to-day ops, or `SUPERADMIN_USERNAME` / `SUPERADMIN_PASSWORD` when you need to change user balances or delete accounts.
+
+You can view all **scheduled** airfarming drops across users and edit percent, min/max balance, and due time. Edited percent is **locked** so automatic band sync does not overwrite your change.
+
+### Required Supabase migrations (admin AI + drop settings)
+
+If admin shows schema errors or empty AI/drop data, run these in the Supabase SQL editor (in order, skip any already applied):
+
+- `backend/sql/migrations/20260528_airfarming_drop_bands.sql`
+- `backend/sql/migrations/20260603_airfarming_drop_settings.sql`
+- `backend/sql/migrations/20260604_ai_daily_earnings.sql`
+- `backend/sql/migrations/20260606_user_drop_schedules.sql`
+
+Redeploy Render after applying migrations.
 
 ### AI daily earnings planner (Deepseek)
 
 In Render env vars (or local `.env`):
 
 - `AI_PROVIDER=deepseek` (default if omitted)
-- `DEEPSEEK_API_KEY=<from https://platform.deepseek.com/>`
+- `DEEPSEEK_API_KEY=<from https://platform.deepseek.com/>` (optional; admin **Fast planner** uses deterministic mode by default)
 - `AI_MODEL=deepseek-chat` (optional; default `deepseek-chat`)
+- `PLANNER_FORCE_DETERMINISTIC=1` (optional; server always skips LLM)
 - `INTERNAL_CRON_SECRET=<random>` — optional cron: `POST /internal/ai/daily-plan` with header `x-internal-cron-secret`
 
-Admin tab **AI earnings**: set daily budget, run planner. Without `DEEPSEEK_API_KEY`, the planner uses a built-in deterministic allocator.
+Admin tab **AI earnings**: set daily budget, run planner with **Fast planner (no AI)** checked (recommended on Render to avoid 30s timeouts). Uncheck only when you want LLM allocation and have time for a longer request.
 
 ## 5) Point mobile app to production backend
 

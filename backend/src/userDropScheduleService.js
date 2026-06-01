@@ -61,7 +61,7 @@ async function saveUserDropScheduleDraft(userId, { weekStart, dropCount, targetT
   return { ok: true, schedule: userDropScheduleRowToApi(row) };
 }
 
-async function aiSuggestUserDropSchedule(userId, { weekStart, dropCount, targetTotalUsd }) {
+async function aiSuggestUserDropSchedule(userId, { weekStart, dropCount, targetTotalUsd, forceDeterministic }) {
   const user = await getUserById(userId);
   if (!user) return { ok: false, error: 'User not found' };
 
@@ -75,6 +75,7 @@ async function aiSuggestUserDropSchedule(userId, { weekStart, dropCount, targetT
     dropCount,
     targetTotalUsd,
     balance,
+    forceDeterministic: forceDeterministic === true,
   });
   if (!suggestion.ok) return suggestion;
 
