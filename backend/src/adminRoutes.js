@@ -586,12 +586,17 @@ function registerAdminRoutes(app) {
         let dueMs = nowMs + Math.round(delayMinutes * 60 * 1000);
         const weekStart = mondayUtcYmd(new Date(dueMs));
         const existing = await listScheduledAirfarmingDropsForUser(req.params.id, weekStart, 100);
+        const earliestDueMs = existing.length
+          ? Math.min(...existing.map((d) => new Date(d.due_at).getTime()).filter((n) => Number.isFinite(n)))
+          : null;
+        if (Number.isFinite(earliestDueMs) && dueMs >= earliestDueMs) {
+          // Keep VIP direct drops ahead of current queue while respecting now.
+          dueMs = Math.max(nowMs, earliestDueMs - 1000);
+        }
         const sameMomentExists = existing.some((d) => new Date(d.due_at).getTime() === dueMs);
         if (sameMomentExists) dueMs -= 1;
         const dueAtIso = new Date(dueMs).toISOString();
-        const floorIndex = existing.reduce((m, d) => Math.min(m, Number(d.drop_index)), Number.POSITIVE_INFINITY);
-        const nextDropIndex =
-          Number.isFinite(floorIndex) ? floorIndex - 1 : (await getMaxAirfarmingDropIndex(req.params.id, weekStart)) + 1;
+        const nextDropIndex = (await getMaxAirfarmingDropIndex(req.params.id, weekStart)) + 1;
 
         const row = await insertAirfarmingDrop({
           id: newId(),
