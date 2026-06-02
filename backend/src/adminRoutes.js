@@ -64,6 +64,7 @@ const {
   MAX_AIRFARMING_PERCENT,
   clearAirfarmingSettingsCache,
   getEffectiveCaps,
+  processDueDrops,
 } = require('./airfarmingDrops');
 const { parsePauseRange, pauseStatusFromState } = require('./airfarmingPause');
 const { registerAdminAiRoutes } = require('./adminAiRoutes');
@@ -918,6 +919,17 @@ function registerAdminRoutes(app) {
 
   app.get('/admin/api/airfarming/payouts/pending', adminAuthMiddleware, async (req, res) => {
     try {
+      const scheduled = await listScheduledAirfarmingDropsAdmin({ upcomingOnly: false, limit: 500 });
+      const overdue = (scheduled || []).filter(
+        (d) => new Date(d.due_at).getTime() <= Date.now() && d.status === 'scheduled'
+      );
+      const keys = new Set(overdue.map((d) => `${d.user_id}:${d.week_start}`));
+      for (const key of keys) {
+        const [userId, weekStart] = key.split(':');
+        // Ensure countdown-elapsed drops are transformed into pending_approval before listing.
+        await processDueDrops(userId, weekStart, { autoFundEnabled: true }).catch(() => {});
+      }
+
       const rows = await listPendingAirfarmingDropsAdmin(Number(req.query.limit) || 300);
       const users = await getUsersByIds(rows.map((r) => r.user_id));
       const emailByUserId = new Map(users.map((u) => [u.id, u.email]));
