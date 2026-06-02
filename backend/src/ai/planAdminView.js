@@ -117,7 +117,7 @@ async function buildAiPlanAdminDetail(plan, planDate) {
     const weekPaid = userDrops.filter((d) => d.status === 'paid').length;
     const weekScheduled = userDrops.filter((d) => d.status === 'scheduled').length;
     const weekMissed = userDrops.filter((d) => d.status === 'missed').length;
-    const profitPaidOnDate = roundMoney(paidOnDate.reduce((s, d) => s + d.profitAmount, 0));
+    const profitPaidOnPlanDate = roundMoney(paidOnDate.reduce((s, d) => s + d.profitAmount, 0));
 
     let linkedDrop = null;
     if (row.drop_id) {

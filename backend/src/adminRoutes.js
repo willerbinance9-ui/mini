@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const {
   listScheduledAirfarmingDropsAdmin,
+  listScheduledAirfarmingDropsForUser,
   getAirfarmingDropById,
   updateAirfarmingDrop,
   getUsersByIds,
@@ -36,6 +37,8 @@ const {
   createAppNotification,
   getUserByEmail,
   deleteUserAdmin,
+  getMaxAirfarmingDropIndex,
+  insertAirfarmingDrop,
 } = require('./db');
 const { normalizeTargetUserId } = require('./notificationRoutes');
 const { approveWithdrawal, rejectWithdrawal } = require('./adminWithdrawals');
@@ -113,6 +116,7 @@ function dropToAdminRow(row, emailByUserId, pausedByUserId) {
     minBalance: Number(row.min_balance),
     maxBalance: Number(row.max_balance),
     bandIndex: row.band_index != null ? Number(row.band_index) : null,
+    isVipPriority: row.band_index == null && Boolean(row.percent_locked),
     percentLocked: Boolean(row.percent_locked),
     status: row.status,
   };
@@ -137,6 +141,14 @@ function settingsToAdminRow(row) {
     maxProfitPerDrop: Number(row.max_profit_per_drop),
     updatedAt: row.updated_at,
   };
+}
+
+function mondayUtcYmd(now = new Date()) {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const dow = d.getUTCDay();
+  const offset = (dow + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - offset);
+  return d.toISOString().slice(0, 10);
 }
 
 async function validateDropPatch(body) {
@@ -536,6 +548,79 @@ function registerAdminRoutes(app) {
       return res.status(500).json({ message: e.message || 'Failed to update airfarming settings' });
     }
   });
+
+  app.post(
+    '/admin/api/users/:id/drops/direct',
+    adminAuthMiddleware,
+    requireSuperAdmin,
+    async (req, res) => {
+      try {
+        const detail = await getAdminUserDetail(req.params.id);
+        if (!detail) return res.status(404).json({ message: 'User not found' });
+
+        const body = req.body || {};
+        const percent = Number(body.percent);
+        const minBalance = Number(body.minBalance);
+        const maxBalance = Number(body.maxBalance);
+        const delayMinutes = Number(body.delayMinutes);
+
+        if (!Number.isFinite(delayMinutes) || delayMinutes < 0) {
+          return res.status(400).json({ message: 'delayMinutes must be a number >= 0' });
+        }
+        if (!Number.isFinite(minBalance) || minBalance < 0) {
+          return res.status(400).json({ message: 'minBalance must be >= 0' });
+        }
+        if (!Number.isFinite(maxBalance) || maxBalance < 0) {
+          return res.status(400).json({ message: 'maxBalance must be >= 0' });
+        }
+        if (maxBalance < minBalance) {
+          return res.status(400).json({ message: 'maxBalance must be >= minBalance' });
+        }
+
+        const caps = await getEffectiveCaps();
+        if (!Number.isFinite(percent) || percent < 0.01 || percent > caps.maxPercent) {
+          return res.status(400).json({ message: `percent must be between 0.01 and ${caps.maxPercent}` });
+        }
+
+        const nowMs = Date.now();
+        let dueMs = nowMs + Math.round(delayMinutes * 60 * 1000);
+        const weekStart = mondayUtcYmd(new Date(dueMs));
+        const existing = await listScheduledAirfarmingDropsForUser(req.params.id, weekStart, 100);
+        const sameMomentExists = existing.some((d) => new Date(d.due_at).getTime() === dueMs);
+        if (sameMomentExists) dueMs -= 1;
+        const dueAtIso = new Date(dueMs).toISOString();
+        const floorIndex = existing.reduce((m, d) => Math.min(m, Number(d.drop_index)), Number.POSITIVE_INFINITY);
+        const nextDropIndex =
+          Number.isFinite(floorIndex) ? floorIndex - 1 : (await getMaxAirfarmingDropIndex(req.params.id, weekStart)) + 1;
+
+        const row = await insertAirfarmingDrop({
+          id: newId(),
+          user_id: req.params.id,
+          week_start: weekStart,
+          drop_index: nextDropIndex,
+          due_at: dueAtIso,
+          band_index: null,
+          percent: clampAirfarmingPercent(percent, caps.maxPercent),
+          min_balance: Math.round(minBalance * 100) / 100,
+          max_balance: Math.round(maxBalance * 100) / 100,
+          status: 'scheduled',
+          profit_amount: 0,
+          percent_locked: true,
+        });
+
+        const users = await getUsersByIds([row.user_id]);
+        const emailByUserId = new Map(users.map((u) => [u.id, u.email]));
+        const pausedByUserId = await getAirfarmingDropsPausedByUserIds([row.user_id]);
+        return res.status(201).json({ ok: true, drop: dropToAdminRow(row, emailByUserId, pausedByUserId) });
+      } catch (e) {
+        if (isMissingTableError(e)) {
+          return res.status(503).json({ message: 'Airfarming drops schema not ready. Run migrations.' });
+        }
+        console.error('[admin/users/drops/direct]', e);
+        return res.status(500).json({ message: e.message || 'Failed to create direct drop' });
+      }
+    }
+  );
 
   app.get('/admin/api/airfarming/global-pause', adminAuthMiddleware, async (req, res) => {
     try {

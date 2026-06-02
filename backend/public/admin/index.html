@@ -659,6 +659,39 @@
                 </div>
               </section>
 
+              <section id="directDropSection" class="card admin-section hidden">
+                <h3 class="admin-section-title">Send direct drop</h3>
+                <p class="admin-section-desc">Superadmin only. Schedule one custom drop directly without creating a plan.</p>
+                <div class="form-grid-2">
+                  <div>
+                    <label>Delay value</label>
+                    <input id="directDropDelayValue" type="number" min="0" step="1" value="1" />
+                  </div>
+                  <div>
+                    <label>Delay unit</label>
+                    <select id="directDropDelayUnit">
+                      <option value="minutes">Minutes</option>
+                      <option value="hours" selected>Hours</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Drop percent (%)</label>
+                    <input id="directDropPercent" type="number" min="0.01" step="0.01" placeholder="12.5" />
+                  </div>
+                  <div>
+                    <label>Min balance required (USD)</label>
+                    <input id="directDropMinBalance" type="number" min="0" step="0.01" placeholder="100" />
+                  </div>
+                  <div>
+                    <label>Max balance required (USD)</label>
+                    <input id="directDropMaxBalance" type="number" min="0" step="0.01" placeholder="145" />
+                  </div>
+                </div>
+                <div class="btn-toolbar">
+                  <button type="button" class="btn-primary" id="sendDirectDropBtn">Schedule direct drop</button>
+                </div>
+              </section>
+
               <section class="card admin-section">
                 <h3 class="admin-section-title">Custom drop plan (AI)</h3>
                 <p class="admin-section-desc">Set how many upcoming drops this user gets and the combined profit target. AI suggests percent and hours between each drop.</p>
@@ -1291,6 +1324,8 @@
       const isSuper = adminRole === 'superadmin';
       const wallets = document.getElementById('walletsSection');
       if (wallets) wallets.classList.toggle('hidden', !isSuper);
+      const directDrop = document.getElementById('directDropSection');
+      if (directDrop) directDrop.classList.toggle('hidden', !isSuper);
       const danger = document.getElementById('dangerUserSection');
       if (danger) danger.classList.toggle('hidden', !isSuper);
     }
@@ -1505,8 +1540,9 @@
       dropBody.innerHTML = '';
       (d.scheduledDrops || []).forEach((drop) => {
         const tr = document.createElement('tr');
+        const vipBadge = drop.isVipPriority ? ' <span class="pill" style="background:rgba(245,158,11,0.18);border-color:rgba(245,158,11,0.45);color:#fbbf24;">VIP</span>' : '';
         tr.innerHTML =
-          '<td>' + drop.dropIndex + '</td><td>' + new Date(drop.dueAt).toLocaleString() + '</td>' +
+          '<td>' + drop.dropIndex + vipBadge + '</td><td>' + new Date(drop.dueAt).toLocaleString() + '</td>' +
           '<td>' + drop.percent + '%</td>' +
           '<td>' + escapeHtml(bandTierLabel(drop.bandIndex)) + '<br><span style="color:var(--muted);font-size:0.7rem;">$' +
           drop.minBalance + ' – $' + drop.maxBalance + '</span></td>';
@@ -2063,6 +2099,53 @@
       }
     }
 
+    async function sendDirectDrop() {
+      clearUserPageAlert();
+      if (adminRole !== 'superadmin') {
+        showUserPageAlert('Superadmin login required to send direct drops.', 'error');
+        return;
+      }
+      const delayValue = Number(document.getElementById('directDropDelayValue').value);
+      const delayUnit = document.getElementById('directDropDelayUnit').value;
+      const percent = Number(document.getElementById('directDropPercent').value);
+      const minBalance = Number(document.getElementById('directDropMinBalance').value);
+      const maxBalance = Number(document.getElementById('directDropMaxBalance').value);
+
+      if (!Number.isFinite(delayValue) || delayValue < 0) {
+        showUserPageAlert('Delay value must be 0 or greater.', 'error');
+        return;
+      }
+      if (!Number.isFinite(percent) || percent <= 0) {
+        showUserPageAlert('Percent must be greater than 0.', 'error');
+        return;
+      }
+      if (!Number.isFinite(minBalance) || minBalance < 0 || !Number.isFinite(maxBalance) || maxBalance < 0) {
+        showUserPageAlert('Balance window must be valid non-negative numbers.', 'error');
+        return;
+      }
+      if (maxBalance < minBalance) {
+        showUserPageAlert('Max balance must be greater than or equal to min balance.', 'error');
+        return;
+      }
+
+      const delayMinutes = delayUnit === 'hours' ? delayValue * 60 : delayValue;
+      try {
+        const data = await api('/admin/api/users/' + viewingUserId + '/drops/direct', {
+          method: 'POST',
+          body: JSON.stringify({ delayMinutes, percent, minBalance, maxBalance }),
+        });
+        const drop = data.drop;
+        showUserPageAlert(
+          'VIP priority drop scheduled for ' + new Date(drop.dueAt).toLocaleString() + ' at ' + drop.percent + '%.',
+          'success'
+        );
+        const d = await api('/admin/api/users/' + viewingUserId);
+        renderUserDetail(d);
+      } catch (e) {
+        showUserPageAlert(e.message, 'error');
+      }
+    }
+
     function renderTicketsTable() {
       const tbody = document.getElementById('ticketRows');
       tbody.innerHTML = '';
@@ -2283,8 +2366,9 @@
       drops.forEach((d) => {
         const tr = document.createElement('tr');
         const paused = d.dropsPaused ? ' <span class="pill pill-paused">paused</span>' : '';
+        const vip = d.isVipPriority ? ' <span class="pill" style="background:rgba(245,158,11,0.18);border-color:rgba(245,158,11,0.45);color:#fbbf24;">VIP</span>' : '';
         tr.innerHTML =
-          '<td>' + escapeHtml(d.userEmail) + paused + '<br><span style="color:var(--muted);font-size:0.7rem;">#' + d.dropIndex + ' · ' + d.weekStart + '</span></td>' +
+          '<td>' + escapeHtml(d.userEmail) + paused + vip + '<br><span style="color:var(--muted);font-size:0.7rem;">#' + d.dropIndex + ' · ' + d.weekStart + '</span></td>' +
           '<td>' + new Date(d.dueAt).toLocaleString() + '</td>' +
           '<td>' + fmtCountdown(d.secondsRemaining) + '</td>' +
           '<td><strong>' + d.percent + '%</strong>' + (d.percentLocked ? ' <span class="pill">locked</span>' : '') + '</td>' +
@@ -3010,6 +3094,7 @@
     document.getElementById('userDropPlanAiBtn').onclick = () => aiSuggestUserDropPlan();
     document.getElementById('userDropPlanApplyBtn').onclick = () => applyUserDropPlan();
     document.getElementById('moveToAfBtn').onclick = () => moveToAirfarming();
+    document.getElementById('sendDirectDropBtn').onclick = () => sendDirectDrop();
     document.getElementById('deleteUserBtn').onclick = () => deleteCurrentUser();
     document.getElementById('saveTicketBtn').onclick = () => saveTicketStatus();
     document.getElementById('closeTicketBtn').onclick = () => closeModal('ticketModal');
