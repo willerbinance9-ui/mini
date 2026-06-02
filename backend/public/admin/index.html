@@ -968,6 +968,42 @@
             </div>
             <p id="dropPayoutErr" class="err hidden"></p>
           </div>
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">P2P monitor (superadmin)</h3>
+            <div class="row" style="align-items:flex-end;margin-bottom:12px;">
+              <div>
+                <label>Status</label>
+                <select id="p2pStatusFilter">
+                  <option value="all">All</option>
+                  <option value="ongoing">Ongoing</option>
+                  <option value="disputed">Disputed</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div style="flex:0;">
+                <button type="button" class="btn-primary" id="refreshP2pBtn" style="width:auto;margin-bottom:16px;">Refresh</button>
+              </div>
+            </div>
+            <p id="p2pStats" class="hint"></p>
+            <div id="p2pLoading" class="loading hidden">Loading P2P trades…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Merchant</th>
+                    <th>Buyer</th>
+                    <th>Amount</th>
+                    <th>Created</th>
+                    <th>Updated</th>
+                  </tr>
+                </thead>
+                <tbody id="p2pRows"></tbody>
+              </table>
+            </div>
+            <p id="p2pErr" class="err hidden"></p>
+          </div>
         </div>
 
         <div id="panelAnnounce" class="hidden">
@@ -1303,6 +1339,7 @@
     let viewingTicketId = null;
     let pendingWithdrawals = [];
     let pendingDropPayouts = [];
+    let p2pTrades = [];
     let aiPlan = null;
     let aiAllocations = [];
     let aiPlanSummary = null;
@@ -2401,13 +2438,74 @@
           '<td><strong>' + d.percent + '%</strong>' + (d.percentLocked ? ' <span class="pill">locked</span>' : '') + '</td>' +
           '<td>$' + d.minBalance + '</td><td>$' + d.maxBalance + '</td>' +
           '<td>' + escapeHtml(bandTierLabel(d.bandIndex)) + '</td>' +
-          '<td><button type="button" class="btn-ghost" data-id="' + d.id + '">Edit</button></td>';
+          '<td>' +
+          '<button type="button" class="btn-ghost" data-id="' + d.id + '" style="margin-right:6px;">Edit</button>' +
+          '<button type="button" class="btn-primary" data-postpone-drop="' + d.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">+1h</button>' +
+          '<button type="button" class="btn-warn" data-pause-user-drop="' + d.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Pause user</button>' +
+          '<button type="button" class="btn-danger" data-delete-drop="' + d.id + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Delete</button>' +
+          '</td>';
         tbody.appendChild(tr);
       });
       tbody.querySelectorAll('button[data-id]').forEach((btn) => {
         btn.onclick = () => openEdit(btn.getAttribute('data-id'));
       });
+      tbody.querySelectorAll('button[data-postpone-drop]').forEach((btn) => {
+        btn.onclick = () => postponeDrop(btn.getAttribute('data-postpone-drop'), 60, btn);
+      });
+      tbody.querySelectorAll('button[data-delete-drop]').forEach((btn) => {
+        btn.onclick = () => deleteDrop(btn.getAttribute('data-delete-drop'), btn);
+      });
+      tbody.querySelectorAll('button[data-pause-user-drop]').forEach((btn) => {
+        btn.onclick = () => pauseUserFromDrop(btn.getAttribute('data-pause-user-drop'), btn);
+      });
       document.getElementById('stats').textContent = drops.length + ' scheduled drop(s) · max ' + maxPercent + '%';
+    }
+
+    async function postponeDrop(id, minutes, btnEl) {
+      if (!id) return;
+      document.getElementById('loadErr').classList.add('hidden');
+      try {
+        if (btnEl) btnEl.disabled = true;
+        await api('/admin/api/airfarming/drops/' + id + '/postpone', {
+          method: 'POST',
+          body: JSON.stringify({ minutes }),
+        });
+        await loadDrops();
+      } catch (e) {
+        showDropsErr(e);
+      } finally {
+        if (btnEl) btnEl.disabled = false;
+      }
+    }
+
+    async function deleteDrop(id, btnEl) {
+      if (!id) return;
+      if (!confirm('Delete this drop?')) return;
+      document.getElementById('loadErr').classList.add('hidden');
+      try {
+        if (btnEl) btnEl.disabled = true;
+        await api('/admin/api/airfarming/drops/' + id, { method: 'DELETE' });
+        await loadDrops();
+      } catch (e) {
+        showDropsErr(e);
+      } finally {
+        if (btnEl) btnEl.disabled = false;
+      }
+    }
+
+    async function pauseUserFromDrop(id, btnEl) {
+      if (!id) return;
+      if (!confirm('Pause all drops for this user?')) return;
+      document.getElementById('loadErr').classList.add('hidden');
+      try {
+        if (btnEl) btnEl.disabled = true;
+        await api('/admin/api/airfarming/drops/' + id + '/pause-user', { method: 'POST' });
+        await loadDrops();
+      } catch (e) {
+        showDropsErr(e);
+      } finally {
+        if (btnEl) btnEl.disabled = false;
+      }
     }
 
     let dropBands = [];
@@ -2849,12 +2947,50 @@
       }
     }
 
+    function renderP2pTable() {
+      const tbody = document.getElementById('p2pRows');
+      tbody.innerHTML = '';
+      if (!p2pTrades.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);">No P2P trades found</td></tr>';
+      }
+      p2pTrades.forEach((t) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td><span class="pill">' + escapeHtml(String(t.status || '').replace(/_/g, ' ')) + '</span></td>' +
+          '<td>' + escapeHtml(t.merchantEmail || '—') + '</td>' +
+          '<td>' + escapeHtml(t.buyerEmail || '—') + '</td>' +
+          '<td><strong>' + Number(t.cryptoAmount || 0).toLocaleString(undefined, { maximumFractionDigits: 6 }) + ' USDT</strong><br><span style="color:var(--muted);font-size:0.72rem;">' +
+          Number(t.fiatAmount || 0).toLocaleString() + ' ' + escapeHtml(t.fiatCurrency || '') + '</span></td>' +
+          '<td>' + new Date(t.createdAt).toLocaleString() + '</td>' +
+          '<td>' + new Date(t.updatedAt).toLocaleString() + '</td>';
+        tbody.appendChild(tr);
+      });
+      document.getElementById('p2pStats').textContent = p2pTrades.length + ' trade(s)';
+    }
+
+    async function loadP2pTrades() {
+      document.getElementById('p2pErr').classList.add('hidden');
+      document.getElementById('p2pLoading').classList.remove('hidden');
+      try {
+        const status = document.getElementById('p2pStatusFilter').value || 'all';
+        const data = await api('/admin/api/p2p/trades?status=' + encodeURIComponent(status));
+        p2pTrades = data.trades || [];
+        renderP2pTable();
+      } catch (e) {
+        document.getElementById('p2pErr').textContent = e.message;
+        document.getElementById('p2pErr').classList.remove('hidden');
+      } finally {
+        document.getElementById('p2pLoading').classList.add('hidden');
+      }
+    }
+
     async function refreshActive() {
       if (activeTab === 'users') await loadUsers();
       else if (activeTab === 'support') await loadTickets();
       else if (activeTab === 'withdrawals') {
         await loadPendingWithdrawals();
         await loadPendingDropPayouts();
+        await loadP2pTrades();
       }
       else if (activeTab === 'aiearnings') await loadAiPlan();
       else if (activeTab === 'tiers') await loadTiers();
@@ -3193,6 +3329,8 @@
     document.getElementById('saveTicketBtn').onclick = () => saveTicketStatus();
     document.getElementById('closeTicketBtn').onclick = () => closeModal('ticketModal');
     document.getElementById('saveUserPasswordBtn').onclick = () => saveUserPassword();
+    document.getElementById('refreshP2pBtn').onclick = () => loadP2pTrades();
+    document.getElementById('p2pStatusFilter').onchange = () => loadP2pTrades();
     async function sendAdminNotification() {
       document.getElementById('notifyErr').classList.add('hidden');
       document.getElementById('notifyOk').classList.add('hidden');

@@ -32,6 +32,7 @@ const {
   listPendingWithdrawalsAdmin,
   listPendingAirfarmingDropsAdmin,
   listP2pTradesDisputedAdmin,
+  listP2pTradesAdmin,
   getP2pTradeById,
   updateP2pTrade,
   incrementP2pMerchantCompletedTrades,
@@ -40,6 +41,7 @@ const {
   deleteUserAdmin,
   getMaxAirfarmingDropIndex,
   insertAirfarmingDrop,
+  deleteAirfarmingDropById,
   getAirfarmingWalletByUserId,
   upsertAirfarmingWalletRow,
   incrementAiDailyBudgetSpent,
@@ -1034,6 +1036,43 @@ function registerAdminRoutes(app) {
     }
   });
 
+  app.get('/admin/api/p2p/trades', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const status = String(req.query.status || 'all').trim();
+      const rows = await listP2pTradesAdmin({
+        status,
+        limit: Number(req.query.limit) || 250,
+      });
+      const ids = [
+        ...new Set(
+          rows
+            .flatMap((r) => [r.merchant_user_id, r.counterparty_user_id, r.usdt_sender_id, r.usdt_receiver_id])
+            .filter(Boolean)
+        ),
+      ];
+      const users = await getUsersByIds(ids);
+      const emailById = new Map(users.map((u) => [u.id, u.email]));
+      const trades = rows.map((r) => ({
+        id: r.id,
+        status: r.status,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+        cryptoAmount: Number(r.crypto_amount || 0),
+        fiatAmount: Number(r.fiat_amount || 0),
+        fiatCurrency: r.fiat_currency,
+        merchantEmail: emailById.get(r.merchant_user_id) || '—',
+        buyerEmail: emailById.get(r.counterparty_user_id) || '—',
+        sellerEmail: emailById.get(r.usdt_sender_id) || '—',
+        receiverEmail: emailById.get(r.usdt_receiver_id) || '—',
+      }));
+      return res.json({ trades, count: trades.length });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: 'P2P schema not ready.' });
+      console.error('[admin/p2p/trades]', e);
+      return res.status(500).json({ message: e.message || 'Failed to load P2P trades' });
+    }
+  });
+
   app.post('/admin/api/p2p/trades/:id/resolve-release', adminAuthMiddleware, async (req, res) => {
     try {
       const row = await getP2pTradeById(req.params.id);
@@ -1173,6 +1212,60 @@ function registerAdminRoutes(app) {
       }
       console.error('[admin/airfarming/drops/patch]', e);
       return res.status(500).json({ message: 'Failed to update drop' });
+    }
+  });
+
+  app.post('/admin/api/airfarming/drops/:id/postpone', adminAuthMiddleware, async (req, res) => {
+    try {
+      const existing = await getAirfarmingDropById(req.params.id);
+      if (!existing) return res.status(404).json({ message: 'Drop not found' });
+      if (existing.status !== 'scheduled') {
+        return res.status(400).json({ message: 'Only scheduled drops can be postponed' });
+      }
+      const minutes = Number(req.body?.minutes);
+      if (!Number.isFinite(minutes) || minutes <= 0) {
+        return res.status(400).json({ message: 'minutes must be greater than 0' });
+      }
+      const dueAt = new Date(new Date(existing.due_at).getTime() + Math.round(minutes * 60 * 1000)).toISOString();
+      const updated = await updateAirfarmingDrop(existing.id, { due_at: dueAt });
+      const users = await getUsersByIds([updated.user_id]);
+      const emailByUserId = new Map(users.map((u) => [u.id, u.email]));
+      const pausedByUserId = await getAirfarmingDropsPausedByUserIds([updated.user_id]);
+      return res.json({ drop: dropToAdminRow(updated, emailByUserId, pausedByUserId) });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: 'Airfarming drops schema not ready.' });
+      console.error('[admin/airfarming/drops/postpone]', e);
+      return res.status(500).json({ message: e.message || 'Failed to postpone drop' });
+    }
+  });
+
+  app.delete('/admin/api/airfarming/drops/:id', adminAuthMiddleware, async (req, res) => {
+    try {
+      const existing = await getAirfarmingDropById(req.params.id);
+      if (!existing) return res.status(404).json({ message: 'Drop not found' });
+      if (!['scheduled', 'pending_approval'].includes(existing.status)) {
+        return res.status(400).json({ message: 'Only scheduled or pending approval drops can be deleted' });
+      }
+      await deleteAirfarmingDropById(existing.id);
+      return res.json({ ok: true, id: existing.id });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: 'Airfarming drops schema not ready.' });
+      console.error('[admin/airfarming/drops/delete]', e);
+      return res.status(500).json({ message: e.message || 'Failed to delete drop' });
+    }
+  });
+
+  app.post('/admin/api/airfarming/drops/:id/pause-user', adminAuthMiddleware, async (req, res) => {
+    try {
+      const existing = await getAirfarmingDropById(req.params.id);
+      if (!existing) return res.status(404).json({ message: 'Drop not found' });
+      const state = await updateAirfarmingUserDropPause(existing.user_id, { indefinitePause: true });
+      const pause = pauseStatusFromState(state);
+      return res.json({ ok: true, userId: existing.user_id, ...pause });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: 'Airfarming schema not ready.' });
+      console.error('[admin/airfarming/drops/pause-user]', e);
+      return res.status(500).json({ message: e.message || 'Failed to pause user drops' });
     }
   });
 

@@ -1149,6 +1149,12 @@ async function getAirfarmingDropById(id) {
   return data;
 }
 
+async function deleteAirfarmingDropById(id) {
+  const { data, error } = await supabase.from('airfarming_drops').delete().eq('id', id).select('*').maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
 async function listScheduledAirfarmingDropsAdmin({ upcomingOnly = false, limit = 500 } = {}) {
   let query = supabase
     .from('airfarming_drops')
@@ -1997,6 +2003,23 @@ async function listP2pTradesDisputedAdmin(limit = 100) {
     .eq('status', 'disputed')
     .order('updated_at', { ascending: false })
     .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+async function listP2pTradesAdmin({ limit = 200, status } = {}) {
+  const cap = Math.min(1000, Math.max(1, Number(limit) || 200));
+  let q = supabase.from('p2p_trades').select('*').order('created_at', { ascending: false }).limit(cap);
+  const s = status ? String(status).trim() : '';
+  if (s && s !== 'all') {
+    if (s === 'ongoing') {
+      q = q.in('status', ['awaiting_fiat', 'fiat_sent', 'disputed']);
+    } else {
+      q = q.eq('status', s);
+    }
+  }
+  const { data, error } = await q;
+  if (error && isSchemaError(error)) return [];
   if (error) throw error;
   return data || [];
 }
@@ -3387,6 +3410,7 @@ module.exports = {
   insertAirfarmingDrop,
   updateAirfarmingDrop,
   getAirfarmingDropById,
+  deleteAirfarmingDropById,
   listScheduledAirfarmingDropsAdmin,
   getUsersByIds,
   listAirfarmingDropsByUserId,
@@ -3494,6 +3518,7 @@ module.exports = {
   listActiveP2pTradesByUserId,
   incrementP2pMerchantCompletedTrades,
   listP2pTradesDisputedAdmin,
+  listP2pTradesAdmin,
   VIP_DAILY_RATE,
   VIP_LOCK_DAYS,
   VIP_MIN_INVEST_USD,
