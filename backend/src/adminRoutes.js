@@ -30,6 +30,7 @@ const {
   getAirfarmingPlatformSettings,
   updateAirfarmingPlatformSettings,
   listPendingWithdrawalsAdmin,
+  listPendingAirfarmingDropsAdmin,
   listP2pTradesDisputedAdmin,
   getP2pTradeById,
   updateP2pTrade,
@@ -39,6 +40,10 @@ const {
   deleteUserAdmin,
   getMaxAirfarmingDropIndex,
   insertAirfarmingDrop,
+  getAirfarmingWalletByUserId,
+  upsertAirfarmingWalletRow,
+  incrementAiDailyBudgetSpent,
+  utcTodayYmd,
 } = require('./db');
 const { normalizeTargetUserId } = require('./notificationRoutes');
 const { approveWithdrawal, rejectWithdrawal } = require('./adminWithdrawals');
@@ -118,6 +123,26 @@ function dropToAdminRow(row, emailByUserId, pausedByUserId) {
     bandIndex: row.band_index != null ? Number(row.band_index) : null,
     isVipPriority: row.band_index == null && Boolean(row.percent_locked),
     percentLocked: Boolean(row.percent_locked),
+    status: row.status,
+  };
+}
+
+function pendingDropToAdminRow(row, emailByUserId) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userEmail: emailByUserId.get(row.user_id) || '—',
+    weekStart: row.week_start,
+    dropIndex: Number(row.drop_index),
+    dueAt: row.due_at,
+    percent: Number(row.percent),
+    minBalance: Number(row.min_balance),
+    maxBalance: Number(row.max_balance),
+    eligibleBalance: row.eligible_balance != null ? Number(row.eligible_balance) : null,
+    profitAmount: Number(row.profit_amount || 0),
+    autoFundedCash: Number(row.auto_funded_cash || 0),
+    autoFundedCrypto: Number(row.auto_funded_crypto || 0),
+    isVipPriority: row.band_index == null && Boolean(row.percent_locked),
     status: row.status,
   };
 }
@@ -890,6 +915,99 @@ function registerAdminRoutes(app) {
       return res.status(500).json({ message: e.message || 'Failed to load pending withdrawals' });
     }
   });
+
+  app.get('/admin/api/airfarming/payouts/pending', adminAuthMiddleware, async (req, res) => {
+    try {
+      const rows = await listPendingAirfarmingDropsAdmin(Number(req.query.limit) || 300);
+      const users = await getUsersByIds(rows.map((r) => r.user_id));
+      const emailByUserId = new Map(users.map((u) => [u.id, u.email]));
+      const payouts = rows.map((r) => pendingDropToAdminRow(r, emailByUserId));
+      return res.json({ payouts, count: payouts.length });
+    } catch (e) {
+      if (isMissingTableError(e)) {
+        return res.status(503).json({
+          message:
+            'Airfarming schema missing pending approval status. Run backend/sql/migrations/20260602_airfarming_pending_approvals.sql.',
+        });
+      }
+      console.error('[admin/airfarming/payouts/pending]', e);
+      return res.status(500).json({ message: e.message || 'Failed to load pending drop payouts' });
+    }
+  });
+
+  app.post(
+    '/admin/api/airfarming/payouts/:id/approve',
+    adminAuthMiddleware,
+    requireSuperAdmin,
+    async (req, res) => {
+      try {
+        const drop = await getAirfarmingDropById(req.params.id);
+        if (!drop) return res.status(404).json({ message: 'Drop not found' });
+        if (drop.status !== 'pending_approval') {
+          return res.status(400).json({ message: 'Drop is not pending approval' });
+        }
+
+        const profit = Number(drop.profit_amount || 0);
+        const now = new Date().toISOString();
+        if (profit > 0) {
+          const af = await getAirfarmingWalletByUserId(drop.user_id);
+          const current = Number.parseFloat(String(af?.balance ?? 0)) || 0;
+          await upsertAirfarmingWalletRow({
+            user_id: drop.user_id,
+            balance: Math.round((current + profit) * 100) / 100,
+            updated_at: now,
+          });
+          const planDate = String(drop.due_at || utcTodayYmd()).slice(0, 10);
+          await incrementAiDailyBudgetSpent(planDate, profit).catch(() => {});
+        }
+
+        const updated = await updateAirfarmingDrop(drop.id, {
+          status: 'paid',
+          paid_at: now,
+        });
+        return res.json({ ok: true, payout: updated });
+      } catch (e) {
+        if (isMissingTableError(e)) {
+          return res.status(503).json({
+            message:
+              'Airfarming schema missing pending approval status. Run backend/sql/migrations/20260602_airfarming_pending_approvals.sql.',
+          });
+        }
+        console.error('[admin/airfarming/payouts/approve]', e);
+        return res.status(500).json({ message: e.message || 'Failed to approve drop payout' });
+      }
+    }
+  );
+
+  app.post(
+    '/admin/api/airfarming/payouts/:id/reject',
+    adminAuthMiddleware,
+    requireSuperAdmin,
+    async (req, res) => {
+      try {
+        const drop = await getAirfarmingDropById(req.params.id);
+        if (!drop) return res.status(404).json({ message: 'Drop not found' });
+        if (drop.status !== 'pending_approval') {
+          return res.status(400).json({ message: 'Drop is not pending approval' });
+        }
+        const updated = await updateAirfarmingDrop(drop.id, {
+          status: 'missed',
+          profit_amount: 0,
+          paid_at: new Date().toISOString(),
+        });
+        return res.json({ ok: true, payout: updated });
+      } catch (e) {
+        if (isMissingTableError(e)) {
+          return res.status(503).json({
+            message:
+              'Airfarming schema missing pending approval status. Run backend/sql/migrations/20260602_airfarming_pending_approvals.sql.',
+          });
+        }
+        console.error('[admin/airfarming/payouts/reject]', e);
+        return res.status(500).json({ message: e.message || 'Failed to reject drop payout' });
+      }
+    }
+  );
 
   app.get('/admin/api/p2p/disputed', adminAuthMiddleware, async (req, res) => {
     try {

@@ -90,6 +90,7 @@ export type AirfarmingStatus = {
   weeklyUsed: number;
   dropsPaid?: number;
   dropsMissed?: number;
+  pendingPayouts?: number;
   autoFundEnabled: boolean;
   scheduleHours: number[];
   lastEventAt: string | null;
@@ -248,6 +249,7 @@ function normalizeStatus(raw: unknown): AirfarmingStatus {
     weeklyUsed: num(r.weeklyUsed),
     dropsPaid: r.dropsPaid != null ? num(r.dropsPaid) : undefined,
     dropsMissed: r.dropsMissed != null ? num(r.dropsMissed) : undefined,
+    pendingPayouts: r.pendingPayouts != null ? num(r.pendingPayouts) : undefined,
     autoFundEnabled: Boolean(r.autoFundEnabled),
     scheduleHours: Array.isArray(sched) ? sched.map((x) => num(x)) : [],
     lastEventAt: r.lastEventAt == null ? null : String(r.lastEventAt),

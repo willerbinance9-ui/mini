@@ -12,6 +12,7 @@ const {
   upsertAirfarmingState,
   updateAirfarmingAutoFundSetting,
   listAirfarmingDropsForWeek,
+  countPendingAirfarmingDropsForUser,
   getAirfarmingWalletByUserId,
   upsertAirfarmingWalletRow,
   insertAirfarmingTransfer,
@@ -95,6 +96,7 @@ function registerAirfarmingRoutes(app, { authMiddleware }) {
         await buildDropStatus(req.userId, state.week_start, airfarmingBalance, { autoFundEnabled });
       ({ cashWallet, airfarmingBalance } = await balancesForUser(req.userId));
       const settled = await listAirfarmingDropsForWeek(req.userId, state.week_start, 50);
+      const pendingPayouts = await countPendingAirfarmingDropsForUser(req.userId);
       const paidCount = settled.filter((d) => d.status === 'paid').length;
       const missedCount = settled.filter((d) => d.status === 'missed').length;
       const history = mergeAirfarmingHistory(settled, AIRFARMING_PLATFORM_HIGHLIGHTS, 25);
@@ -108,6 +110,7 @@ function registerAirfarmingRoutes(app, { authMiddleware }) {
         weeklyUsed: paidCount + missedCount,
         dropsPaid: paidCount,
         dropsMissed: missedCount,
+        pendingPayouts,
         scheduleHours: [],
         lastEventAt: settled[0]?.paid_at || settled[0]?.due_at || null,
         autoFundEnabled,

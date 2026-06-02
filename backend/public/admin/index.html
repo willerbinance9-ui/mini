@@ -943,6 +943,31 @@
             </div>
             <p id="withdrawalsErr" class="err hidden"></p>
           </div>
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Pending drop payouts</h3>
+            <p class="hint" style="margin-bottom:12px;">
+              When a drop countdown ends and eligibility is in range, payout waits for superadmin approval.
+            </p>
+            <p id="dropPayoutStats" class="hint"></p>
+            <div id="dropPayoutsLoading" class="loading hidden">Loading pending payouts…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Due</th>
+                    <th>Eligible balance</th>
+                    <th>Window</th>
+                    <th>%</th>
+                    <th>Payout</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="dropPayoutRows"></tbody>
+              </table>
+            </div>
+            <p id="dropPayoutErr" class="err hidden"></p>
+          </div>
         </div>
 
         <div id="panelAnnounce" class="hidden">
@@ -1277,6 +1302,7 @@
     let userDropPlanView = null;
     let viewingTicketId = null;
     let pendingWithdrawals = [];
+    let pendingDropPayouts = [];
     let aiPlan = null;
     let aiAllocations = [];
     let aiPlanSummary = null;
@@ -1541,8 +1567,9 @@
       (d.scheduledDrops || []).forEach((drop) => {
         const tr = document.createElement('tr');
         const vipBadge = drop.isVipPriority ? ' <span class="pill" style="background:rgba(245,158,11,0.18);border-color:rgba(245,158,11,0.45);color:#fbbf24;">VIP</span>' : '';
+        const pendingBadge = drop.status === 'pending_approval' ? ' <span class="pill">pending</span>' : '';
         tr.innerHTML =
-          '<td>' + drop.dropIndex + vipBadge + '</td><td>' + new Date(drop.dueAt).toLocaleString() + '</td>' +
+          '<td>' + drop.dropIndex + vipBadge + pendingBadge + '</td><td>' + new Date(drop.dueAt).toLocaleString() + '</td>' +
           '<td>' + drop.percent + '%</td>' +
           '<td>' + escapeHtml(bandTierLabel(drop.bandIndex)) + '<br><span style="color:var(--muted);font-size:0.7rem;">$' +
           drop.minBalance + ' – $' + drop.maxBalance + '</span></td>';
@@ -2716,6 +2743,41 @@
         pendingWithdrawals.length + ' withdrawal(s) awaiting your approval';
     }
 
+    function renderDropPayoutsTable() {
+      const tbody = document.getElementById('dropPayoutRows');
+      tbody.innerHTML = '';
+      if (!pendingDropPayouts.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted);">No pending drop payouts</td></tr>';
+      }
+      pendingDropPayouts.forEach((p) => {
+        const tr = document.createElement('tr');
+        const vip = p.isVipPriority
+          ? ' <span class="pill" style="background:rgba(245,158,11,0.18);border-color:rgba(245,158,11,0.45);color:#fbbf24;">VIP</span>'
+          : '';
+        const actionCell = adminRole === 'superadmin'
+          ? '<button type="button" class="btn-primary" data-approve-drop-payout="' + p.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Approve</button>' +
+            '<button type="button" class="btn-danger" data-reject-drop-payout="' + p.id + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Reject</button>'
+          : '<span style="color:var(--muted);font-size:0.78rem;">Superadmin only</span>';
+        tr.innerHTML =
+          '<td>' + escapeHtml(p.userEmail || '—') + vip + '<br><span style="color:var(--muted);font-size:0.72rem;">#' + p.dropIndex + '</span></td>' +
+          '<td>' + new Date(p.dueAt).toLocaleString() + '</td>' +
+          '<td>' + fmtMoney(p.eligibleBalance || 0) + '</td>' +
+          '<td>' + fmtMoney(p.minBalance) + ' - ' + fmtMoney(p.maxBalance) + '</td>' +
+          '<td>' + Number(p.percent).toFixed(2) + '%</td>' +
+          '<td><strong>' + fmtMoney(p.profitAmount || 0) + '</strong></td>' +
+          '<td style="white-space:nowrap;">' + actionCell + '</td>';
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-approve-drop-payout]').forEach((btn) => {
+        btn.onclick = () => actOnDropPayout(btn.getAttribute('data-approve-drop-payout'), 'approve', btn);
+      });
+      tbody.querySelectorAll('button[data-reject-drop-payout]').forEach((btn) => {
+        btn.onclick = () => actOnDropPayout(btn.getAttribute('data-reject-drop-payout'), 'reject', btn);
+      });
+      document.getElementById('dropPayoutStats').textContent =
+        pendingDropPayouts.length + ' drop payout(s) awaiting superadmin action';
+    }
+
     async function loadPendingWithdrawals() {
       document.getElementById('withdrawalsErr').classList.add('hidden');
       document.getElementById('withdrawalsLoading').classList.remove('hidden');
@@ -2725,6 +2787,18 @@
         renderWithdrawalsTable();
       } finally {
         document.getElementById('withdrawalsLoading').classList.add('hidden');
+      }
+    }
+
+    async function loadPendingDropPayouts() {
+      document.getElementById('dropPayoutErr').classList.add('hidden');
+      document.getElementById('dropPayoutsLoading').classList.remove('hidden');
+      try {
+        const data = await api('/admin/api/airfarming/payouts/pending');
+        pendingDropPayouts = data.payouts || [];
+        renderDropPayoutsTable();
+      } finally {
+        document.getElementById('dropPayoutsLoading').classList.add('hidden');
       }
     }
 
@@ -2758,10 +2832,30 @@
       }
     }
 
+    async function actOnDropPayout(id, action, btnEl) {
+      if (!id) return;
+      if (!['approve', 'reject'].includes(action)) return;
+      if (!confirm((action === 'approve' ? 'Approve' : 'Reject') + ' this drop payout?')) return;
+      document.getElementById('dropPayoutErr').classList.add('hidden');
+      try {
+        if (btnEl) btnEl.disabled = true;
+        await api('/admin/api/airfarming/payouts/' + id + '/' + action, { method: 'POST' });
+        await Promise.all([loadPendingWithdrawals(), loadPendingDropPayouts()]);
+      } catch (e) {
+        document.getElementById('dropPayoutErr').textContent = e.message;
+        document.getElementById('dropPayoutErr').classList.remove('hidden');
+      } finally {
+        if (btnEl) btnEl.disabled = false;
+      }
+    }
+
     async function refreshActive() {
       if (activeTab === 'users') await loadUsers();
       else if (activeTab === 'support') await loadTickets();
-      else if (activeTab === 'withdrawals') await loadPendingWithdrawals();
+      else if (activeTab === 'withdrawals') {
+        await loadPendingWithdrawals();
+        await loadPendingDropPayouts();
+      }
       else if (activeTab === 'aiearnings') await loadAiPlan();
       else if (activeTab === 'tiers') await loadTiers();
       else if (activeTab === 'drops') await loadDrops();

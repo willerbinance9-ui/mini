@@ -312,7 +312,7 @@ export function AirfarmingTradeScreen() {
             >
               <Text style={styles.detailsToggleText}>Details</Text>
               <Text style={styles.meta}>
-                Paid {status.dropsPaid ?? 0} · Missed {status.dropsMissed ?? 0}
+                Paid {status.dropsPaid ?? 0} · Missed {status.dropsMissed ?? 0} · Pending {status.pendingPayouts ?? 0}
               </Text>
               <Ionicons
                 name={detailsExpanded ? 'chevron-up' : 'chevron-down'}

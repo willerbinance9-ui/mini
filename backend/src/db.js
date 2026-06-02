@@ -987,7 +987,7 @@ async function getAdminUserDetail(userId) {
       .from('airfarming_drops')
       .select('id, drop_index, due_at, percent, min_balance, max_balance, band_index, status')
       .eq('user_id', userId)
-      .eq('status', 'scheduled')
+      .in('status', ['scheduled', 'pending_approval'])
       .order('due_at', { ascending: true })
       .limit(10),
     getCryptoBalancesByUserId(userId).catch(() => []),
@@ -1048,6 +1048,7 @@ async function getAdminUserDetail(userId) {
       minBalance: Number(d.min_balance),
       maxBalance: Number(d.max_balance),
       status: d.status,
+      isVipPriority: d.band_index == null,
     })),
   };
 }
@@ -1192,6 +1193,44 @@ async function listAirfarmingDropsForWeek(userId, weekStart, limit = 50) {
     .in('status', ['paid', 'missed'])
     .order('due_at', { ascending: false })
     .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+async function listPendingAirfarmingDropsForUser(userId, limit = 100) {
+  const cap = Math.min(300, Math.max(1, Number(limit) || 100));
+  const { data, error } = await supabase
+    .from('airfarming_drops')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'pending_approval')
+    .order('due_at', { ascending: true })
+    .limit(cap);
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function countPendingAirfarmingDropsForUser(userId) {
+  const { count, error } = await supabase
+    .from('airfarming_drops')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('status', 'pending_approval');
+  if (error && isSchemaError(error)) return 0;
+  if (error) throw error;
+  return Number(count || 0);
+}
+
+async function listPendingAirfarmingDropsAdmin(limit = 300) {
+  const cap = Math.min(1000, Math.max(1, Number(limit) || 300));
+  const { data, error } = await supabase
+    .from('airfarming_drops')
+    .select('*')
+    .eq('status', 'pending_approval')
+    .order('due_at', { ascending: true })
+    .limit(cap);
+  if (error && isSchemaError(error)) return [];
   if (error) throw error;
   return data || [];
 }
@@ -3352,6 +3391,9 @@ module.exports = {
   getUsersByIds,
   listAirfarmingDropsByUserId,
   listAirfarmingDropsForWeek,
+  listPendingAirfarmingDropsForUser,
+  countPendingAirfarmingDropsForUser,
+  listPendingAirfarmingDropsAdmin,
   listAirfarmingDropBands,
   listAirfarmingDropBandsAdmin,
   updateAirfarmingDropBand,

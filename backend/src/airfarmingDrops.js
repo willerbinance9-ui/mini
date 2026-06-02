@@ -18,7 +18,6 @@ const {
   getAirfarmingPlatformSettings,
   getActiveAiAllocationForUserToday,
   getAiDailyPlanByDate,
-  incrementAiDailyBudgetSpent,
   utcTodayYmd,
 } = require('./db');
 const { isDropPausedForUser } = require('./airfarmingPause');
@@ -659,24 +658,15 @@ async function settleDrop(userId, drop, options = {}) {
       }
     }
 
-    const nextBal = roundMoney(liveBalance + profit);
-    await upsertAirfarmingWalletRow({
-      user_id: userId,
-      balance: nextBal,
-      updated_at: now,
-    });
-    const paid = await updateAirfarmingDrop(drop.id, {
-      status: 'paid',
+    const pending = await updateAirfarmingDrop(drop.id, {
+      status: 'pending_approval',
       eligible_balance: eligibilityBalance,
       profit_amount: profit,
       auto_funded_cash: autoFunded.cash,
       auto_funded_crypto: autoFunded.crypto,
-      paid_at: now,
+      paid_at: null,
     });
-    if (dailyPlan?.status === 'active' && profit > 0) {
-      await incrementAiDailyBudgetSpent(planDate, profit);
-    }
-    return paid;
+    return pending;
   }
 
   return updateAirfarmingDrop(drop.id, {
