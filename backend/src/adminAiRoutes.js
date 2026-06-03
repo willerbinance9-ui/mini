@@ -8,7 +8,7 @@ const {
   isMissingTableError,
   listAiDailyPlansAdmin,
 } = require('./db');
-const { adminAuthMiddleware } = require('./middleware/adminAuth');
+const { adminAuthMiddleware, requireSuperAdmin } = require('./middleware/adminAuth');
 const { runDailyPlanner } = require('./ai/earningsPlanner');
 const { applyActivePlan } = require('./ai/applyPlan');
 const { fetchMarketIndicators } = require('./ai/earningsTools');
@@ -20,7 +20,7 @@ function registerAdminAiRoutes(app) {
   const schemaMsg =
     'AI daily plans schema missing. Run backend/sql/migrations/20260604_ai_daily_earnings.sql in Supabase.';
 
-  app.get('/admin/api/ai/plans', adminAuthMiddleware, async (req, res) => {
+  app.get('/admin/api/ai/plans', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const limit = Number(req.query.limit) || 45;
       const rows = await listAiDailyPlansAdmin({ limit });
@@ -41,7 +41,7 @@ function registerAdminAiRoutes(app) {
     }
   });
 
-  app.get('/admin/api/ai/daily-plan', adminAuthMiddleware, async (req, res) => {
+  app.get('/admin/api/ai/daily-plan', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const planDate = String(req.query.date || utcTodayYmd()).slice(0, 10);
       const plan = await getAiDailyPlanByDate(planDate);
@@ -54,7 +54,7 @@ function registerAdminAiRoutes(app) {
     }
   });
 
-  app.post('/admin/api/ai/daily-plan/budget', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/ai/daily-plan/budget', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const planDate = String(req.body?.planDate || utcTodayYmd()).slice(0, 10);
       const budgetUsd = Number(req.body?.budgetUsd);
@@ -85,7 +85,7 @@ function registerAdminAiRoutes(app) {
     }
   });
 
-  app.post('/admin/api/ai/daily-plan/fetch-market', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/ai/daily-plan/fetch-market', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const planDate = String(req.body?.planDate || utcTodayYmd()).slice(0, 10);
       const indicators = await fetchMarketIndicators();
@@ -110,7 +110,7 @@ function registerAdminAiRoutes(app) {
     }
   });
 
-  app.post('/admin/api/ai/daily-plan/run', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/ai/daily-plan/run', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const planDate = String(req.body?.planDate || utcTodayYmd()).slice(0, 10);
       const forceDeterministic =
@@ -129,7 +129,7 @@ function registerAdminAiRoutes(app) {
     }
   });
 
-  app.post('/admin/api/ai/daily-plan/approve', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/ai/daily-plan/approve', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const planDate = String(req.body?.planDate || utcTodayYmd()).slice(0, 10);
       const plan = await getAiDailyPlanByDate(planDate);

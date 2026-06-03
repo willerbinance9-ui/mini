@@ -334,7 +334,7 @@ function registerAdminRoutes(app) {
   const dropScheduleSchemaMsg =
     'User drop schedules schema missing. Run backend/sql/migrations/20260606_user_drop_schedules.sql in Supabase.';
 
-  app.get('/admin/api/users/:id/drop-schedule', adminAuthMiddleware, async (req, res) => {
+  app.get('/admin/api/users/:id/drop-schedule', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const weekStart = req.query.weekStart ? String(req.query.weekStart).slice(0, 10) : undefined;
       const view = await getUserDropScheduleView(req.params.id, weekStart);
@@ -346,7 +346,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/admin/api/users/:id/drop-schedule', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/users/:id/drop-schedule', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const dropCount = Number(req.body?.dropCount);
       const targetTotalUsd = Number(req.body?.targetTotalUsd);
@@ -368,7 +368,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/admin/api/users/:id/drop-schedule/ai-suggest', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/users/:id/drop-schedule/ai-suggest', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const dropCount = Number(req.body?.dropCount);
       const targetTotalUsd = Number(req.body?.targetTotalUsd);
@@ -396,7 +396,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/admin/api/users/:id/drop-schedule/apply', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/users/:id/drop-schedule/apply', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const weekStart = req.body?.weekStart ? String(req.body.weekStart).slice(0, 10) : undefined;
       const result = await applyUserDropSchedule(req.params.id, { weekStart });
@@ -660,7 +660,7 @@ function registerAdminRoutes(app) {
     }
   );
 
-  app.get('/admin/api/airfarming/global-pause', adminAuthMiddleware, async (req, res) => {
+  app.get('/admin/api/airfarming/global-pause', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const active = await getActiveGlobalDropPauses();
       const recent = await listGlobalDropPauses({ limit: 15 });
@@ -688,7 +688,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/admin/api/airfarming/global-pause', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/airfarming/global-pause', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const range = parsePauseRange({
         pauseFrom: req.body?.startsAt,
@@ -722,7 +722,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/admin/api/airfarming/global-pause/:id/end', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/airfarming/global-pause/:id/end', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const row = await endGlobalDropPauseEarly(req.params.id);
       if (!row) return res.status(404).json({ message: 'Pause not found or already ended' });
@@ -800,7 +800,7 @@ function registerAdminRoutes(app) {
   const dropSettingsSchemaMsg =
     'Airfarming drop settings schema missing. Run backend/sql/migrations/20260603_airfarming_drop_settings.sql and 20260528_airfarming_drop_bands.sql in Supabase.';
 
-  app.get('/admin/api/airfarming/settings', adminAuthMiddleware, async (_req, res) => {
+  app.get('/admin/api/airfarming/settings', adminAuthMiddleware, requireSuperAdmin, async (_req, res) => {
     try {
       const [settings, bands] = await Promise.all([
         getAirfarmingPlatformSettings(),
@@ -822,7 +822,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.patch('/admin/api/airfarming/settings', adminAuthMiddleware, async (req, res) => {
+  app.patch('/admin/api/airfarming/settings', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const body = req.body || {};
       const maxPercent = body.maxPercent !== undefined ? Number(body.maxPercent) : undefined;
@@ -853,7 +853,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.patch('/admin/api/airfarming/bands/:index', adminAuthMiddleware, async (req, res) => {
+  app.patch('/admin/api/airfarming/bands/:index', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const bandIndex = Number(req.params.index);
       if (!Number.isInteger(bandIndex) || bandIndex < 0 || bandIndex > 3) {

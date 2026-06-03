@@ -579,10 +579,10 @@
         <button type="button" class="nav-item" data-tab="withdrawals">
           <span class="nav-icon">💸</span> Withdrawals
         </button>
-        <button type="button" class="nav-item" data-tab="aiearnings">
+        <button type="button" class="nav-item superadmin-only" data-tab="aiearnings">
           <span class="nav-icon">🤖</span> AI earnings
         </button>
-        <button type="button" class="nav-item" data-tab="tiers">
+        <button type="button" class="nav-item superadmin-only" data-tab="tiers">
           <span class="nav-icon">📊</span> Drop tiers
         </button>
         <button type="button" class="nav-item superadmin-only" id="navDrops" data-tab="drops">
@@ -702,7 +702,7 @@
                 </div>
               </section>
 
-              <section class="card admin-section">
+              <section class="card admin-section superadmin-only">
                 <h3 class="admin-section-title">Custom drop plan (AI)</h3>
                 <p class="admin-section-desc">Set how many upcoming drops this user gets and the combined profit target. AI suggests percent and hours between each drop.</p>
                 <div class="form-grid-2">
@@ -737,7 +737,7 @@
                 </div>
               </section>
 
-              <section class="card admin-section">
+              <section class="card admin-section superadmin-only">
                 <h3 class="admin-section-title">Scheduled drops</h3>
                 <p class="admin-section-desc">Upcoming airfarming drops for this user (current week).</p>
                 <div class="table-scroll">
@@ -1098,7 +1098,7 @@
           </div>
         </div>
 
-        <div id="panelAiEarnings" class="hidden">
+        <div id="panelAiEarnings" class="hidden superadmin-only">
           <div class="card">
             <h3 style="margin:0 0 8px;font-size:1rem;">Daily AI earnings planner</h3>
             <p class="hint" style="margin-bottom:12px;">
@@ -1193,7 +1193,7 @@
           </div>
         </div>
 
-        <div id="panelTiers" class="hidden">
+        <div id="panelTiers" class="hidden superadmin-only">
           <div class="card">
             <h3 style="margin:0 0 8px;font-size:1rem;">What each drop tier means</h3>
             <p class="hint" style="margin-bottom:12px;">
@@ -1242,7 +1242,7 @@
           <p id="tiersErr" class="err hidden"></p>
         </div>
 
-        <div id="panelDrops" class="hidden">
+        <div id="panelDrops" class="hidden superadmin-only">
           <p class="hint" style="margin:0 0 12px;">Tier rules and percentages are configured under <strong>Drop tiers</strong> in the sidebar.</p>
           <div class="card">
             <h3 style="margin:0 0 12px;font-size:1rem;">Pause all users (global)</h3>
@@ -1450,7 +1450,7 @@
       if (directDrop) directDrop.classList.toggle('hidden', !isSuper);
       const danger = document.getElementById('dangerUserSection');
       if (danger) danger.classList.toggle('hidden', !isSuper);
-      if (!isSuper && activeTab === 'drops') setTab('users');
+      if (!isSuper && ['drops', 'aiearnings', 'tiers'].includes(activeTab)) setTab('users');
     }
 
     function setAdminSession(me) {
@@ -2094,7 +2094,7 @@
       document.querySelector('.content').scrollTop = 0;
       void loadUserCharts(id);
       void loadUserJournal(id);
-      void loadUserDropPlan(id);
+      if (adminRole === 'superadmin') void loadUserDropPlan(id);
     }
 
     async function applyWalletAdjust() {
