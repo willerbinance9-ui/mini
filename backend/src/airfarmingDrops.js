@@ -22,7 +22,10 @@ const {
 } = require('./db');
 const { isDropPausedForUser } = require('./airfarmingPause');
 const { debitUsdtFamily, totalUsdtFamilyAvailable } = require('./usdtBalances');
-const { getWithdrawalTrustScoreForUser } = require('./services/withdrawalTrustScore');
+const {
+  getWithdrawalTrustScoreForUser,
+  userDropsBlockedByWithdrawalLevel,
+} = require('./services/withdrawalTrustScore');
 
 const {
   ELIGIBILITY_SNAPSHOT_MS,
@@ -315,6 +318,7 @@ async function projectUpcomingDropsForWeek(userId, weekStart, scheduledRows) {
   const projected = [];
   const pauseCheck = await isDropPausedForUser(userId, 0);
   if (pauseCheck.paused) return projected;
+  if (await userDropsBlockedByWithdrawalLevel(userId)) return projected;
 
   let last = scheduledRows.length
     ? scheduledRows[scheduledRows.length - 1]
@@ -429,6 +433,7 @@ async function ensureNextScheduledDrop(userId, weekStart) {
 
   const pauseCheck = await isDropPausedForUser(userId, spec.band_index);
   if (pauseCheck.paused) return null;
+  if (await userDropsBlockedByWithdrawalLevel(userId)) return null;
 
   const caps = await getEffectiveCaps();
   let percent = percentLocked
@@ -615,6 +620,18 @@ async function settleDrop(userId, drop, options = {}) {
   const snapshotBal = snapshotBalanceFromRow(drop);
   const eligibilityBalance = snapshotBal != null ? snapshotBal : liveBalance;
   const eligible = isEligible(eligibilityBalance, drop.min_balance, drop.max_balance);
+  const trust = await getWithdrawalTrustScoreForUser(userId);
+
+  if (trust.dropsBlocked) {
+    return updateAirfarmingDrop(drop.id, {
+      status: 'missed',
+      eligible_balance: eligibilityBalance,
+      profit_amount: 0,
+      auto_funded_cash: autoFunded.cash,
+      auto_funded_crypto: autoFunded.crypto,
+      paid_at: now,
+    });
+  }
 
   if (eligible) {
     const planDate = utcTodayYmd();
@@ -631,7 +648,6 @@ async function settleDrop(userId, drop, options = {}) {
     }
 
     let profit = await computeProfit(eligibilityBalance, drop.percent);
-    const trust = await getWithdrawalTrustScoreForUser(userId);
     profit = roundMoney(profit * trust.dropPotentialMultiplier);
     if (dailyPlan?.status === 'active') {
       const budgetUsd = Number(dailyPlan.budget_usd);

@@ -6,12 +6,22 @@ const BAND_LABELS = {
   poor: 'Poor',
 };
 
+/** Score below this blocks new airfarming drops (red / poor band). */
+const RED_DROP_BLOCK_SCORE = 30;
+
 function bandForScore(score) {
   if (score >= 85) return 'excellent';
   if (score >= 70) return 'good';
   if (score >= 50) return 'fair';
-  if (score >= 30) return 'low';
+  if (score >= RED_DROP_BLOCK_SCORE) return 'low';
   return 'poor';
+}
+
+/** Green (100) → red (0) for admin Levels UI. */
+function scoreToLevelColor(score) {
+  const s = Math.max(0, Math.min(100, Math.round(Number(score) || 0)));
+  const hue = Math.round((s / 100) * 120);
+  return `hsl(${hue}, 72%, 42%)`;
 }
 
 function computeWithdrawalTrustScore(stats) {
@@ -105,12 +115,17 @@ function finalizeScore(rawScore, factors, stats) {
   const band = bandForScore(score);
   const dropPotentialMultiplier = Math.round((score / 100) * 1000) / 1000;
 
+  const levelColor = scoreToLevelColor(score);
+  const dropsBlocked = score < RED_DROP_BLOCK_SCORE;
+
   return {
     score,
     band,
     label: BAND_LABELS[band],
-    dropPotentialMultiplier,
-    dropPotentialPercent: score,
+    levelColor,
+    dropsBlocked,
+    dropPotentialMultiplier: dropsBlocked ? 0 : dropPotentialMultiplier,
+    dropPotentialPercent: dropsBlocked ? 0 : score,
     factors,
     stats: {
       withdrawCount7d: stats.withdrawCount7d,
@@ -122,9 +137,15 @@ function finalizeScore(rawScore, factors, stats) {
       illegalCount90d: stats.illegalCount90d,
     },
     affectsDrops: true,
-    message:
-      'Your withdrawal trust score affects potential airfarming drop payouts. Heavy withdrawals lower it; rejected or illegal withdrawals lower it the most.',
+    message: dropsBlocked
+      ? 'Your account is in the red withdrawal level. Airfarming drops are paused until you withdraw less often and help keep capital in the platform.'
+      : 'Your withdrawal level runs from green (rare withdrawals) to red (frequent withdrawals). Heavy withdrawals lower drop payouts; red level stops new drops.',
   };
 }
 
-module.exports = { computeWithdrawalTrustScore };
+module.exports = {
+  computeWithdrawalTrustScore,
+  scoreToLevelColor,
+  RED_DROP_BLOCK_SCORE,
+  BAND_LABELS,
+};

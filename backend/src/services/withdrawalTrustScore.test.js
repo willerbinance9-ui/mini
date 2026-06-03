@@ -35,6 +35,8 @@ assert(excellent.dropPotentialMultiplier === 1, 'multiplier should be 1');
 
 const poor = computeWithdrawalTrustScore(heavy);
 assert(poor.score < 70, `heavy withdrawer should score under 70, got ${poor.score}`);
+assert(poor.levelColor && poor.levelColor.includes('hsl'), 'levelColor should be hsl');
+if (poor.score < 30) assert(poor.dropsBlocked === true, 'red level should block drops');
 
 const flagged = computeWithdrawalTrustScore(illegal);
 assert(flagged.score < poor.score, 'illegal withdrawals should score lower than heavy alone');

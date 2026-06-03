@@ -61,6 +61,8 @@ const {
   getPlatformRevenueAdminStats,
   PLATFORM_FEE_DROP_RATE,
 } = require('./platformRevenueService');
+const { getWithdrawalTrustScoreForUser } = require('./services/withdrawalTrustScore');
+const { RED_DROP_BLOCK_SCORE } = require('./services/withdrawalTrustScoreCompute');
 
 function newId() {
   return crypto.randomUUID();
@@ -1056,6 +1058,46 @@ function registerAdminRoutes(app) {
       }
       console.error('[admin/p2p/disputed]', e);
       return res.status(500).json({ message: e.message || 'Failed to load disputed P2P trades' });
+    }
+  });
+
+  app.get('/admin/api/levels', adminAuthMiddleware, async (req, res) => {
+    try {
+      const search = String(req.query.search || '').trim();
+      const users = await listUsersAdmin({
+        limit: Number(req.query.limit) || 300,
+        search,
+      });
+      const levels = await Promise.all(
+        users.map(async (u) => {
+          const trust = await getWithdrawalTrustScoreForUser(u.id);
+          return {
+            userId: u.id,
+            email: u.email,
+            cashBalance: u.cashBalance,
+            airfarmingBalance: u.airfarmingBalance,
+            score: trust.score,
+            band: trust.band,
+            label: trust.label,
+            levelColor: trust.levelColor,
+            dropsBlocked: trust.dropsBlocked,
+            dropPotentialPercent: trust.dropPotentialPercent,
+            stats: trust.stats,
+            dropsPaused: u.dropsPaused,
+          };
+        })
+      );
+      levels.sort((a, b) => a.score - b.score);
+      const blockedCount = levels.filter((l) => l.dropsBlocked).length;
+      return res.json({
+        levels,
+        count: levels.length,
+        blockedCount,
+        redBlockScore: RED_DROP_BLOCK_SCORE,
+      });
+    } catch (e) {
+      console.error('[admin/levels]', e);
+      return res.status(500).json({ message: e.message || 'Failed to load withdrawal levels' });
     }
   });
 

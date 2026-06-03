@@ -20,6 +20,8 @@ export type WithdrawalTrustScore = {
   score: number;
   band: 'excellent' | 'good' | 'fair' | 'low' | 'poor';
   label: string;
+  levelColor?: string;
+  dropsBlocked?: boolean;
   dropPotentialMultiplier: number;
   dropPotentialPercent: number;
   factors: WithdrawalTrustFactor[];
@@ -177,6 +179,8 @@ function normalizeTrustScore(raw: unknown): WithdrawalTrustScore | null {
     score: num(r.score),
     band: validBand,
     label: String(r.label ?? 'Fair'),
+    levelColor: r.levelColor != null ? String(r.levelColor) : undefined,
+    dropsBlocked: Boolean(r.dropsBlocked),
     dropPotentialMultiplier: num(r.dropPotentialMultiplier, 1),
     dropPotentialPercent: num(r.dropPotentialPercent, num(r.score)),
     factors: factorsRaw.map((f) => {

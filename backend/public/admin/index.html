@@ -190,6 +190,33 @@
       border: 1px solid rgba(201, 162, 39, 0.35);
     }
     .nav-icon { font-size: 1.1rem; width: 22px; text-align: center; }
+    .level-gradient-bar {
+      flex: 1;
+      max-width: 280px;
+      height: 10px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, hsl(120, 72%, 42%), hsl(60, 72%, 45%), hsl(0, 72%, 42%));
+      border: 1px solid var(--border);
+    }
+    .level-meter {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 120px;
+    }
+    .level-meter-bar {
+      flex: 1;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--border);
+      overflow: hidden;
+      max-width: 88px;
+    }
+    .level-meter-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.2s ease;
+    }
     .sidebar nav {
       flex: 1;
       min-height: 0;
@@ -590,6 +617,9 @@
         </button>
         <button type="button" class="nav-item" id="navVipFarmers" data-tab="vipfarmers">
           <span class="nav-icon">👑</span> VIP Farmers
+        </button>
+        <button type="button" class="nav-item" data-tab="levels">
+          <span class="nav-icon">🎚</span> Levels
         </button>
         <button type="button" class="nav-item" data-tab="account">
           <span class="nav-icon">💰</span> Account
@@ -1064,6 +1094,48 @@
           </div>
         </div>
 
+        <div id="panelLevels" class="hidden">
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Withdrawal levels</h3>
+            <p class="hint" style="margin-bottom:12px;">
+              Green = rarely withdraws (helps platform capital grow). Red = frequent withdrawals.
+              Score under <strong id="levelsRedThreshold">30</strong> (red) <strong>stops airfarming drops</strong> until behavior improves.
+            </p>
+            <div class="row" style="align-items:flex-end;margin-bottom:12px;">
+              <div style="flex:2;">
+                <label>Search email</label>
+                <input id="levelsSearch" type="search" placeholder="user@example.com" />
+              </div>
+              <div style="flex:0;">
+                <button type="button" class="btn-primary" id="refreshLevelsBtn" style="width:auto;margin-bottom:16px;">Refresh</button>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;font-size:0.78rem;color:var(--muted);">
+              <span>Grows capital</span>
+              <div class="level-gradient-bar" aria-hidden="true"></div>
+              <span>Withdraws often</span>
+            </div>
+            <p id="levelsStats" class="hint"></p>
+            <div id="levelsLoading" class="loading hidden">Loading levels…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Level</th>
+                    <th>Member</th>
+                    <th>Score</th>
+                    <th>Withdrawals</th>
+                    <th>Drops</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="levelsRows"></tbody>
+              </table>
+            </div>
+            <p id="levelsErr" class="err hidden"></p>
+          </div>
+        </div>
+
         <div id="panelAccount" class="hidden">
           <div class="card">
             <h3 style="margin:0 0 8px;font-size:1rem;">Platform revenue</h3>
@@ -1409,6 +1481,7 @@
       tiers: 'Drop tiers',
       drops: 'Airfarming drops',
       vipfarmers: 'VIP Farmers',
+      levels: 'Levels',
       account: 'Account',
       announce: 'Announce & notify',
     };
@@ -1575,6 +1648,7 @@
       document.getElementById('panelTiers').classList.toggle('hidden', tab !== 'tiers');
       document.getElementById('panelDrops').classList.toggle('hidden', tab !== 'drops');
       document.getElementById('panelVipFarmers').classList.toggle('hidden', tab !== 'vipfarmers');
+      document.getElementById('panelLevels').classList.toggle('hidden', tab !== 'levels');
       document.getElementById('panelAccount').classList.toggle('hidden', tab !== 'account');
       document.getElementById('panelAnnounce').classList.toggle('hidden', tab !== 'announce');
       document.getElementById('pageTitle').textContent = PAGE_TITLES[tab] || 'Admin';
@@ -1587,6 +1661,7 @@
         else if (tab === 'tiers') showTiersErr(e);
         else if (tab === 'drops') showDropsErr(e);
         else if (tab === 'vipfarmers') showVipErr(e);
+        else if (tab === 'levels') showLevelsErr(e);
         else if (tab === 'account') showAccountRevenueErr(e);
         else if (tab === 'announce') {
           document.getElementById('announceErr').textContent = e.message;
@@ -3098,8 +3173,98 @@
       else if (activeTab === 'tiers') await loadTiers();
       else if (activeTab === 'drops') await loadDrops();
       else if (activeTab === 'vipfarmers') await loadVipFarmers();
+      else if (activeTab === 'levels') await loadLevels();
       else if (activeTab === 'account') await loadAccountRevenue();
       else if (activeTab === 'announce') await loadAnnouncements();
+    }
+
+    let levelsList = [];
+
+    function showLevelsErr(e) {
+      document.getElementById('levelsErr').textContent = e.message;
+      document.getElementById('levelsErr').classList.remove('hidden');
+    }
+
+    function renderLevelsTable() {
+      const tbody = document.getElementById('levelsRows');
+      tbody.innerHTML = '';
+      if (!levelsList.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);">No users found</td></tr>';
+        return;
+      }
+      levelsList.forEach((row) => {
+        const tr = document.createElement('tr');
+        const color = row.levelColor || 'hsl(120, 72%, 42%)';
+        const blocked = row.dropsBlocked;
+        const dropPill = blocked
+          ? '<span class="pill pill-paused">blocked (red)</span>'
+          : row.dropsPaused
+            ? '<span class="pill pill-paused">paused</span>'
+            : '<span class="pill pill-ok">active</span>';
+        const stats = row.stats || {};
+        tr.innerHTML =
+          '<td><div class="level-meter">' +
+          '<div class="level-meter-bar"><div class="level-meter-fill" style="width:' +
+          row.score +
+          '%;background:' +
+          color +
+          ';"></div></div>' +
+          '<span style="font-size:0.72rem;font-weight:700;color:' +
+          color +
+          ';">' +
+          escapeHtml(row.label || row.band) +
+          '</span></div></td>' +
+          '<td>' +
+          escapeHtml(row.email) +
+          '<br><span style="color:var(--muted);font-size:0.7rem;">' +
+          escapeHtml(row.userId.slice(0, 8)) +
+          '…</span></td>' +
+          '<td><strong>' +
+          row.score +
+          '</strong>/100</td>' +
+          '<td style="font-size:0.8rem;">7d: ' +
+          (stats.withdrawCount7d || 0) +
+          ' · 30d: ' +
+          (stats.withdrawCount30d || 0) +
+          '<br><span style="color:var(--muted);">$' +
+          Number(stats.withdrawAmount7d || 0).toLocaleString() +
+          ' / 7d</span></td>' +
+          '<td>' +
+          dropPill +
+          '</td>' +
+          '<td><button type="button" class="btn-ghost" data-level-user="' +
+          row.userId +
+          '" style="width:auto;font-size:0.75rem;padding:6px 10px;">View</button></td>';
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-level-user]').forEach((btn) => {
+        btn.onclick = () => openUser(btn.getAttribute('data-level-user'));
+      });
+    }
+
+    async function loadLevels() {
+      document.getElementById('levelsErr').classList.add('hidden');
+      document.getElementById('levelsLoading').classList.remove('hidden');
+      try {
+        const q = document.getElementById('levelsSearch').value.trim();
+        const data = await api('/admin/api/levels?search=' + encodeURIComponent(q));
+        levelsList = data.levels || [];
+        if (data.redBlockScore != null) {
+          document.getElementById('levelsRedThreshold').textContent = String(data.redBlockScore);
+        }
+        document.getElementById('levelsStats').textContent =
+          levelsList.length +
+          ' member(s) · ' +
+          (data.blockedCount || 0) +
+          ' red (drops blocked) · sorted reddest first';
+        renderLevelsTable();
+      } catch (e) {
+        levelsList = [];
+        document.getElementById('levelsRows').innerHTML = '';
+        showLevelsErr(e);
+      } finally {
+        document.getElementById('levelsLoading').classList.add('hidden');
+      }
     }
 
     const REVENUE_TYPE_LABELS = {
@@ -3654,6 +3819,10 @@
     document.getElementById('refreshP2pBtn').onclick = () => loadP2pTrades();
     document.getElementById('p2pStatusFilter').onchange = () => loadP2pTrades();
     document.getElementById('refreshVipBtn').onclick = () => loadVipFarmers().catch(showVipErr);
+    document.getElementById('refreshLevelsBtn').onclick = () => loadLevels().catch(showLevelsErr);
+    document.getElementById('levelsSearch').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') loadLevels().catch(showLevelsErr);
+    });
     document.getElementById('vipStatusFilter').onchange = () => loadVipFarmers().catch(showVipErr);
     async function sendAdminNotification() {
       document.getElementById('notifyErr').classList.add('hidden');

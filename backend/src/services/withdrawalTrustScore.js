@@ -20,8 +20,14 @@ function clearWithdrawalTrustScoreCache(userId) {
   else scoreCache.clear();
 }
 
+async function userDropsBlockedByWithdrawalLevel(userId) {
+  const trust = await getWithdrawalTrustScoreForUser(userId);
+  return Boolean(trust?.dropsBlocked);
+}
+
 module.exports = {
   computeWithdrawalTrustScore,
   getWithdrawalTrustScoreForUser,
   clearWithdrawalTrustScoreCache,
+  userDropsBlockedByWithdrawalLevel,
 };
