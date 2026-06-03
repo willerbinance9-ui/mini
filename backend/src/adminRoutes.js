@@ -924,7 +924,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/admin/api/airfarming/payouts/pending', adminAuthMiddleware, async (req, res) => {
+  app.get('/admin/api/airfarming/payouts/pending', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const scheduled = await listScheduledAirfarmingDropsAdmin({ upcomingOnly: false, limit: 500 });
       const overdue = (scheduled || []).filter(
@@ -1236,7 +1236,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/admin/api/airfarming/drops', adminAuthMiddleware, async (req, res) => {
+  app.get('/admin/api/airfarming/drops', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const upcomingOnly = String(req.query.upcoming || '1') !== '0';
       const rows = await listScheduledAirfarmingDropsAdmin({ upcomingOnly, limit: 500 });
@@ -1266,7 +1266,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.patch('/admin/api/airfarming/drops/:id', adminAuthMiddleware, async (req, res) => {
+  app.patch('/admin/api/airfarming/drops/:id', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const existing = await getAirfarmingDropById(req.params.id);
       if (!existing) return res.status(404).json({ message: 'Drop not found' });
@@ -1297,7 +1297,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/admin/api/airfarming/drops/:id/postpone', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/airfarming/drops/:id/postpone', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const existing = await getAirfarmingDropById(req.params.id);
       if (!existing) return res.status(404).json({ message: 'Drop not found' });
@@ -1321,7 +1321,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.delete('/admin/api/airfarming/drops/:id', adminAuthMiddleware, async (req, res) => {
+  app.delete('/admin/api/airfarming/drops/:id', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const existing = await getAirfarmingDropById(req.params.id);
       if (!existing) return res.status(404).json({ message: 'Drop not found' });
@@ -1337,7 +1337,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/admin/api/airfarming/drops/:id/pause-user', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/airfarming/drops/:id/pause-user', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const existing = await getAirfarmingDropById(req.params.id);
       if (!existing) return res.status(404).json({ message: 'Drop not found' });

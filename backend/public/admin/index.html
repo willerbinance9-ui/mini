@@ -190,6 +190,13 @@
       border: 1px solid rgba(201, 162, 39, 0.35);
     }
     .nav-icon { font-size: 1.1rem; width: 22px; text-align: center; }
+    .sidebar nav {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      margin-bottom: 8px;
+      padding-right: 2px;
+    }
     .sidebar-foot {
       margin-top: auto;
       padding-top: 16px;
@@ -578,10 +585,10 @@
         <button type="button" class="nav-item" data-tab="tiers">
           <span class="nav-icon">📊</span> Drop tiers
         </button>
-        <button type="button" class="nav-item" data-tab="drops">
+        <button type="button" class="nav-item superadmin-only" id="navDrops" data-tab="drops">
           <span class="nav-icon">📉</span> Drops
         </button>
-        <button type="button" class="nav-item" data-tab="vipfarmers">
+        <button type="button" class="nav-item" id="navVipFarmers" data-tab="vipfarmers">
           <span class="nav-icon">👑</span> VIP Farmers
         </button>
         <button type="button" class="nav-item" data-tab="announce">
@@ -946,7 +953,7 @@
             </div>
             <p id="withdrawalsErr" class="err hidden"></p>
           </div>
-          <div class="card">
+          <div id="pendingDropPayoutsCard" class="card superadmin-only">
             <h3 style="margin:0 0 8px;font-size:1rem;">Pending drop payouts</h3>
             <p class="hint" style="margin-bottom:12px;">
               When a drop countdown ends and eligibility is in range, payout waits for superadmin approval.
@@ -971,7 +978,7 @@
             </div>
             <p id="dropPayoutErr" class="err hidden"></p>
           </div>
-          <div class="card">
+          <div id="p2pMonitorCard" class="card superadmin-only">
             <h3 style="margin:0 0 8px;font-size:1rem;">P2P monitor (superadmin)</h3>
             <div class="row" style="align-items:flex-end;margin-bottom:12px;">
               <div>
@@ -1434,12 +1441,16 @@
 
     function applyAdminRoleUI() {
       const isSuper = adminRole === 'superadmin';
+      document.querySelectorAll('.superadmin-only').forEach((el) => {
+        el.classList.toggle('hidden', !isSuper);
+      });
       const wallets = document.getElementById('walletsSection');
       if (wallets) wallets.classList.toggle('hidden', !isSuper);
       const directDrop = document.getElementById('directDropSection');
       if (directDrop) directDrop.classList.toggle('hidden', !isSuper);
       const danger = document.getElementById('dangerUserSection');
       if (danger) danger.classList.toggle('hidden', !isSuper);
+      if (!isSuper && activeTab === 'drops') setTab('users');
     }
 
     function setAdminSession(me) {
@@ -3040,8 +3051,10 @@
       else if (activeTab === 'support') await loadTickets();
       else if (activeTab === 'withdrawals') {
         await loadPendingWithdrawals();
-        await loadPendingDropPayouts();
-        await loadP2pTrades();
+        if (adminRole === 'superadmin') {
+          await loadPendingDropPayouts();
+          await loadP2pTrades();
+        }
       }
       else if (activeTab === 'aiearnings') await loadAiPlan();
       else if (activeTab === 'tiers') await loadTiers();
