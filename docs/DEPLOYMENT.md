@@ -40,7 +40,7 @@ Production:
 - `INTERNAL_CRON_SECRET`
 - `DEEPSEEK_API_KEY` (AI daily earnings planner)
 
-Optional integrations: Tatum, Flutterwave, MetaApi (`MT5_METAAPI_TOKEN`), SMTP email, `MT5_EA_WEBHOOK_SECRET`.
+Optional integrations: Tatum, Flutterwave, MetaApi (`MT5_METAAPI_TOKEN`), SMTP email, `MT5_EA_WEBHOOK_SECRET`, `MT5_PRICE_FEED_SECRET`, `MT5_LIVE_SERVER`.
 
 ### Admin console
 
@@ -67,8 +67,19 @@ Airfarming drop settlement is **not** cron-driven — it runs on `GET /airfarmin
 | `POST /webhooks/flutterwave` | Flutterwave mobile money |
 | `POST /crypto/webhooks/tatum` | Tatum Ethereum |
 | `POST /webhooks/mt5-ea/telemetry` | MT5 EA |
+| `POST /webhooks/mt5-ea/prices` | MT5 price feed EA |
 
 Base URL must match `APP_BASE_URL`.
+
+### Live trading (MT5 server)
+
+1. Run migration `backend/sql/migrations/20260614_live_trading_accounts.sql`.
+2. Set env: `MT5_LIVE_SERVER` (server name shown to users), `MT5_PRICE_FEED_SECRET` (64+ char hex), `MT5_METAAPI_TOKEN`.
+3. On your MT5 VPS terminal:
+   - **Tools → Options → Expert Advisors → Allow WebRequest** — add your API host (e.g. `https://mini-rdjs.onrender.com`).
+   - Compile and attach **`backend/docs/EmaPriceFeedEa.mq5`** to any chart; set `InpApiBase` and `InpPriceFeedSecret`.
+   - Attach **`backend/docs/EmaWebhookEa.mq5`** per trading account for telemetry + command execution.
+4. Ensure symbols are in **Market Watch** for the price feed EA.
 
 ## 3. Mobile (EAS preview APK)
 
@@ -112,5 +123,5 @@ cd ema-mobile && cp .env.example .env && npm install && npm start
 ## Reference
 
 - Upstream fork: [willerdev/ema](https://github.com/willerdev/ema)
-- MT5 EA source: `backend/docs/EmaWebhookEa.mq5`
+- MT5 EA source: `backend/docs/EmaWebhookEa.mq5`, `backend/docs/EmaPriceFeedEa.mq5`
 - NOWPayments notes: `backend/docs/NOWPAYMENTS.md`

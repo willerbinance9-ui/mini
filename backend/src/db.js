@@ -1557,6 +1557,134 @@ async function insertExpertTradingTransfer(row) {
   return data;
 }
 
+async function allocateLiveTradingLogin() {
+  const { data, error } = await supabase.rpc('allocate_live_trading_login');
+  if (error) throw error;
+  const n = Number(data);
+  if (!Number.isFinite(n) || n <= 0) throw new Error('Failed to allocate live trading login');
+  return String(Math.trunc(n));
+}
+
+async function listPlatformLiveTradingAccountsByUserId(userId) {
+  const { data, error } = await supabase
+    .from('mt5_accounts')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('is_platform_provisioned', true)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+async function createPlatformLiveTradingAccount(userId, row) {
+  const payload = {
+    id: id(),
+    user_id: userId,
+    metaapi_account_id: row.metaapiAccountId || '',
+    login: String(row.login),
+    password: String(row.password),
+    server: String(row.server),
+    account_name: row.accountName || '',
+    bot_type: row.botType,
+    is_platform_provisioned: true,
+    leverage: row.leverage || 100,
+    platform_login_seq: row.platformLoginSeq || null,
+    ea_webhook_token: row.eaWebhookToken || null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await supabase.from('mt5_accounts').insert(payload).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+async function getLiveTradingWalletByAccountId(mt5AccountId) {
+  const { data, error } = await supabase
+    .from('live_trading_wallets')
+    .select('*')
+    .eq('mt5_account_id', mt5AccountId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function ensureLiveTradingWalletRow(mt5AccountId) {
+  const existing = await getLiveTradingWalletByAccountId(mt5AccountId);
+  if (existing) return existing;
+  const { data, error } = await supabase
+    .from('live_trading_wallets')
+    .insert({
+      mt5_account_id: mt5AccountId,
+      balance: 0,
+      updated_at: new Date().toISOString(),
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function upsertLiveTradingWalletBalance(mt5AccountId, balance) {
+  const { data, error } = await supabase
+    .from('live_trading_wallets')
+    .upsert(
+      {
+        mt5_account_id: mt5AccountId,
+        balance,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'mt5_account_id' }
+    )
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function insertLiveTradingTransfer(row) {
+  const { data, error } = await supabase.from('live_trading_transfers').insert(row).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+async function listMarketPrices({ search, limit = 200 } = {}) {
+  const cap = Math.min(500, Math.max(1, Number(limit) || 200));
+  let q = supabase.from('market_prices').select('*').order('symbol', { ascending: true }).limit(cap);
+  const s = search ? String(search).trim().toUpperCase() : '';
+  if (s) q = q.ilike('symbol', `%${s}%`);
+  const { data, error } = await q;
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function upsertMarketPricesBatch(rows) {
+  if (!rows.length) return [];
+  const now = new Date().toISOString();
+  const payload = rows.map((r) => ({
+    symbol: r.symbol,
+    bid: r.bid,
+    ask: r.ask,
+    digits: r.digits,
+    updated_at: now,
+  }));
+  const { data, error } = await supabase.from('market_prices').upsert(payload, { onConflict: 'symbol' }).select('symbol');
+  if (error) throw error;
+  return data || [];
+}
+
+async function getLatestMarketPriceUpdate() {
+  const { data, error } = await supabase
+    .from('market_prices')
+    .select('updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error && isSchemaError(error)) return null;
+  if (error) throw error;
+  return data?.updated_at || null;
+}
+
 // --- NOWPayments crypto ledger ---
 
 async function insertNowpaymentsPayment(row) {
@@ -3691,6 +3819,16 @@ module.exports = {
   getExpertTradingWalletByUserId,
   upsertExpertTradingWalletRow,
   insertExpertTradingTransfer,
+  allocateLiveTradingLogin,
+  listPlatformLiveTradingAccountsByUserId,
+  createPlatformLiveTradingAccount,
+  getLiveTradingWalletByAccountId,
+  ensureLiveTradingWalletRow,
+  upsertLiveTradingWalletBalance,
+  insertLiveTradingTransfer,
+  listMarketPrices,
+  upsertMarketPricesBatch,
+  getLatestMarketPriceUpdate,
   insertNowpaymentsPayment,
   getNowpaymentsPaymentById,
   getNowpaymentsPaymentByOrderId,

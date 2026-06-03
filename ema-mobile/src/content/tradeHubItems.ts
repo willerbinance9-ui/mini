@@ -1,11 +1,11 @@
-export type TradeHubItemId = 'airfarming' | 'vip' | 'expert';
+export type TradeHubItemId = 'airfarming' | 'vip' | 'expert' | 'liveTrading';
 
 export type TradeHubItem = {
   id: TradeHubItemId;
   title: string;
   meta: string;
   roi: string;
-  route: 'AirfarmingTrade' | 'VipFarmersTrade' | 'ExpertAutoTrading';
+  route: 'AirfarmingTrade' | 'VipFarmersTrade' | 'ExpertAutoTrading' | 'LiveTrading';
 };
 
 export const TRADE_HUB_ITEMS: TradeHubItem[] = [
@@ -29,6 +29,13 @@ export const TRADE_HUB_ITEMS: TradeHubItem[] = [
     meta: 'Managed MT5 trading — set risk limits and enable the expert',
     roi: 'Connect MT5, configure risk, then activate',
     route: 'ExpertAutoTrading',
+  },
+  {
+    id: 'liveTrading',
+    title: 'Live Trading',
+    meta: 'Open a real account · Synthetix EA or Quantix EA',
+    roi: 'Prices, open trades & history in-app',
+    route: 'LiveTrading',
   },
 ];
 

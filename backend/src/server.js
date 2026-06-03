@@ -61,6 +61,7 @@ const { registerAiInternalRoutes } = require('./aiInternalRoutes');
 const { registerVipFarmerRoutes } = require('./vipFarmerRoutes');
 const { registerJournalRoutes } = require('./journalRoutes');
 const { registerExpertRoutes } = require('./expertRoutes');
+const { registerLiveTradingRoutes } = require('./liveTradingRoutes');
 const { registerMt5EaWebhookRoutes } = require('./mt5EaWebhookRoutes');
 const { registerComplianceRoutes } = require('./complianceRoutes');
 const { registerWhitelistWalletRoutes } = require('./whitelistWalletRoutes');
@@ -463,6 +464,7 @@ registerAiInternalRoutes(app);
 registerVipFarmerRoutes(app, { authMiddleware });
 registerJournalRoutes(app, { authMiddleware });
 registerExpertRoutes(app, { authMiddleware });
+registerLiveTradingRoutes(app, { authMiddleware });
 registerAdminRoutes(app);
 registerAnnouncementRoutes(app, { adminAuthMiddleware });
 app.use(

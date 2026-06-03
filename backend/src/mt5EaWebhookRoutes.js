@@ -6,6 +6,7 @@ const {
   insertMt5EaTelemetry,
   listPendingMt5EaCommands,
   ackMt5EaCommand,
+  upsertMarketPricesBatch,
   isMissingTableError,
 } = require('./db');
 
@@ -46,6 +47,36 @@ async function resolveEaAccountForPost(req) {
   if (!login || !server) return null;
   return getMt5AccountByLoginAndServer(login, server);
 }
+
+function resolvePriceFeedSecret() {
+  return String(process.env.MT5_PRICE_FEED_SECRET || process.env.MT5_EA_WEBHOOK_SECRET || '').trim();
+}
+
+function authorizePriceFeed(req) {
+  const secret = resolvePriceFeedSecret();
+  if (!secret) return false;
+  const bearer = parseBearer(req);
+  if (!bearer) return false;
+  if (bearer.length !== secret.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(bearer), Buffer.from(secret));
+  } catch {
+    return bearer === secret;
+  }
+}
+
+const priceFeedLastByIp = new Map();
+
+function priceFeedRateOk(req) {
+  const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+  const now = Date.now();
+  const last = priceFeedLastByIp.get(ip) || 0;
+  if (now - last < 900) return false;
+  priceFeedLastByIp.set(ip, now);
+  return true;
+}
+
+const { normalizePriceBatch } = require('./services/priceFeedNormalize');
 
 function registerMt5EaWebhookRoutes(app) {
   const router = express.Router();
@@ -134,7 +165,32 @@ function registerMt5EaWebhookRoutes(app) {
     }
   });
 
+  router.post('/prices', express.json({ limit: '512kb' }), async (req, res) => {
+    try {
+      if (!authorizePriceFeed(req)) {
+        return res.status(401).json({ message: 'Unauthorized price feed' });
+      }
+      if (!priceFeedRateOk(req)) {
+        return res.status(429).json({ message: 'Rate limit: wait before next price batch' });
+      }
+      const rows = normalizePriceBatch(req.body);
+      if (!rows.length) {
+        return res.status(400).json({ message: 'Provide prices: [{ symbol, bid, ask, digits? }]' });
+      }
+      await upsertMarketPricesBatch(rows);
+      return res.json({ ok: true, count: rows.length });
+    } catch (e) {
+      if (isMissingTableError(e)) {
+        return res.status(503).json({
+          message: 'market_prices table missing. Run migrations/20260614_live_trading_accounts.sql',
+        });
+      }
+      console.error('mt5-ea prices', e);
+      return res.status(500).json({ message: e?.message || 'price upsert failed' });
+    }
+  });
+
   app.use('/webhooks/mt5-ea', router);
 }
 
-module.exports = { registerMt5EaWebhookRoutes };
+module.exports = { registerMt5EaWebhookRoutes, authorizePriceFeed };

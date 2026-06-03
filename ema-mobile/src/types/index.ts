@@ -41,6 +41,10 @@ export type RootStackParamList = {
   AirfarmingTrade: undefined;
   VipFarmersTrade: undefined;
   ExpertAutoTrading: undefined;
+  LiveTrading: undefined;
+  LiveTradingCreateBot: undefined;
+  LiveTradingCreateSetup: { botType: import('../services/liveTradingService').LiveTradingBotType };
+  LiveTradingAccount: { accountId: string };
   Notifications: undefined;
   TransactionHistory: { initialTab?: TransactionHistoryTab } | undefined;
   TransactionDetail: { row: WalletActivityRow };
