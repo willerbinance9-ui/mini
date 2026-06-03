@@ -11,6 +11,28 @@ const noWithdraw = {
   withdrawAmount7d: 0,
   withdrawAmount90d: 0,
   depositAmount90d: 5000,
+  transferSendCount7d: 0,
+  transferSendCount30d: 0,
+  transferSendCountLifetime: 0,
+  transferSendAmount7d: 0,
+  transferSendAmount90d: 0,
+  transferReceiveAmount90d: 0,
+  illegalCount90d: 0,
+};
+
+const transfersOnly = {
+  withdrawCount7d: 0,
+  withdrawCount30d: 0,
+  withdrawCountLifetime: 0,
+  withdrawAmount7d: 0,
+  withdrawAmount90d: 0,
+  depositAmount90d: 2000,
+  transferSendCount7d: 5,
+  transferSendCount30d: 6,
+  transferSendCountLifetime: 10,
+  transferSendAmount7d: 1200,
+  transferSendAmount90d: 6000,
+  transferReceiveAmount90d: 0,
   illegalCount90d: 0,
 };
 
@@ -40,5 +62,8 @@ if (poor.score < 30) assert(poor.dropsBlocked === true, 'red level should block 
 
 const flagged = computeWithdrawalTrustScore(illegal);
 assert(flagged.score < poor.score, 'illegal withdrawals should score lower than heavy alone');
+
+const transferHeavy = computeWithdrawalTrustScore(transfersOnly);
+assert(transferHeavy.score < 70, `frequent transfers should lower score, got ${transferHeavy.score}`);
 
 console.log('withdrawalTrustScore tests passed');

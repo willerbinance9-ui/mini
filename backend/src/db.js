@@ -2217,6 +2217,12 @@ function withinWindow(createdAt, sinceIso) {
  *   withdrawAmount7d: number;
  *   withdrawAmount90d: number;
  *   depositAmount90d: number;
+ *   transferSendCount7d: number;
+ *   transferSendCount30d: number;
+ *   transferSendCountLifetime: number;
+ *   transferSendAmount7d: number;
+ *   transferSendAmount90d: number;
+ *   transferReceiveAmount90d: number;
  *   illegalCount90d: number;
  * }>}
  */
@@ -2232,6 +2238,12 @@ async function getUserWithdrawalDepositStats(userId) {
     withdrawAmount7d: 0,
     withdrawAmount90d: 0,
     depositAmount90d: 0,
+    transferSendCount7d: 0,
+    transferSendCount30d: 0,
+    transferSendCountLifetime: 0,
+    transferSendAmount7d: 0,
+    transferSendAmount90d: 0,
+    transferReceiveAmount90d: 0,
     illegalCount90d: 0,
   };
 
@@ -2247,12 +2259,24 @@ async function getUserWithdrawalDepositStats(userId) {
     if (withinWindow(createdAt, since90)) stats.withdrawAmount90d += amt;
   };
 
+  const bumpTransferSend = (amount, createdAt) => {
+    const amt = withdrawalAmountUsd(amount);
+    if (amt <= 0) return;
+    stats.transferSendCountLifetime += 1;
+    if (withinWindow(createdAt, since30)) stats.transferSendCount30d += 1;
+    if (withinWindow(createdAt, since7)) {
+      stats.transferSendCount7d += 1;
+      stats.transferSendAmount7d += amt;
+    }
+    if (withinWindow(createdAt, since90)) stats.transferSendAmount90d += amt;
+  };
+
   const [txRes, npPayRes, npPayoutRes, localRes] = await Promise.all([
     supabase
       .from('transactions')
       .select('type, amount, status, created_at')
       .eq('user_id', userId)
-      .in('type', ['withdraw', 'deposit'])
+      .in('type', ['withdraw', 'deposit', 'peer_send', 'peer_receive'])
       .order('created_at', { ascending: false })
       .limit(500),
     supabase
@@ -2283,6 +2307,21 @@ async function getUserWithdrawalDepositStats(userId) {
 
   for (const row of txRes.data || []) {
     const createdAt = row.created_at;
+    if (row.type === 'peer_send') {
+      const s = String(row.status || '').toLowerCase();
+      if (s.startsWith('completed') || COMPLETED_DEPOSIT_STATUSES.has(s)) {
+        bumpTransferSend(row.amount, createdAt);
+      }
+      continue;
+    }
+    if (row.type === 'peer_receive') {
+      const s = String(row.status || '').toLowerCase();
+      if (s.startsWith('completed') || COMPLETED_DEPOSIT_STATUSES.has(s)) {
+        const amt = depositAmountUsd(row.amount);
+        if (withinWindow(createdAt, since90)) stats.transferReceiveAmount90d += amt;
+      }
+      continue;
+    }
     if (row.type === 'deposit') {
       const s = String(row.status || '').toLowerCase();
       if (!COMPLETED_DEPOSIT_STATUSES.has(s) && !s.startsWith('approved')) continue;

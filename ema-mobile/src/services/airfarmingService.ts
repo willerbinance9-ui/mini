@@ -32,6 +32,12 @@ export type WithdrawalTrustScore = {
     withdrawAmount7d: number;
     withdrawAmount90d: number;
     depositAmount90d: number;
+    transferSendCount7d?: number;
+    transferSendCount30d?: number;
+    transferSendAmount7d?: number;
+    outboundCount7d?: number;
+    outboundCount30d?: number;
+    outboundAmount7d?: number;
     illegalCount90d: number;
   };
   affectsDrops: boolean;
@@ -202,6 +208,17 @@ function normalizeTrustScore(raw: unknown): WithdrawalTrustScore | null {
       withdrawAmount7d: num(statsRaw.withdrawAmount7d),
       withdrawAmount90d: num(statsRaw.withdrawAmount90d),
       depositAmount90d: num(statsRaw.depositAmount90d),
+      transferSendCount7d:
+        statsRaw.transferSendCount7d != null ? num(statsRaw.transferSendCount7d) : undefined,
+      transferSendCount30d:
+        statsRaw.transferSendCount30d != null ? num(statsRaw.transferSendCount30d) : undefined,
+      transferSendAmount7d:
+        statsRaw.transferSendAmount7d != null ? num(statsRaw.transferSendAmount7d) : undefined,
+      outboundCount7d: statsRaw.outboundCount7d != null ? num(statsRaw.outboundCount7d) : undefined,
+      outboundCount30d:
+        statsRaw.outboundCount30d != null ? num(statsRaw.outboundCount30d) : undefined,
+      outboundAmount7d:
+        statsRaw.outboundAmount7d != null ? num(statsRaw.outboundAmount7d) : undefined,
       illegalCount90d: num(statsRaw.illegalCount90d),
     },
     affectsDrops: Boolean(r.affectsDrops),

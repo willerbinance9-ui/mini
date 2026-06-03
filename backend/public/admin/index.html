@@ -1167,7 +1167,7 @@
           <div class="card">
             <h3 style="margin:0 0 8px;font-size:1rem;">Withdrawal levels</h3>
             <p class="hint" style="margin-bottom:12px;">
-              Green = rarely withdraws (helps platform capital grow). Red = frequent withdrawals.
+              Green = rarely withdraws or sends transfers (helps platform capital grow). Red = frequent withdrawals and peer transfers out.
               Score under <strong id="levelsRedThreshold">30</strong> (red) <strong>stops airfarming drops</strong> until behavior improves.
             </p>
             <div class="row" style="align-items:flex-end;margin-bottom:12px;">
@@ -1193,7 +1193,7 @@
                     <th>Level</th>
                     <th>Member</th>
                     <th>Score</th>
-                    <th>Withdrawals</th>
+                    <th>Outflows</th>
                     <th>Drops</th>
                     <th></th>
                   </tr>
@@ -3412,12 +3412,26 @@
           row.score +
           '</strong>/100</td>' +
           '<td style="font-size:0.8rem;">7d: ' +
-          (stats.withdrawCount7d || 0) +
+          (stats.outboundCount7d != null
+            ? stats.outboundCount7d
+            : (stats.withdrawCount7d || 0) + (stats.transferSendCount7d || 0)) +
           ' · 30d: ' +
-          (stats.withdrawCount30d || 0) +
+          (stats.outboundCount30d != null
+            ? stats.outboundCount30d
+            : (stats.withdrawCount30d || 0) + (stats.transferSendCount30d || 0)) +
           '<br><span style="color:var(--muted);">$' +
-          Number(stats.withdrawAmount7d || 0).toLocaleString() +
-          ' / 7d</span></td>' +
+          Number(
+            stats.outboundAmount7d != null
+              ? stats.outboundAmount7d
+              : Number(stats.withdrawAmount7d || 0) + Number(stats.transferSendAmount7d || 0)
+          ).toLocaleString() +
+          ' / 7d</span>' +
+          ((stats.transferSendCount7d || 0) > 0
+            ? '<br><span style="color:var(--muted);font-size:0.68rem;">incl. ' +
+              stats.transferSendCount7d +
+              ' transfer(s)</span>'
+            : '') +
+          '</td>' +
           '<td>' +
           dropPill +
           '</td>' +
