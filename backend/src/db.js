@@ -3216,6 +3216,29 @@ async function listVipAccrualsForUserOnDate(userId, dateYmd) {
   return data || [];
 }
 
+async function listVipInvestmentsAdmin({ status = 'active', limit = 500 } = {}) {
+  let query = supabase.from('vip_investments').select('*').order('started_at', { ascending: false }).limit(limit);
+  const st = String(status || 'active').trim().toLowerCase();
+  if (st && st !== 'all') query = query.eq('status', st);
+  const { data, error } = await query;
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function listVipAccrualsForInvestmentIds(investmentIds) {
+  const ids = [...new Set((investmentIds || []).filter(Boolean))];
+  if (!ids.length) return [];
+  const { data, error } = await supabase
+    .from('vip_accruals')
+    .select('*')
+    .in('investment_id', ids)
+    .order('accrual_date', { ascending: false });
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
 function userDropScheduleRowToApi(row) {
   if (!row) return null;
   return {
@@ -3533,6 +3556,8 @@ module.exports = {
   insertVipAccrual,
   listVipAccrualsForUserBetween,
   listVipAccrualsForUserOnDate,
+  listVipInvestmentsAdmin,
+  listVipAccrualsForInvestmentIds,
   listPaidAirfarmingDropsForUserBetween,
   listContractAccrualsForUserBetween,
   listContractAccrualsForUserOnDate,

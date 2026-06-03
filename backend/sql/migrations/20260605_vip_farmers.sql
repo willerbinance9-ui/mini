@@ -22,7 +22,7 @@ create table if not exists public.vip_accruals (
   investment_id uuid not null references public.vip_investments(id) on delete cascade,
   user_id uuid not null references public.users(id) on delete cascade,
   accrual_date date not null,
-  rate numeric(10, 4) not null default 0.09,
+  rate numeric(10, 4) not null default 0.06,
   amount numeric(18, 2) not null check (amount >= 0),
   created_at timestamptz not null default now(),
   unique (investment_id, accrual_date)
@@ -32,6 +32,6 @@ create index if not exists idx_vip_accruals_user_date on public.vip_accruals (us
 create index if not exists idx_vip_accruals_date on public.vip_accruals (accrual_date);
 
 comment on table public.vip_investments is
-  'VIP Farmers locked principal (30 UTC days); daily 9% of principal paid to cash wallet.';
+  'VIP Farmers locked principal (30 UTC days); daily 6% of principal paid to cash wallet (no compounding).';
 comment on table public.vip_accruals is
-  'Daily VIP Farmers payout log (9% of original principal per UTC day).';
+  'Daily VIP Farmers payout log (6% of original principal per UTC weekday).';

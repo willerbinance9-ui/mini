@@ -46,6 +46,11 @@ const {
   upsertAirfarmingWalletRow,
   incrementAiDailyBudgetSpent,
   utcTodayYmd,
+  listVipInvestmentsAdmin,
+  listVipAccrualsForInvestmentIds,
+  VIP_DAILY_RATE,
+  VIP_LOCK_DAYS,
+  vipInvestmentToApi,
 } = require('./db');
 const { normalizeTargetUserId } = require('./notificationRoutes');
 const { approveWithdrawal, rejectWithdrawal } = require('./adminWithdrawals');
@@ -1033,6 +1038,83 @@ function registerAdminRoutes(app) {
       }
       console.error('[admin/p2p/disputed]', e);
       return res.status(500).json({ message: e.message || 'Failed to load disputed P2P trades' });
+    }
+  });
+
+  app.get('/admin/api/vip-farmers', adminAuthMiddleware, async (req, res) => {
+    try {
+      const status = String(req.query.status || 'active').trim();
+      const rows = await listVipInvestmentsAdmin({ status, limit: Number(req.query.limit) || 500 });
+      const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
+      const investmentIds = rows.map((r) => r.id);
+      const [users, accrualRows] = await Promise.all([
+        getUsersByIds(userIds),
+        listVipAccrualsForInvestmentIds(investmentIds),
+      ]);
+      const emailById = new Map(users.map((u) => [u.id, u.email]));
+      const accrualsByInvestment = new Map();
+      for (const a of accrualRows) {
+        const list = accrualsByInvestment.get(a.investment_id) || [];
+        list.push(a);
+        accrualsByInvestment.set(a.investment_id, list);
+      }
+      const planDate = utcTodayYmd();
+      const members = rows.map((row) => {
+        const inv = vipInvestmentToApi(row);
+        const principal = Number(inv.principalUsd || 0);
+        const dailyIncomeUsd = Math.round(principal * VIP_DAILY_RATE * 100) / 100;
+        const accruals = (accrualsByInvestment.get(row.id) || [])
+          .sort((a, b) => String(b.accrual_date).localeCompare(String(a.accrual_date)))
+          .map((a) => ({
+            date: a.accrual_date,
+            amount: Number(a.amount),
+            rate: Number(a.rate),
+          }));
+        const todayRow = accruals.find((a) => a.date === planDate);
+        return {
+          userId: row.user_id,
+          email: emailById.get(row.user_id) || '—',
+          investmentId: row.id,
+          status: row.status,
+          principalUsd: principal,
+          dailyIncomeUsd,
+          dailyRate: VIP_DAILY_RATE,
+          totalAccruedUsd: Number(inv.totalAccruedUsd || 0),
+          daysAccrued: Number(inv.daysAccrued || 0),
+          daysLeft: inv.daysLeft,
+          lockDays: VIP_LOCK_DAYS,
+          startedAt: inv.startedAt,
+          maturesAt: inv.maturesAt,
+          matured: inv.matured,
+          todayAccruedUsd: todayRow ? todayRow.amount : null,
+          accruals,
+        };
+      });
+      const activeMembers = members.filter((m) => m.status === 'active');
+      const summary = {
+        count: members.length,
+        activeCount: activeMembers.length,
+        totalPrincipalUsd: activeMembers.reduce((s, m) => s + m.principalUsd, 0),
+        totalDailyIncomeUsd: activeMembers.reduce((s, m) => s + m.dailyIncomeUsd, 0),
+        totalAccruedUsd: members.reduce((s, m) => s + m.totalAccruedUsd, 0),
+      };
+      return res.json({
+        dailyRate: VIP_DAILY_RATE,
+        lockDays: VIP_LOCK_DAYS,
+        planDate,
+        compounding: false,
+        members,
+        summary,
+      });
+    } catch (e) {
+      if (isMissingTableError(e) || isSchemaError(e)) {
+        return res.status(503).json({
+          message: 'VIP Farmers schema missing. Run backend/sql/migrations/20260605_vip_farmers.sql in Supabase.',
+          schemaMissing: true,
+        });
+      }
+      console.error('[admin/vip-farmers]', e);
+      return res.status(500).json({ message: e.message || 'Failed to load VIP members' });
     }
   });
 

@@ -581,6 +581,9 @@
         <button type="button" class="nav-item" data-tab="drops">
           <span class="nav-icon">📉</span> Drops
         </button>
+        <button type="button" class="nav-item" data-tab="vipfarmers">
+          <span class="nav-icon">👑</span> VIP Farmers
+        </button>
         <button type="button" class="nav-item" data-tab="announce">
           <span class="nav-icon">📢</span> Notify
         </button>
@@ -1006,6 +1009,51 @@
           </div>
         </div>
 
+        <div id="panelVipFarmers" class="hidden">
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">VIP Farmers members</h3>
+            <p class="hint" style="margin-bottom:12px;">
+              Daily income is <strong>6% of the original deposit (principal)</strong> — no compounding. Payouts credit the cash wallet on UTC weekdays only (weekends skipped), up to 30 days per lock.
+            </p>
+            <div class="row" style="align-items:flex-end;margin-bottom:12px;">
+              <div>
+                <label>Status</label>
+                <select id="vipStatusFilter">
+                  <option value="active" selected>Active</option>
+                  <option value="all">All</option>
+                  <option value="matured">Matured</option>
+                  <option value="early_withdrawn">Early withdrawn</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+              <div style="flex:0;">
+                <button type="button" class="btn-primary" id="refreshVipBtn" style="width:auto;margin-bottom:16px;">Refresh</button>
+              </div>
+            </div>
+            <div class="stat-grid" id="vipSummaryGrid" style="max-width:900px;margin-bottom:16px;"></div>
+            <p id="vipStats" class="hint"></p>
+            <div id="vipLoading" class="loading hidden">Loading VIP members…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Member</th>
+                    <th>Principal</th>
+                    <th>Daily (6%)</th>
+                    <th>Days</th>
+                    <th>Total paid</th>
+                    <th>Today (UTC)</th>
+                    <th>Lock ends</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="vipMemberRows"></tbody>
+              </table>
+            </div>
+            <p id="vipErr" class="err hidden"></p>
+          </div>
+        </div>
+
         <div id="panelAnnounce" class="hidden">
           <div class="card">
             <h3 style="margin:0 0 8px;font-size:1rem;">In-app announcement</h3>
@@ -1318,6 +1366,7 @@
       aiearnings: 'AI earnings',
       tiers: 'Drop tiers',
       drops: 'Airfarming drops',
+      vipfarmers: 'VIP Farmers',
       announce: 'Announce & notify',
     };
     let drops = [];
@@ -1478,6 +1527,7 @@
       document.getElementById('panelAiEarnings').classList.toggle('hidden', tab !== 'aiearnings');
       document.getElementById('panelTiers').classList.toggle('hidden', tab !== 'tiers');
       document.getElementById('panelDrops').classList.toggle('hidden', tab !== 'drops');
+      document.getElementById('panelVipFarmers').classList.toggle('hidden', tab !== 'vipfarmers');
       document.getElementById('panelAnnounce').classList.toggle('hidden', tab !== 'announce');
       document.getElementById('pageTitle').textContent = PAGE_TITLES[tab] || 'Admin';
       closeSidebar();
@@ -1488,6 +1538,7 @@
         else if (tab === 'aiearnings') showAiPlanErr(e);
         else if (tab === 'tiers') showTiersErr(e);
         else if (tab === 'drops') showDropsErr(e);
+        else if (tab === 'vipfarmers') showVipErr(e);
         else if (tab === 'announce') {
           document.getElementById('announceErr').textContent = e.message;
           document.getElementById('announceErr').classList.remove('hidden');
@@ -2995,7 +3046,128 @@
       else if (activeTab === 'aiearnings') await loadAiPlan();
       else if (activeTab === 'tiers') await loadTiers();
       else if (activeTab === 'drops') await loadDrops();
+      else if (activeTab === 'vipfarmers') await loadVipFarmers();
       else if (activeTab === 'announce') await loadAnnouncements();
+    }
+
+    let vipMembers = [];
+
+    function showVipErr(e) {
+      document.getElementById('vipErr').textContent = e.message;
+      document.getElementById('vipErr').classList.remove('hidden');
+    }
+
+    function renderVipSummary(summary, planDate) {
+      const grid = document.getElementById('vipSummaryGrid');
+      if (!summary) {
+        grid.innerHTML = '';
+        return;
+      }
+      grid.innerHTML =
+        '<div class="stat"><div class="val">' + summary.activeCount + '</div><div class="lbl">Active members</div></div>' +
+        '<div class="stat"><div class="val">' + fmtMoney(summary.totalPrincipalUsd) + '</div><div class="lbl">Active principal</div></div>' +
+        '<div class="stat"><div class="val">' + fmtMoney(summary.totalDailyIncomeUsd) + '</div><div class="lbl">Daily income (6% × principal)</div></div>' +
+        '<div class="stat"><div class="val">' + fmtMoney(summary.totalAccruedUsd) + '</div><div class="lbl">Lifetime accrued</div></div>' +
+        '<div class="stat"><div class="val">' + escapeHtml(planDate || '—') + '</div><div class="lbl">UTC today</div></div>';
+    }
+
+    function renderVipMembersTable() {
+      const tbody = document.getElementById('vipMemberRows');
+      tbody.innerHTML = '';
+      if (!vipMembers.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);">No VIP members for this filter</td></tr>';
+        return;
+      }
+      vipMembers.forEach((m) => {
+        const tr = document.createElement('tr');
+        const statusPill =
+          m.status === 'active'
+            ? '<span class="pill pill-ok">active</span>'
+            : '<span class="pill">' + escapeHtml(String(m.status).replace(/_/g, ' ')) + '</span>';
+        const todayCell =
+          m.todayAccruedUsd != null
+            ? fmtMoney(m.todayAccruedUsd)
+            : '<span style="color:var(--muted);">—</span>';
+        const historyId = 'vip-hist-' + m.investmentId;
+        tr.innerHTML =
+          '<td>' +
+          escapeHtml(m.email) +
+          '<br><span style="color:var(--muted);font-size:0.7rem;">' +
+          escapeHtml(m.userId.slice(0, 8)) +
+          '…</span> ' +
+          statusPill +
+          '</td>' +
+          '<td>' +
+          fmtMoney(m.principalUsd) +
+          '</td>' +
+          '<td><strong>' +
+          fmtMoney(m.dailyIncomeUsd) +
+          '</strong><br><span style="color:var(--muted);font-size:0.7rem;">6% of principal</span></td>' +
+          '<td>' +
+          m.daysAccrued +
+          ' / ' +
+          (m.lockDays || 30) +
+          '<br><span style="color:var(--muted);font-size:0.7rem;">' +
+          (m.daysLeft != null ? m.daysLeft + 'd left' : '—') +
+          '</td>' +
+          '<td>' +
+          fmtMoney(m.totalAccruedUsd) +
+          '</td>' +
+          '<td>' +
+          todayCell +
+          '</td>' +
+          '<td>' +
+          (m.maturesAt ? new Date(m.maturesAt).toLocaleString() : '—') +
+          '</td>' +
+          '<td style="white-space:nowrap;"><button type="button" class="btn-ghost" data-vip-history="' +
+          m.investmentId +
+          '" style="width:auto;font-size:0.75rem;padding:6px 10px;">History</button></td>';
+        tbody.appendChild(tr);
+        const histTr = document.createElement('tr');
+        histTr.id = historyId;
+        histTr.className = 'hidden';
+        const accrualLines = (m.accruals || [])
+          .slice(0, 30)
+          .map((a) => escapeHtml(a.date) + ': ' + fmtMoney(a.amount))
+          .join('<br>');
+        histTr.innerHTML =
+          '<td colspan="8" style="background:rgba(0,0,0,0.2);font-size:0.82rem;color:var(--muted);">' +
+          '<strong style="color:var(--text);">Daily payouts (principal × 6%, no compounding)</strong><br>' +
+          (accrualLines || 'No accruals recorded yet') +
+          '</td>';
+        tbody.appendChild(histTr);
+      });
+      tbody.querySelectorAll('button[data-vip-history]').forEach((btn) => {
+        btn.onclick = () => {
+          const row = document.getElementById('vip-hist-' + btn.getAttribute('data-vip-history'));
+          if (row) row.classList.toggle('hidden');
+        };
+      });
+    }
+
+    async function loadVipFarmers() {
+      document.getElementById('vipErr').classList.add('hidden');
+      document.getElementById('vipLoading').classList.remove('hidden');
+      try {
+        const status = document.getElementById('vipStatusFilter').value || 'active';
+        const data = await api('/admin/api/vip-farmers?status=' + encodeURIComponent(status));
+        vipMembers = data.members || [];
+        renderVipSummary(data.summary, data.planDate);
+        document.getElementById('vipStats').textContent =
+          vipMembers.length +
+          ' member(s) · daily rate ' +
+          Math.round((data.dailyRate || 0.06) * 1000) / 10 +
+          '% on principal · ' +
+          (data.compounding === false ? 'no compounding' : '');
+        renderVipMembersTable();
+      } catch (e) {
+        vipMembers = [];
+        renderVipSummary(null);
+        document.getElementById('vipMemberRows').innerHTML = '';
+        showVipErr(e);
+      } finally {
+        document.getElementById('vipLoading').classList.add('hidden');
+      }
     }
 
     function showTiersErr(e) {
@@ -3331,6 +3503,8 @@
     document.getElementById('saveUserPasswordBtn').onclick = () => saveUserPassword();
     document.getElementById('refreshP2pBtn').onclick = () => loadP2pTrades();
     document.getElementById('p2pStatusFilter').onchange = () => loadP2pTrades();
+    document.getElementById('refreshVipBtn').onclick = () => loadVipFarmers().catch(showVipErr);
+    document.getElementById('vipStatusFilter').onchange = () => loadVipFarmers().catch(showVipErr);
     async function sendAdminNotification() {
       document.getElementById('notifyErr').classList.add('hidden');
       document.getElementById('notifyOk').classList.add('hidden');
