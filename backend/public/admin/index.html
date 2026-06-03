@@ -3467,22 +3467,41 @@
       document.getElementById('accountRevenueErr').classList.remove('hidden');
     }
 
-    function renderAccountRevenueBucket(gridEl, bucket, label) {
-      if (!bucket) return '';
+    function revenueBucket(bucket) {
+      const b = bucket && typeof bucket === 'object' ? bucket : { count: 0, grossUsd: 0, feeUsd: 0 };
+      return {
+        count: Number(b.count) || 0,
+        grossUsd: Number(b.grossUsd) || 0,
+        feeUsd: Number(b.feeUsd) || 0,
+      };
+    }
+
+    function renderAccountRevenueBucket(bucket, label) {
+      const b = revenueBucket(bucket);
       return (
         '<div class="stat"><div class="val">' +
-        fmtMoney(bucket.feeUsd) +
+        fmtMoney(b.feeUsd) +
         '</div><div class="lbl">' +
-        escapeHtml(label) +
+        escapeHtml(label || '') +
         '<br><span style="font-size:0.65rem;color:var(--muted);">' +
-        bucket.count +
+        b.count +
         ' events · gross ' +
-        fmtMoney(bucket.grossUsd) +
+        fmtMoney(b.grossUsd) +
         '</span></div></div>'
       );
     }
 
     function renderAccountRevenue(data) {
+      if (data.schemaMissing) {
+        document.getElementById('accountRevenueGrid').innerHTML =
+          '<div class="stat"><div class="val">—</div><div class="lbl">Run SQL migration</div></div>';
+        document.getElementById('accountRevenueByType').innerHTML = '';
+        document.getElementById('accountRevenueStats').textContent =
+          'Run backend/sql/migrations/20260612_platform_revenue.sql in Supabase, then redeploy.';
+        document.getElementById('accountRevenueRows').innerHTML =
+          '<tr><td colspan="6" style="color:var(--muted);">' + escapeHtml(data.message || 'Schema missing') + '</td></tr>';
+        return;
+      }
       const s = data.summary || {};
       const rates = data.rates || {};
       document.getElementById('accountRevenueGrid').innerHTML =
@@ -3511,7 +3530,7 @@
       const recent = data.recent || [];
       if (!recent.length) {
         tbody.innerHTML =
-          '<tr><td colspan="6" style="color:var(--muted);">No fee events yet. Run migration 20260612_platform_revenue.sql if schema errors appear.</td></tr>';
+          '<tr><td colspan="6" style="color:var(--muted);">No fee events yet. Fees appear when you approve drop payouts, withdrawals, or VIP daily accruals.</td></tr>';
         return;
       }
       recent.forEach((ev) => {

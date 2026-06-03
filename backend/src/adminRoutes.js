@@ -1134,10 +1134,19 @@ function registerAdminRoutes(app) {
       return res.json(stats);
     } catch (e) {
       if (isMissingTableError(e) || isSchemaError(e)) {
-        return res.status(503).json({
+        const empty = () => ({ count: 0, grossUsd: 0, feeUsd: 0 });
+        return res.json({
+          schemaMissing: true,
           message:
             'Platform revenue schema missing. Run backend/sql/migrations/20260612_platform_revenue.sql in Supabase.',
-          schemaMissing: true,
+          rates: { airfarmingDrop: 0.1, withdrawal: 0.05, vipAccrual: 0.03 },
+          summary: {
+            all: empty(),
+            today: empty(),
+            month: empty(),
+            byType: { airfarming_drop: empty(), withdrawal: empty(), vip_accrual: empty() },
+          },
+          recent: [],
         });
       }
       console.error('[admin/account/revenue]', e);
