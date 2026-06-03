@@ -11,6 +11,8 @@ const {
   updateUserPasswordHash,
   listUsersAdmin,
   getAdminUserDetail,
+  unbanUserAccount,
+  userIsBanned,
   getAdminUserChartSeries,
   updateAirfarmingUserDropPause,
   getAirfarmingDropsPausedByUserIds,
@@ -414,6 +416,22 @@ function registerAdminRoutes(app) {
       if (isMissingTableError(e)) return res.status(503).json({ message: dropScheduleSchemaMsg });
       console.error('[admin/drop-schedule/apply]', e);
       return res.status(500).json({ message: e.message || 'Apply failed' });
+    }
+  });
+
+  app.post('/admin/api/users/:id/unban', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const user = await getUserById(req.params.id);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      if (!userIsBanned(user)) {
+        return res.status(400).json({ message: 'User is not banned' });
+      }
+      await unbanUserAccount(req.params.id);
+      const detail = await getAdminUserDetail(req.params.id);
+      return res.json({ ok: true, user: detail?.user });
+    } catch (e) {
+      console.error('[admin/users/unban]', e);
+      return res.status(500).json({ message: e.message || 'Failed to unban user' });
     }
   });
 

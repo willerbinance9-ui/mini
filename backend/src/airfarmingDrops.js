@@ -26,6 +26,12 @@ const {
   getWithdrawalTrustScoreForUser,
   userDropsBlockedByWithdrawalLevel,
 } = require('./services/withdrawalTrustScore');
+const { getUserById, userIsBanned } = require('./db');
+
+async function userDropsBlockedByAccount(userId) {
+  const user = await getUserById(userId);
+  return userIsBanned(user);
+}
 
 const {
   ELIGIBILITY_SNAPSHOT_MS,
@@ -318,6 +324,7 @@ async function projectUpcomingDropsForWeek(userId, weekStart, scheduledRows) {
   const projected = [];
   const pauseCheck = await isDropPausedForUser(userId, 0);
   if (pauseCheck.paused) return projected;
+  if (await userDropsBlockedByAccount(userId)) return projected;
   if (await userDropsBlockedByWithdrawalLevel(userId)) return projected;
 
   let last = scheduledRows.length
@@ -433,6 +440,7 @@ async function ensureNextScheduledDrop(userId, weekStart) {
 
   const pauseCheck = await isDropPausedForUser(userId, spec.band_index);
   if (pauseCheck.paused) return null;
+  if (await userDropsBlockedByAccount(userId)) return null;
   if (await userDropsBlockedByWithdrawalLevel(userId)) return null;
 
   const caps = await getEffectiveCaps();
@@ -620,6 +628,17 @@ async function settleDrop(userId, drop, options = {}) {
   const snapshotBal = snapshotBalanceFromRow(drop);
   const eligibilityBalance = snapshotBal != null ? snapshotBal : liveBalance;
   const eligible = isEligible(eligibilityBalance, drop.min_balance, drop.max_balance);
+  if (await userDropsBlockedByAccount(userId)) {
+    return updateAirfarmingDrop(drop.id, {
+      status: 'missed',
+      eligible_balance: eligibilityBalance,
+      profit_amount: 0,
+      auto_funded_cash: autoFunded.cash,
+      auto_funded_crypto: autoFunded.crypto,
+      paid_at: now,
+    });
+  }
+
   const trust = await getWithdrawalTrustScoreForUser(userId);
 
   if (trust.dropsBlocked) {

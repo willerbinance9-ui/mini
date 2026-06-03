@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const {
   getUserByEmail,
   getUserById,
+  userIsBanned,
   createUser,
   updateUserTotpSecretEnc,
   setTotpEnabled,
@@ -262,6 +263,12 @@ app.post('/auth/login', async (req, res) => {
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
+    if (userIsBanned(user)) {
+      return res.status(403).json({
+        message: user.ban_reason || 'This account has been suspended.',
+        code: 'ACCOUNT_BANNED',
+      });
+    }
     if (user.totp_enabled) {
       return res.json({ requiresTotp: true, preAuthToken: signTotpPendingToken(user.id) });
     }
@@ -293,6 +300,12 @@ app.post('/auth/totp/verify', totpPendingMiddleware, async (req, res) => {
     });
     if (!totpResult.valid) {
       return res.status(401).json({ message: 'Invalid code' });
+    }
+    if (userIsBanned(user)) {
+      return res.status(403).json({
+        message: user.ban_reason || 'This account has been suspended.',
+        code: 'ACCOUNT_BANNED',
+      });
     }
     return res.json({ token: signToken(user), user: { id: user.id, email: user.email } });
   } catch (error) {

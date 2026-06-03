@@ -395,6 +395,40 @@
       margin-bottom: 20px;
     }
     .user-page-header .user-page-title-block { flex: 1; min-width: 200px; }
+    .user-profile-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 16px;
+      max-width: 1100px;
+    }
+    .user-detail-group {
+      margin-bottom: 28px;
+      max-width: 1100px;
+    }
+    .user-detail-group-title {
+      margin: 0 0 12px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .user-detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 16px;
+    }
+    .pill-ban {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: rgba(239, 68, 68, 0.45);
+      color: #fca5a5;
+    }
+    .pill-dup {
+      background: rgba(249, 115, 22, 0.15);
+      border-color: rgba(249, 115, 22, 0.4);
+      color: #fdba74;
+    }
     .user-page-header h2 { margin: 0 0 4px; font-size: 1.35rem; }
     .user-page-header .user-page-meta { margin: 0; }
     .user-page-sections {
@@ -665,6 +699,7 @@
                 <thead>
                   <tr>
                     <th>Email</th>
+                    <th>Status</th>
                     <th>Cash</th>
                     <th>Airfarming</th>
                     <th>VIP</th>
@@ -690,12 +725,36 @@
               </div>
             </div>
 
+            <div id="userProfileBadges" class="user-profile-badges"></div>
             <div class="stat-grid" id="userStatsGrid" style="max-width:1100px;margin-bottom:20px;"></div>
 
             <div class="user-page-sections">
 
+              <div class="user-detail-group">
+                <h3 class="user-detail-group-title">Account &amp; wallets</h3>
+                <div class="user-detail-grid">
               <section class="card admin-section">
-                <h3 class="admin-section-title">Airfarming drops</h3>
+                <h3 class="admin-section-title">Account status</h3>
+                <p id="userAccountStatusDesc" class="admin-section-desc"></p>
+                <div id="userWalletList" class="hint" style="font-size:0.82rem;line-height:1.6;"></div>
+                <div id="userUnbanToolbar" class="btn-toolbar hidden">
+                  <button type="button" class="btn-primary" id="unbanUserBtn">Unban account</button>
+                </div>
+              </section>
+
+              <section class="card admin-section">
+                <h3 class="admin-section-title">Withdrawal level</h3>
+                <p id="userWithdrawalLevelDesc" class="admin-section-desc"></p>
+                <div id="userWithdrawalLevelMeter" style="max-width:240px;"></div>
+              </section>
+                </div>
+              </div>
+
+              <div class="user-detail-group">
+                <h3 class="user-detail-group-title">Airfarming</h3>
+                <div class="user-detail-grid">
+              <section class="card admin-section">
+                <h3 class="admin-section-title">Drop controls</h3>
                 <p id="userPauseStatus" class="admin-section-desc"></p>
                 <div class="btn-toolbar">
                   <button type="button" id="toggleUserPauseBtn" class="btn-warn">Pause drops</button>
@@ -780,7 +839,12 @@
                   </table>
                 </div>
               </section>
+                </div>
+              </div>
 
+              <div class="user-detail-group superadmin-only">
+                <h3 class="user-detail-group-title">Superadmin</h3>
+                <div class="user-detail-grid">
               <section id="walletsSection" class="card admin-section">
                 <h3 class="admin-section-title">Wallets</h3>
                 <p class="admin-section-desc">Adjust balances (reason required) or move cash into airfarming.</p>
@@ -840,26 +904,11 @@
                   <button type="button" class="btn-warn" id="deleteUserBtn">Delete user permanently</button>
                 </div>
               </section>
-
-              <section class="card admin-section">
-                <h3 class="admin-section-title">Reset password</h3>
-                <p class="admin-section-desc">Set a new password for this user (minimum 6 characters).</p>
-                <div class="form-grid-2">
-                  <div>
-                    <label>New password</label>
-                    <input id="userNewPassword" type="password" autocomplete="new-password" placeholder="New password" />
-                  </div>
-                  <div>
-                    <label>Confirm password</label>
-                    <input id="userNewPasswordConfirm" type="password" autocomplete="new-password" placeholder="Confirm password" />
-                  </div>
                 </div>
-                <div class="btn-toolbar">
-                  <button type="button" class="btn-primary" id="saveUserPasswordBtn">Update password</button>
-                </div>
-                <p id="userPasswordOk" class="section-inline-ok hidden"></p>
-              </section>
+              </div>
 
+              <div class="user-detail-group">
+                <h3 class="user-detail-group-title">Activity &amp; history</h3>
               <section class="card admin-section">
                 <h3 class="admin-section-title">Deposits &amp; profits (90 days)</h3>
                 <p id="chartTotals" class="admin-section-desc"></p>
@@ -903,6 +952,26 @@
                   </table>
                 </div>
               </section>
+
+              <section class="card admin-section">
+                <h3 class="admin-section-title">Security</h3>
+                <p class="admin-section-desc">Set a new password for this user (minimum 6 characters).</p>
+                <div class="form-grid-2">
+                  <div>
+                    <label>New password</label>
+                    <input id="userNewPassword" type="password" autocomplete="new-password" placeholder="New password" />
+                  </div>
+                  <div>
+                    <label>Confirm password</label>
+                    <input id="userNewPasswordConfirm" type="password" autocomplete="new-password" placeholder="Confirm password" />
+                  </div>
+                </div>
+                <div class="btn-toolbar">
+                  <button type="button" class="btn-primary" id="saveUserPasswordBtn">Update password</button>
+                </div>
+                <p id="userPasswordOk" class="section-inline-ok hidden"></p>
+              </section>
+              </div>
 
             </div>
           </div>
@@ -1674,12 +1743,15 @@
       const tbody = document.getElementById('userRows');
       tbody.innerHTML = '';
       if (!users.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted);">No users found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);">No users found</td></tr>';
       }
       users.forEach((u) => {
         const tr = document.createElement('tr');
         let pausePill = u.dropsPaused
           ? '<span class="pill pill-paused">paused</span>'
+          : '<span class="pill pill-ok">active</span>';
+        const statusCell = u.isBanned
+          ? '<span class="pill pill-ban">banned</span>'
           : '<span class="pill pill-ok">active</span>';
         const vipCell = u.vipActive
           ? '<span class="pill pill-ok">active</span><br><span style="color:var(--muted);font-size:0.7rem;">' + fmtMoney(u.vipPrincipalUsd || 0) + '</span>'
@@ -1689,6 +1761,7 @@
         }
         tr.innerHTML =
           '<td>' + escapeHtml(u.email) + '<br><span style="color:var(--muted);font-size:0.7rem;">' + escapeHtml(u.id.slice(0, 8)) + '…</span></td>' +
+          '<td>' + statusCell + '</td>' +
           '<td>' + fmtMoney(u.cashBalance) + '</td>' +
           '<td>' + fmtMoney(u.airfarmingBalance) + '</td>' +
           '<td>' + vipCell + '</td>' +
@@ -1741,10 +1814,103 @@
 
     function renderUserDetail(d) {
       viewingUserDetail = d;
-      document.getElementById('userModalTitle').textContent = d.user.email;
+      const u = d.user || {};
+      document.getElementById('userModalTitle').textContent = u.email || 'User';
       document.getElementById('userModalMeta').textContent =
-        'Joined ' + new Date(d.user.createdAt).toLocaleString() +
-        (d.user.transferCode ? ' · Transfer ' + d.user.transferCode : '');
+        'Joined ' + new Date(u.createdAt).toLocaleString() +
+        (u.transferCode ? ' · Transfer ' + u.transferCode : '') +
+        (u.totpEnabled ? ' · 2FA on' : '');
+
+      const badges = document.getElementById('userProfileBadges');
+      badges.innerHTML = '';
+      if (u.isBanned) {
+        badges.innerHTML +=
+          '<span class="pill pill-ban">Banned</span>' +
+          (u.walletDuplicateAddress
+            ? '<span class="pill pill-dup">Duplicate wallet</span>'
+            : '');
+      } else {
+        badges.innerHTML += '<span class="pill pill-ok">Account active</span>';
+      }
+      const wl = d.withdrawalLevel;
+      if (wl) {
+        badges.innerHTML +=
+          '<span class="pill" style="border-color:' +
+          (wl.levelColor || 'var(--border)') +
+          ';color:' +
+          (wl.levelColor || 'var(--text)') +
+          ';">Level: ' +
+          escapeHtml(wl.label || wl.band) +
+          ' (' +
+          wl.score +
+          ')</span>';
+      }
+      if (d.vipInvestment) badges.innerHTML += '<span class="pill" style="color:#fbbf24;border-color:rgba(245,158,11,0.45);">VIP Farmers</span>';
+
+      const acctDesc = document.getElementById('userAccountStatusDesc');
+      if (u.isBanned) {
+        acctDesc.textContent =
+          (u.banReason || 'Account suspended.') +
+          (u.bannedAt ? ' Since ' + new Date(u.bannedAt).toLocaleString() + '.' : '.');
+        if (u.walletDuplicateLinkedEmail || u.walletDuplicateAddress) {
+          acctDesc.textContent +=
+            ' Reused wallet' +
+            (u.walletDuplicateAddress ? ' ' + u.walletDuplicateAddress : '') +
+            (u.walletDuplicateLinkedEmail ? ' from account ' + u.walletDuplicateLinkedEmail : '') +
+            '.';
+        }
+      } else {
+        acctDesc.textContent = 'No ban flags. Adding a withdrawal address already used on another account auto-bans this user.';
+      }
+
+      const walletLines = [];
+      if (d.depositAddress) {
+        walletLines.push('<strong>ETH deposit</strong><br><code style="word-break:break-all;">' + escapeHtml(d.depositAddress) + '</code>');
+      }
+      (d.whitelistedWallets || []).forEach((w) => {
+        walletLines.push(
+          '<strong>' +
+            escapeHtml(String(w.currency || '').toUpperCase()) +
+            ' withdraw</strong>' +
+            (w.label ? ' · ' + escapeHtml(w.label) : '') +
+            '<br><code style="word-break:break-all;">' +
+            escapeHtml(w.address) +
+            '</code>'
+        );
+      });
+      document.getElementById('userWalletList').innerHTML =
+        walletLines.length ? walletLines.join('<br><br>') : 'No external withdrawal wallets on file yet.';
+
+      const unbanBar = document.getElementById('userUnbanToolbar');
+      const unbanBtn = document.getElementById('unbanUserBtn');
+      if (u.isBanned && adminRole === 'superadmin') {
+        unbanBar.classList.remove('hidden');
+        if (unbanBtn) unbanBtn.disabled = false;
+      } else {
+        unbanBar.classList.add('hidden');
+      }
+
+      const lvlDesc = document.getElementById('userWithdrawalLevelDesc');
+      const lvlMeter = document.getElementById('userWithdrawalLevelMeter');
+      if (wl) {
+        lvlDesc.textContent =
+          (wl.dropsBlocked ? 'Red level — airfarming drops blocked. ' : '') +
+          'Based on withdrawal frequency vs deposits (90 days).';
+        lvlMeter.innerHTML =
+          '<div class="level-meter"><div class="level-meter-bar"><div class="level-meter-fill" style="width:' +
+          wl.score +
+          '%;background:' +
+          (wl.levelColor || '#22c55e') +
+          ';"></div></div><span style="font-weight:700;color:' +
+          (wl.levelColor || 'inherit') +
+          ';">' +
+          wl.score +
+          '/100</span></div>';
+      } else {
+        lvlDesc.textContent = '—';
+        lvlMeter.innerHTML = '';
+      }
+
       const af = d.airfarming;
       const vip = d.vipInvestment;
       document.getElementById('userStatsGrid').innerHTML =
@@ -2184,6 +2350,28 @@
       }
     }
 
+    async function unbanUser() {
+      if (!viewingUserId) return;
+      if (adminRole !== 'superadmin') {
+        showUserPageAlert('Superadmin required to unban.', 'error');
+        return;
+      }
+      if (!confirm('Unban this account and clear duplicate-wallet flags?')) return;
+      clearUserPageAlert();
+      try {
+        document.getElementById('unbanUserBtn').disabled = true;
+        await api('/admin/api/users/' + viewingUserId + '/unban', { method: 'POST' });
+        showUserPageAlert('Account unbanned.', 'success');
+        await openUser(viewingUserId);
+        await loadUsers();
+      } catch (e) {
+        showUserPageAlert(e.message, 'error');
+      } finally {
+        const btn = document.getElementById('unbanUserBtn');
+        if (btn) btn.disabled = false;
+      }
+    }
+
     async function openUser(id) {
       clearUserPageAlert();
       document.getElementById('userPasswordOk').classList.add('hidden');
@@ -2203,6 +2391,7 @@
       document.getElementById('panelUserDetail').classList.remove('hidden');
       const d = await api('/admin/api/users/' + id);
       renderUserDetail(d);
+      applyAdminRoleUI();
       document.getElementById('pageTitle').textContent = d.user.email;
       document.querySelector('.content').scrollTop = 0;
       void loadUserCharts(id);
@@ -3816,6 +4005,7 @@
     document.getElementById('saveTicketBtn').onclick = () => saveTicketStatus();
     document.getElementById('closeTicketBtn').onclick = () => closeModal('ticketModal');
     document.getElementById('saveUserPasswordBtn').onclick = () => saveUserPassword();
+    document.getElementById('unbanUserBtn').onclick = () => unbanUser();
     document.getElementById('refreshP2pBtn').onclick = () => loadP2pTrades();
     document.getElementById('p2pStatusFilter').onchange = () => loadP2pTrades();
     document.getElementById('refreshVipBtn').onclick = () => loadVipFarmers().catch(showVipErr);

@@ -75,6 +75,103 @@ async function getUserById(userId) {
   return data;
 }
 
+function userIsBanned(row) {
+  return String(row?.account_status || 'active').toLowerCase() === 'banned';
+}
+
+async function banUserAccount(userId, { reason, linkedUserId = null, address = null } = {}) {
+  const now = new Date().toISOString();
+  const patch = {
+    account_status: 'banned',
+    banned_at: now,
+    ban_reason: reason ? String(reason).slice(0, 500) : 'Account banned',
+    wallet_duplicate_of_user_id: linkedUserId || null,
+    wallet_duplicate_address: address ? String(address).trim() : null,
+  };
+  const { data, error } = await supabase.from('users').update(patch).eq('id', userId).select('*').single();
+  if (error && isMissingColumnError(error, 'account_status')) {
+    const err = new Error('User ban columns missing. Run backend/sql/migrations/20260613_user_wallet_ban.sql');
+    err.statusCode = 503;
+    throw err;
+  }
+  if (error) throw error;
+  return data;
+}
+
+async function unbanUserAccount(userId) {
+  const patch = {
+    account_status: 'active',
+    banned_at: null,
+    ban_reason: null,
+    wallet_duplicate_of_user_id: null,
+    wallet_duplicate_address: null,
+  };
+  const { data, error } = await supabase.from('users').update(patch).eq('id', userId).select('*').single();
+  if (error && isMissingColumnError(error, 'account_status')) {
+    const err = new Error('User ban columns missing. Run backend/sql/migrations/20260613_user_wallet_ban.sql');
+    err.statusCode = 503;
+    throw err;
+  }
+  if (error) throw error;
+  return data;
+}
+
+async function findOtherUsersWithWhitelistedAddress(excludeUserId, currency, address) {
+  const cur = String(currency || '').trim().toLowerCase();
+  const addr = String(address || '').trim().toLowerCase();
+  if (!cur || !addr) return [];
+
+  const { data, error } = await supabase.from('user_whitelisted_wallets').select('user_id, currency, address, created_at');
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+
+  const userIds = [
+    ...new Set(
+      (data || [])
+        .filter(
+          (r) =>
+            r.user_id !== excludeUserId &&
+            String(r.currency || '').toLowerCase() === cur &&
+            String(r.address || '').trim().toLowerCase() === addr
+        )
+        .map((r) => r.user_id)
+    ),
+  ];
+  if (!userIds.length) return [];
+
+  const { data: users, error: uErr } = await supabase
+    .from('users')
+    .select('id, email, created_at, account_status')
+    .in('id', userIds);
+  if (uErr && isSchemaError(uErr)) {
+    return userIds.map((uid) => {
+      const w = (data || []).find((r) => r.user_id === uid);
+      return {
+        user_id: uid,
+        email: null,
+        userCreatedAt: null,
+        walletCreatedAt: w?.created_at,
+        currency: cur,
+        address: w?.address,
+      };
+    });
+  }
+  if (uErr) throw uErr;
+
+  return (users || []).map((u) => {
+    const w = (data || []).find((r) => r.user_id === u.id);
+    return {
+      user_id: u.id,
+      email: u.email,
+      userCreatedAt: u.created_at,
+      accountStatus: u.account_status,
+      walletCreatedAt: w?.created_at,
+      currency: cur,
+      address: w?.address,
+    };
+  });
+}
+
 async function deleteUserAdmin(userId) {
   const existing = await getUserById(userId);
   if (!existing) {
@@ -795,7 +892,9 @@ async function endGlobalDropPauseEarly(pauseId) {
 async function listUsersAdmin({ limit = 100, search = '' } = {}) {
   let query = supabase
     .from('users')
-    .select('id, email, created_at, transfer_code')
+    .select(
+      'id, email, created_at, transfer_code, account_status, banned_at, ban_reason, wallet_duplicate_of_user_id, wallet_duplicate_address'
+    )
     .order('created_at', { ascending: false })
     .limit(limit);
   const term = String(search || '').trim();
@@ -876,6 +975,12 @@ async function listUsersAdmin({ limit = 100, search = '' } = {}) {
       email: u.email,
       createdAt: u.created_at,
       transferCode: u.transfer_code || null,
+      accountStatus: u.account_status || 'active',
+      isBanned: userIsBanned(u),
+      banReason: u.ban_reason || null,
+      bannedAt: u.banned_at || null,
+      walletDuplicateOfUserId: u.wallet_duplicate_of_user_id || null,
+      walletDuplicateAddress: u.wallet_duplicate_address || null,
       cashBalance: cashByUser.get(u.id) ?? 0,
       airfarmingBalance: afByUser.get(u.id) ?? 0,
       vipPrincipalUsd: Number(vipByUser.get(u.id)?.principal_usd || 0),
@@ -978,7 +1083,9 @@ async function getAdminUserDetail(userId) {
   const user = await getUserById(userId);
   if (!user) return null;
 
-  const [wallet, afWallet, state, transactions, scheduledDrops, cryptoBalances, vipInvestment] = await Promise.all([
+  const linkedUserId = user.wallet_duplicate_of_user_id || null;
+  const [wallet, afWallet, state, transactions, scheduledDrops, cryptoBalances, vipInvestment, whitelistedWallets, ethWallet, linkedUser, withdrawalTrust] =
+    await Promise.all([
     getWalletByUserId(userId),
     getAirfarmingWalletByUserId(userId),
     getAirfarmingStateByUserId(userId),
@@ -992,6 +1099,17 @@ async function getAdminUserDetail(userId) {
       .limit(10),
     getCryptoBalancesByUserId(userId).catch(() => []),
     getActiveVipInvestmentForUser(userId).catch(() => null),
+    listWhitelistedWalletsByUserId(userId).catch(() => []),
+    getCryptoEthereumWalletByUserId(userId).catch(() => null),
+    linkedUserId ? getUserById(linkedUserId).catch(() => null) : Promise.resolve(null),
+    (async () => {
+      try {
+        const { getWithdrawalTrustScoreForUser } = require('./services/withdrawalTrustScore');
+        return await getWithdrawalTrustScoreForUser(userId);
+      } catch {
+        return null;
+      }
+    })(),
   ]);
 
   if (scheduledDrops.error && !isSchemaError(scheduledDrops.error)) throw scheduledDrops.error;
@@ -1011,7 +1129,31 @@ async function getAdminUserDetail(userId) {
       createdAt: user.created_at,
       transferCode: user.transfer_code || null,
       totpEnabled: Boolean(user.totp_enabled),
+      accountStatus: user.account_status || 'active',
+      isBanned: userIsBanned(user),
+      banReason: user.ban_reason || null,
+      bannedAt: user.banned_at || null,
+      walletDuplicateOfUserId: user.wallet_duplicate_of_user_id || null,
+      walletDuplicateAddress: user.wallet_duplicate_address || null,
+      walletDuplicateLinkedEmail: linkedUser?.email || null,
     },
+    withdrawalLevel: withdrawalTrust
+      ? {
+          score: withdrawalTrust.score,
+          band: withdrawalTrust.band,
+          label: withdrawalTrust.label,
+          levelColor: withdrawalTrust.levelColor,
+          dropsBlocked: withdrawalTrust.dropsBlocked,
+        }
+      : null,
+    whitelistedWallets: (whitelistedWallets || []).map((w) => ({
+      id: w.id,
+      label: w.label || '',
+      currency: w.currency,
+      address: w.address,
+      createdAt: w.created_at,
+    })),
+    depositAddress: ethWallet?.address || null,
     cashBalance: Number.parseFloat(String(wallet?.balance ?? 0)) || 0,
     airfarmingBalance: Number.parseFloat(String(afWallet?.balance ?? 0)) || 0,
     usdtBalance: usdtAvailable,
@@ -3418,6 +3560,10 @@ module.exports = {
   updateUserPasswordHash,
   replacePasswordResetCode,
   consumePasswordResetCode,
+  userIsBanned,
+  banUserAccount,
+  unbanUserAccount,
+  findOtherUsersWithWhitelistedAddress,
   createUser,
   updateAlpacaKeys,
   updateUserTotpSecretEnc,

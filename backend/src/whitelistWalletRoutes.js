@@ -8,6 +8,7 @@ const {
   isMissingTableError,
 } = require('./db');
 const { normalizeCurrency } = require('./currencyNormalize');
+const { enforceWalletUniquenessOnAdd } = require('./walletDuplicateService');
 
 function newId() {
   return crypto.randomUUID();
@@ -55,6 +56,14 @@ function registerWhitelistWalletRoutes(app, { authMiddleware }) {
         currency,
         address,
       });
+      const dup = await enforceWalletUniquenessOnAdd(req.userId, currency, address);
+      if (dup.banned) {
+        return res.status(403).json({
+          message: dup.reason || 'Account suspended: wallet already used on another account.',
+          code: 'ACCOUNT_BANNED',
+          linkedEmail: dup.linkedEmail || null,
+        });
+      }
       const rows = await listWhitelistedWalletsByUserId(req.userId);
       return res.json({ wallet: toPublic(row), wallets: rows.map(toPublic), maxWallets: MAX_WHITELISTED_WALLETS_PER_USER });
     } catch (e) {
