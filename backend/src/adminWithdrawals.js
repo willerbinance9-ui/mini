@@ -14,6 +14,10 @@ const {
 const { refundCashFundingForPayout } = require('./walletFunding');
 const { submitPayoutToProvider } = require('./nowpaymentsPayoutFlow');
 const { notifyWithdrawalOutcome } = require('./depositNotifications');
+const {
+  recordPlatformRevenueIfNew,
+  PLATFORM_FEE_WITHDRAW_RATE,
+} = require('./platformRevenueService');
 const { getRegion, maskPhone } = require('./localMoneyRegions');
 const { sendSms } = require('./services/twilioSms');
 const crypto = require('crypto');
@@ -35,6 +39,20 @@ async function refundLocalMoneyWithdraw(order) {
     source: 'local_withdraw_refund',
     source_id: order.id,
   });
+}
+
+async function recordWithdrawalPlatformFee({ source, id, userId, grossAmount, currency, meta }) {
+  const fee = Number(grossAmount || 0);
+  if (fee <= 0) return;
+  await recordPlatformRevenueIfNew({
+    eventType: 'withdrawal',
+    userId,
+    sourceId: `${source}:${id}`,
+    grossAmount: fee,
+    feeRate: PLATFORM_FEE_WITHDRAW_RATE,
+    currency,
+    meta: { source, ...meta },
+  }).catch((e) => console.error('[platform-revenue/withdraw]', e));
 }
 
 async function approveWithdrawal({ source, id }) {
@@ -61,6 +79,14 @@ async function approveWithdrawal({ source, id }) {
       asset: 'usd',
       status: 'finished',
     });
+    await recordWithdrawalPlatformFee({
+      source,
+      id,
+      userId: tx.user_id,
+      grossAmount: Number(tx.amount),
+      currency: 'USD',
+      meta: { destination: meta },
+    });
     return { source, id, status: updated.status };
   }
 
@@ -82,6 +108,13 @@ async function approveWithdrawal({ source, id }) {
       amount: Number(row.amount),
       asset: row.currency,
       status: 'in_progress',
+    });
+    await recordWithdrawalPlatformFee({
+      source,
+      id,
+      userId: row.user_id,
+      grossAmount: Number(row.amount),
+      currency: String(row.currency || 'USD').toUpperCase(),
     });
     return { source, id, status: updated.status, payoutId: updated.payout_id };
   }
@@ -112,6 +145,14 @@ async function approveWithdrawal({ source, id }) {
       amount: Number(updated.crypto_amount),
       asset: updated.crypto_asset || 'usdt',
       status: 'in_progress',
+    });
+    await recordWithdrawalPlatformFee({
+      source,
+      id,
+      userId: updated.user_id,
+      grossAmount: Number(updated.crypto_amount),
+      currency: String(updated.crypto_asset || 'usdt').toUpperCase(),
+      meta: { fiatAmount: updated.fiat_amount, fiatCurrency: updated.fiat_currency },
     });
     return { source, id, status: updated.status };
   }

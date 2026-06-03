@@ -55,6 +55,12 @@ const {
 const { normalizeTargetUserId } = require('./notificationRoutes');
 const { approveWithdrawal, rejectWithdrawal } = require('./adminWithdrawals');
 const { releaseP2pEscrow, refundP2pEscrow } = require('./p2pEscrow');
+const {
+  splitPlatformFee,
+  recordPlatformRevenueIfNew,
+  getPlatformRevenueAdminStats,
+  PLATFORM_FEE_DROP_RATE,
+} = require('./platformRevenueService');
 
 function newId() {
   return crypto.randomUUID();
@@ -967,17 +973,29 @@ function registerAdminRoutes(app) {
         }
 
         const profit = Number(drop.profit_amount || 0);
+        const { net: netProfit, fee: platformFee } = splitPlatformFee(profit, PLATFORM_FEE_DROP_RATE);
         const now = new Date().toISOString();
-        if (profit > 0) {
+        if (netProfit > 0) {
           const af = await getAirfarmingWalletByUserId(drop.user_id);
           const current = Number.parseFloat(String(af?.balance ?? 0)) || 0;
           await upsertAirfarmingWalletRow({
             user_id: drop.user_id,
-            balance: Math.round((current + profit) * 100) / 100,
+            balance: Math.round((current + netProfit) * 100) / 100,
             updated_at: now,
           });
           const planDate = String(drop.due_at || utcTodayYmd()).slice(0, 10);
-          await incrementAiDailyBudgetSpent(planDate, profit).catch(() => {});
+          await incrementAiDailyBudgetSpent(planDate, netProfit).catch(() => {});
+        }
+        if (platformFee > 0) {
+          await recordPlatformRevenueIfNew({
+            eventType: 'airfarming_drop',
+            userId: drop.user_id,
+            sourceId: drop.id,
+            grossAmount: profit,
+            feeRate: PLATFORM_FEE_DROP_RATE,
+            meta: { dropId: drop.id, netPaidToUser: netProfit },
+            eventAt: now,
+          }).catch((e) => console.error('[platform-revenue/drop]', e));
         }
 
         const updated = await updateAirfarmingDrop(drop.id, {
@@ -1038,6 +1056,32 @@ function registerAdminRoutes(app) {
       }
       console.error('[admin/p2p/disputed]', e);
       return res.status(500).json({ message: e.message || 'Failed to load disputed P2P trades' });
+    }
+  });
+
+  app.get('/admin/api/account/revenue', adminAuthMiddleware, async (req, res) => {
+    try {
+      const stats = await getPlatformRevenueAdminStats({
+        recentLimit: Number(req.query.recentLimit) || 80,
+      });
+      const userIds = [...new Set(stats.recent.map((r) => r.userId).filter(Boolean))];
+      const users = await getUsersByIds(userIds);
+      const emailById = new Map(users.map((u) => [u.id, u.email]));
+      stats.recent = stats.recent.map((r) => ({
+        ...r,
+        email: r.userId ? emailById.get(r.userId) || '—' : '—',
+      }));
+      return res.json(stats);
+    } catch (e) {
+      if (isMissingTableError(e) || isSchemaError(e)) {
+        return res.status(503).json({
+          message:
+            'Platform revenue schema missing. Run backend/sql/migrations/20260612_platform_revenue.sql in Supabase.',
+          schemaMissing: true,
+        });
+      }
+      console.error('[admin/account/revenue]', e);
+      return res.status(500).json({ message: e.message || 'Failed to load platform revenue' });
     }
   });
 

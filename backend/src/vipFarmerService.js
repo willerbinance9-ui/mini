@@ -18,6 +18,11 @@ const {
   vipInvestmentToApi,
   utcTodayYmd,
 } = require('./db');
+const {
+  splitPlatformFee,
+  recordPlatformRevenueIfNew,
+  PLATFORM_FEE_VIP_RATE,
+} = require('./platformRevenueService');
 
 function newId() {
   return crypto.randomUUID();
@@ -236,12 +241,14 @@ async function runVipDailyAccrual(planDate = utcTodayYmd()) {
     }
 
     const principal = roundUsd(inv.principal_usd);
-    const amount = roundUsd(principal * VIP_DAILY_RATE);
+    const grossAmount = roundUsd(principal * VIP_DAILY_RATE);
+    const { net: amount, fee: platformFee } = splitPlatformFee(grossAmount, PLATFORM_FEE_VIP_RATE);
     if (amount <= 0) {
       skipped += 1;
       continue;
     }
 
+    const accrualId = newId();
     const wallet = await getWalletByUserId(inv.user_id);
     const cash = roundUsd(wallet?.balance);
     await setWalletBalance(inv.user_id, roundUsd(cash + amount));
@@ -253,7 +260,7 @@ async function runVipDailyAccrual(planDate = utcTodayYmd()) {
     });
 
     await insertVipAccrual({
-      id: newId(),
+      id: accrualId,
       investment_id: inv.id,
       user_id: inv.user_id,
       accrual_date: planDate,
@@ -261,6 +268,18 @@ async function runVipDailyAccrual(planDate = utcTodayYmd()) {
       amount,
       created_at: new Date().toISOString(),
     });
+
+    if (platformFee > 0) {
+      await recordPlatformRevenueIfNew({
+        eventType: 'vip_accrual',
+        userId: inv.user_id,
+        sourceId: accrualId,
+        grossAmount,
+        feeRate: PLATFORM_FEE_VIP_RATE,
+        meta: { investmentId: inv.id, netPaidToUser: amount },
+        eventAt: new Date().toISOString(),
+      }).catch((e) => console.error('[platform-revenue/vip]', e));
+    }
 
     await updateVipInvestment(inv.id, {
       totalAccruedUsd: roundUsd(Number(inv.total_accrued_usd) + amount),

@@ -591,6 +591,9 @@
         <button type="button" class="nav-item" id="navVipFarmers" data-tab="vipfarmers">
           <span class="nav-icon">👑</span> VIP Farmers
         </button>
+        <button type="button" class="nav-item" data-tab="account">
+          <span class="nav-icon">💰</span> Account
+        </button>
         <button type="button" class="nav-item" data-tab="announce">
           <span class="nav-icon">📢</span> Notify
         </button>
@@ -1061,6 +1064,38 @@
           </div>
         </div>
 
+        <div id="panelAccount" class="hidden">
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Platform revenue</h3>
+            <p class="hint" style="margin-bottom:12px;">
+              Fees collected automatically: <strong>10%</strong> on approved airfarming drop payouts,
+              <strong>5%</strong> on approved withdrawals, <strong>3%</strong> on VIP daily interest (deducted before user credit on drops &amp; VIP).
+            </p>
+            <div class="stat-grid" id="accountRevenueGrid" style="max-width:1100px;margin-bottom:16px;"></div>
+            <h4 style="margin:16px 0 8px;font-size:0.9rem;">By source (all time)</h4>
+            <div class="stat-grid" id="accountRevenueByType" style="max-width:1100px;margin-bottom:16px;"></div>
+            <p id="accountRevenueStats" class="hint"></p>
+            <div id="accountRevenueLoading" class="loading hidden">Loading revenue statistics…</div>
+            <h4 style="margin:16px 0 8px;font-size:0.9rem;">Recent fee events</h4>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Type</th>
+                    <th>User</th>
+                    <th>Gross</th>
+                    <th>Fee</th>
+                    <th>User net</th>
+                  </tr>
+                </thead>
+                <tbody id="accountRevenueRows"></tbody>
+              </table>
+            </div>
+            <p id="accountRevenueErr" class="err hidden"></p>
+          </div>
+        </div>
+
         <div id="panelAnnounce" class="hidden">
           <div class="card">
             <h3 style="margin:0 0 8px;font-size:1rem;">In-app announcement</h3>
@@ -1374,6 +1409,7 @@
       tiers: 'Drop tiers',
       drops: 'Airfarming drops',
       vipfarmers: 'VIP Farmers',
+      account: 'Account',
       announce: 'Announce & notify',
     };
     let drops = [];
@@ -1539,6 +1575,7 @@
       document.getElementById('panelTiers').classList.toggle('hidden', tab !== 'tiers');
       document.getElementById('panelDrops').classList.toggle('hidden', tab !== 'drops');
       document.getElementById('panelVipFarmers').classList.toggle('hidden', tab !== 'vipfarmers');
+      document.getElementById('panelAccount').classList.toggle('hidden', tab !== 'account');
       document.getElementById('panelAnnounce').classList.toggle('hidden', tab !== 'announce');
       document.getElementById('pageTitle').textContent = PAGE_TITLES[tab] || 'Admin';
       closeSidebar();
@@ -1550,6 +1587,7 @@
         else if (tab === 'tiers') showTiersErr(e);
         else if (tab === 'drops') showDropsErr(e);
         else if (tab === 'vipfarmers') showVipErr(e);
+        else if (tab === 'account') showAccountRevenueErr(e);
         else if (tab === 'announce') {
           document.getElementById('announceErr').textContent = e.message;
           document.getElementById('announceErr').classList.remove('hidden');
@@ -3060,7 +3098,106 @@
       else if (activeTab === 'tiers') await loadTiers();
       else if (activeTab === 'drops') await loadDrops();
       else if (activeTab === 'vipfarmers') await loadVipFarmers();
+      else if (activeTab === 'account') await loadAccountRevenue();
       else if (activeTab === 'announce') await loadAnnouncements();
+    }
+
+    const REVENUE_TYPE_LABELS = {
+      airfarming_drop: 'Drop payout',
+      withdrawal: 'Withdrawal',
+      vip_accrual: 'VIP interest',
+    };
+
+    function showAccountRevenueErr(e) {
+      document.getElementById('accountRevenueErr').textContent = e.message;
+      document.getElementById('accountRevenueErr').classList.remove('hidden');
+    }
+
+    function renderAccountRevenueBucket(gridEl, bucket, label) {
+      if (!bucket) return '';
+      return (
+        '<div class="stat"><div class="val">' +
+        fmtMoney(bucket.feeUsd) +
+        '</div><div class="lbl">' +
+        escapeHtml(label) +
+        '<br><span style="font-size:0.65rem;color:var(--muted);">' +
+        bucket.count +
+        ' events · gross ' +
+        fmtMoney(bucket.grossUsd) +
+        '</span></div></div>'
+      );
+    }
+
+    function renderAccountRevenue(data) {
+      const s = data.summary || {};
+      const rates = data.rates || {};
+      document.getElementById('accountRevenueGrid').innerHTML =
+        renderAccountRevenueBucket(s.today, 'Fees today (UTC)') +
+        renderAccountRevenueBucket(s.month, 'Fees this month') +
+        renderAccountRevenueBucket(s.all, 'Fees all time') +
+        '<div class="stat"><div class="val">' +
+        Math.round((rates.airfarmingDrop || 0.1) * 100) +
+        '% / ' +
+        Math.round((rates.withdrawal || 0.05) * 100) +
+        '% / ' +
+        Math.round((rates.vipAccrual || 0.03) * 100) +
+        '%</div><div class="lbl">Rates (drop / withdraw / VIP)</div></div>';
+
+      const by = s.byType || {};
+      document.getElementById('accountRevenueByType').innerHTML =
+        renderAccountRevenueBucket(by.airfarming_drop, 'Drop payouts (10%)') +
+        renderAccountRevenueBucket(by.withdrawal, 'Withdrawals (5%)') +
+        renderAccountRevenueBucket(by.vip_accrual, 'VIP interest (3%)');
+
+      document.getElementById('accountRevenueStats').textContent =
+        (data.recent || []).length + ' recent events loaded · platform keeps fees on approved payouts';
+
+      const tbody = document.getElementById('accountRevenueRows');
+      tbody.innerHTML = '';
+      const recent = data.recent || [];
+      if (!recent.length) {
+        tbody.innerHTML =
+          '<tr><td colspan="6" style="color:var(--muted);">No fee events yet. Run migration 20260612_platform_revenue.sql if schema errors appear.</td></tr>';
+        return;
+      }
+      recent.forEach((ev) => {
+        const tr = document.createElement('tr');
+        const typeLabel = REVENUE_TYPE_LABELS[ev.eventType] || ev.eventType;
+        const ratePct = Math.round(Number(ev.feeRate || 0) * 1000) / 10;
+        tr.innerHTML =
+          '<td>' +
+          new Date(ev.eventAt).toLocaleString() +
+          '</td><td>' +
+          escapeHtml(typeLabel) +
+          '<br><span style="color:var(--muted);font-size:0.7rem;">' +
+          ratePct +
+          '%</span></td><td>' +
+          escapeHtml(ev.email || '—') +
+          '</td><td>' +
+          fmtMoney(ev.grossAmount) +
+          '</td><td><strong>' +
+          fmtMoney(ev.feeAmount) +
+          '</strong></td><td>' +
+          fmtMoney(ev.netAmount) +
+          '</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadAccountRevenue() {
+      document.getElementById('accountRevenueErr').classList.add('hidden');
+      document.getElementById('accountRevenueLoading').classList.remove('hidden');
+      try {
+        const data = await api('/admin/api/account/revenue');
+        renderAccountRevenue(data);
+      } catch (e) {
+        document.getElementById('accountRevenueGrid').innerHTML = '';
+        document.getElementById('accountRevenueByType').innerHTML = '';
+        document.getElementById('accountRevenueRows').innerHTML = '';
+        showAccountRevenueErr(e);
+      } finally {
+        document.getElementById('accountRevenueLoading').classList.add('hidden');
+      }
     }
 
     let vipMembers = [];

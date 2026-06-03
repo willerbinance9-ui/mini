@@ -3239,6 +3239,54 @@ async function listVipAccrualsForInvestmentIds(investmentIds) {
   return data || [];
 }
 
+async function getPlatformRevenueEventBySource(eventType, sourceId) {
+  const { data, error } = await supabase
+    .from('platform_revenue_events')
+    .select('*')
+    .eq('event_type', eventType)
+    .eq('source_id', String(sourceId))
+    .maybeSingle();
+  if (error && isSchemaError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function insertPlatformRevenueEvent(row) {
+  const payload = {
+    id: row.id || id(),
+    event_type: row.event_type,
+    user_id: row.user_id || null,
+    source_id: String(row.source_id),
+    gross_amount: roundWalletUsd(row.gross_amount),
+    fee_rate: Number(row.fee_rate),
+    fee_amount: roundWalletUsd(row.fee_amount),
+    net_amount: roundWalletUsd(row.net_amount),
+    currency: row.currency || 'USD',
+    meta: row.meta || null,
+    event_at: row.event_at || new Date().toISOString(),
+    created_at: new Date().toISOString(),
+  };
+  const { data, error } = await supabase.from('platform_revenue_events').insert(payload).select('*').single();
+  if (error?.code === '23505') {
+    return getPlatformRevenueEventBySource(row.event_type, row.source_id);
+  }
+  if (error && isSchemaError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function listPlatformRevenueEventsAdmin({ limit = 10000 } = {}) {
+  const cap = Math.min(10000, Math.max(1, Number(limit) || 10000));
+  const { data, error } = await supabase
+    .from('platform_revenue_events')
+    .select('*')
+    .order('event_at', { ascending: false })
+    .limit(cap);
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
 function userDropScheduleRowToApi(row) {
   if (!row) return null;
   return {
@@ -3558,6 +3606,9 @@ module.exports = {
   listVipAccrualsForUserOnDate,
   listVipInvestmentsAdmin,
   listVipAccrualsForInvestmentIds,
+  getPlatformRevenueEventBySource,
+  insertPlatformRevenueEvent,
+  listPlatformRevenueEventsAdmin,
   listPaidAirfarmingDropsForUserBetween,
   listContractAccrualsForUserBetween,
   listContractAccrualsForUserOnDate,
