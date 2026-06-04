@@ -4,6 +4,7 @@ import { MainTabNavigator } from './MainTabNavigator';
 import { P2PStackNavigator } from './P2PStackNavigator';
 import { AirfarmingTradeScreen } from '../screens/AirfarmingTradeScreen';
 import { VipFarmersTradeScreen } from '../screens/VipFarmersTradeScreen';
+import { ExpertAutoTradingScreen } from '../screens/ExpertAutoTradingScreen';
 import { LiveTradingScreen } from '../screens/LiveTradingScreen';
 import { LiveTradingCreateBotScreen } from '../screens/LiveTradingCreateBotScreen';
 import { LiveTradingCreateSetupScreen } from '../screens/LiveTradingCreateSetupScreen';
