@@ -28,6 +28,11 @@ export type MarketPriceRow = {
   ask: number;
   digits: number;
   spread: number;
+  dayHigh?: number | null;
+  dayLow?: number | null;
+  dayOpen?: number | null;
+  changePts?: number | null;
+  changePct?: number | null;
   updatedAt: string;
 };
 

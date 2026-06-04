@@ -19,12 +19,26 @@ assert(bot === 'synthetix_ea', 'bot normalize');
 
 const batch = normalizePriceBatch({
   prices: [
-    { symbol: 'eurusd', bid: 1.08, ask: 1.0802, digits: 5 },
+    { symbol: 'eurusd', bid: 1.08, ask: 1.0802, digits: 5, dayOpen: 1.07, dayHigh: 1.09, dayLow: 1.06 },
     { symbol: 'EURUSD', bid: 1.08, ask: 1.08, digits: 5 },
     { symbol: 'BAD', bid: -1, ask: 1 },
   ],
 });
 assert(batch.length === 1, 'dedupe and validate prices');
 assert(batch[0].symbol === 'EURUSD', 'uppercase symbol');
+assert(batch[0].dayOpen === 1.07, 'day open parsed');
+
+const { mapPriceRowForApi } = require('./priceFeedNormalize');
+const mapped = mapPriceRowForApi({
+  symbol: 'EURUSD',
+  bid: 1.08,
+  ask: 1.0802,
+  digits: 5,
+  day_open: 1.07,
+  day_high: 1.09,
+  day_low: 1.06,
+  updated_at: new Date().toISOString(),
+});
+assert(mapped.changePct != null && mapped.changePct > 0, 'change percent computed');
 
 console.log('liveTrading tests passed');

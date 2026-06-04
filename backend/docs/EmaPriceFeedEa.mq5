@@ -12,7 +12,7 @@ input string InpApiBase =
    "https://your-backend.onrender.com";   // No trailing slash; must be https
 input string InpPriceFeedSecret =
    "";                                     // MT5_PRICE_FEED_SECRET from backend env
-input int    InpIntervalSeconds  = 3;     // POST interval
+input int    InpIntervalSeconds  = 1;     // POST interval (1 = every second)
 input string InpSymbolList       =
    "";                                     // Optional comma list; empty = all Market Watch
 
@@ -122,13 +122,24 @@ bool PostPriceBatch(const string api_base)
       if(bid <= 0 || ask <= 0 || ask < bid)
          continue;
       int dg = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+      datetime bar_time = iTime(sym, PERIOD_D1, 0);
+      double day_open = (bar_time > 0) ? iOpen(sym, PERIOD_D1, 0) : 0;
+      double day_high = (bar_time > 0) ? iHigh(sym, PERIOD_D1, 0) : 0;
+      double day_low  = (bar_time > 0) ? iLow(sym, PERIOD_D1, 0) : 0;
       if(!first)
          body += ",";
       first = false;
       body += "{\"symbol\":\"" + JsonEscape(sym) + "\",";
       body += "\"bid\":" + DoubleToString(bid, dg) + ",";
       body += "\"ask\":" + DoubleToString(ask, dg) + ",";
-      body += "\"digits\":" + IntegerToString(dg) + "}";
+      body += "\"digits\":" + IntegerToString(dg);
+      if(day_open > 0)
+         body += ",\"dayOpen\":" + DoubleToString(day_open, dg);
+      if(day_high > 0)
+         body += ",\"dayHigh\":" + DoubleToString(day_high, dg);
+      if(day_low > 0)
+         body += ",\"dayLow\":" + DoubleToString(day_low, dg);
+      body += "}";
    }
    body += "]}";
    if(first)

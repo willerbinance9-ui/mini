@@ -15,6 +15,7 @@ const {
   isMissingTableError,
 } = require('./db');
 const { ensureMetaApiAccount } = require('./services/mt5Client');
+const { mapPriceRowForApi } = require('./services/priceFeedNormalize');
 const {
   validateTradingPassword,
   validateAccountName,
@@ -242,14 +243,7 @@ function registerLiveTradingRoutes(app, { authMiddleware }) {
       const prices = await listMarketPrices({ search, limit });
       const lastUpdated = await getLatestMarketPriceUpdate();
       return res.json({
-        prices: prices.map((p) => ({
-          symbol: p.symbol,
-          bid: Number(p.bid),
-          ask: Number(p.ask),
-          digits: Number(p.digits || 5),
-          spread: Math.round((Number(p.ask) - Number(p.bid)) * Math.pow(10, Number(p.digits || 5))) / Math.pow(10, Number(p.digits || 5)),
-          updatedAt: p.updated_at,
-        })),
+        prices: prices.map(mapPriceRowForApi),
         lastUpdated,
         count: prices.length,
       });

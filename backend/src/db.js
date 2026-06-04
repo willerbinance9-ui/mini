@@ -1666,6 +1666,9 @@ async function upsertMarketPricesBatch(rows) {
     bid: r.bid,
     ask: r.ask,
     digits: r.digits,
+    day_high: r.dayHigh ?? null,
+    day_low: r.dayLow ?? null,
+    day_open: r.dayOpen ?? null,
     updated_at: now,
   }));
   const { data, error } = await supabase.from('market_prices').upsert(payload, { onConflict: 'symbol' }).select('symbol');

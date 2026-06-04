@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,6 +12,7 @@ import {
 } from 'react-native';
 import { RouteProp, useFocusEffect, useRoute } from '@react-navigation/native';
 import { Card } from '../components/Card';
+import { QuoteRow } from '../components/QuoteRow';
 import { usePolling } from '../hooks/usePolling';
 import { liveTradingService, type LiveTradingAccount, type MarketPriceRow } from '../services/liveTradingService';
 import { mt5Service } from '../services/mt5Service';
@@ -20,6 +22,7 @@ import { withTimeout } from '../utils/withTimeout';
 
 type Tab = 'prices' | 'trades' | 'history';
 type Route = RouteProp<RootStackParamList, 'LiveTradingAccount'>;
+type TickDir = 'up' | 'down' | 'flat';
 
 function formatTime(iso: string | null | undefined) {
   if (!iso) return '—';
@@ -35,6 +38,13 @@ function sideLabel(type: string | undefined) {
   return type || '—';
 }
 
+function tickDir(prev: number | undefined, next: number): TickDir {
+  if (prev == null || !Number.isFinite(prev)) return 'flat';
+  if (next > prev) return 'up';
+  if (next < prev) return 'down';
+  return 'flat';
+}
+
 export function LiveTradingAccountScreen() {
   const route = useRoute<Route>();
   const accountId = route.params.accountId;
@@ -48,6 +58,9 @@ export function LiveTradingAccountScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingTab, setLoadingTab] = useState(false);
   const [lastPriceUpdate, setLastPriceUpdate] = useState<string | null>(null);
+  const [tickDirs, setTickDirs] = useState<Record<string, { bid: TickDir; ask: TickDir }>>({});
+
+  const prevQuotesRef = useRef<Record<string, { bid: number; ask: number }>>({});
 
   const loadSummary = useCallback(async () => {
     const s = await withTimeout(liveTradingService.getSummary(accountId), 10000, 'Account');
@@ -56,7 +69,18 @@ export function LiveTradingAccountScreen() {
 
   const loadPrices = useCallback(async () => {
     const data = await liveTradingService.listPrices(priceSearch.trim() || undefined);
-    setPrices(data.prices || []);
+    const rows = data.prices || [];
+    const dirs: Record<string, { bid: TickDir; ask: TickDir }> = {};
+    for (const row of rows) {
+      const prev = prevQuotesRef.current[row.symbol];
+      dirs[row.symbol] = {
+        bid: tickDir(prev?.bid, row.bid),
+        ask: tickDir(prev?.ask, row.ask),
+      };
+      prevQuotesRef.current[row.symbol] = { bid: row.bid, ask: row.ask };
+    }
+    setTickDirs(dirs);
+    setPrices(rows);
     setLastPriceUpdate(data.lastUpdated);
   }, [priceSearch]);
 
@@ -92,7 +116,7 @@ export function LiveTradingAccountScreen() {
     () => {
       loadPrices().catch(() => {});
     },
-    3000,
+    1000,
     tab === 'prices'
   );
 
@@ -105,6 +129,14 @@ export function LiveTradingAccountScreen() {
       setRefreshing(false);
     }
   };
+
+  const renderQuoteItem = useCallback(
+    ({ item }: { item: MarketPriceRow }) => {
+      const dir = tickDirs[item.symbol];
+      return <QuoteRow row={item} bidDir={dir?.bid} askDir={dir?.ask} />;
+    },
+    [tickDirs]
+  );
 
   return (
     <View style={styles.root}>
@@ -138,81 +170,88 @@ export function LiveTradingAccountScreen() {
         ))}
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={palette.primary} />}
-      >
-        {tab === 'prices' ? (
-          <>
-            <TextInput
-              style={styles.search}
-              value={priceSearch}
-              onChangeText={setPriceSearch}
-              onSubmitEditing={() => void loadPrices()}
-              placeholder='Search symbol'
-              placeholderTextColor={palette.textSecondary}
-            />
-            {lastPriceUpdate ? (
-              <Text style={styles.meta}>Last feed update {formatTime(lastPriceUpdate)}</Text>
-            ) : (
-              <Text style={styles.meta}>Waiting for price feed from server EA…</Text>
-            )}
-            {prices.map((p) => (
-              <Card key={p.symbol} style={styles.rowCard}>
-                <View style={styles.priceRow}>
+      {tab === 'prices' ? (
+        <View style={styles.pricesPane}>
+          <View style={styles.quotesHeader}>
+            <Text style={styles.quotesTitle}>Quotes</Text>
+            <Text style={styles.quotesMeta}>
+              {lastPriceUpdate ? formatTime(lastPriceUpdate) : 'Waiting for feed…'}
+            </Text>
+          </View>
+          <TextInput
+            style={styles.search}
+            value={priceSearch}
+            onChangeText={setPriceSearch}
+            onSubmitEditing={() => void loadPrices()}
+            placeholder='Search symbol'
+            placeholderTextColor={palette.textSecondary}
+          />
+          <FlatList
+            data={prices}
+            keyExtractor={(item) => item.symbol}
+            renderItem={renderQuoteItem}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={palette.primary} />
+            }
+            ListEmptyComponent={
+              loadingTab ? (
+                <ActivityIndicator color={palette.primary} style={{ marginVertical: 24 }} />
+              ) : (
+                <Text style={styles.emptyMeta}>No prices yet. Run EmaPriceFeedEa on MT5 (1s interval).</Text>
+              )
+            }
+            contentContainerStyle={prices.length === 0 ? styles.emptyList : undefined}
+            initialNumToRender={20}
+            windowSize={8}
+            removeClippedSubviews
+          />
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={palette.primary} />
+          }
+        >
+          {tab === 'trades' ? (
+            <>
+              {loadingTab ? <ActivityIndicator color={palette.primary} style={{ marginVertical: 16 }} /> : null}
+              {positions.map((p) => (
+                <Card key={p.id} style={styles.rowCard}>
                   <Text style={styles.symbol}>{p.symbol}</Text>
-                  <View style={styles.quoteCol}>
-                    <Text style={styles.bid}>{p.bid.toFixed(p.digits)}</Text>
-                    <Text style={styles.ask}>{p.ask.toFixed(p.digits)}</Text>
-                  </View>
-                  <Text style={styles.spread}>{p.spread.toFixed(Math.min(p.digits, 5))}</Text>
-                </View>
-              </Card>
-            ))}
-            {!prices.length && !loadingTab ? (
-              <Text style={styles.meta}>No prices yet. Attach EmaPriceFeedEa.mq5 on your MT5 server.</Text>
-            ) : null}
-          </>
-        ) : null}
+                  <Text style={styles.meta}>
+                    {sideLabel(p.type)} · {p.volume} lots · Open {p.openPrice ?? '—'} · Now {p.currentPrice ?? '—'}
+                  </Text>
+                  <Text style={[styles.pl, (p.profit ?? 0) >= 0 ? styles.plUp : styles.plDown]}>
+                    P/L ${Number(p.profit ?? 0).toFixed(2)}
+                  </Text>
+                </Card>
+              ))}
+              {!positions.length && !loadingTab ? (
+                <Text style={styles.meta}>No open trades. Connect MetaApi for live positions.</Text>
+              ) : null}
+            </>
+          ) : null}
 
-        {tab === 'trades' ? (
-          <>
-            {loadingTab ? <ActivityIndicator color={palette.primary} style={{ marginVertical: 16 }} /> : null}
-            {positions.map((p) => (
-              <Card key={p.id} style={styles.rowCard}>
-                <Text style={styles.symbol}>{p.symbol}</Text>
-                <Text style={styles.meta}>
-                  {sideLabel(p.type)} · {p.volume} lots · Open {p.openPrice ?? '—'} · Now {p.currentPrice ?? '—'}
-                </Text>
-                <Text style={[styles.pl, (p.profit ?? 0) >= 0 ? styles.plUp : styles.plDown]}>
-                  P/L ${Number(p.profit ?? 0).toFixed(2)}
-                </Text>
-              </Card>
-            ))}
-            {!positions.length && !loadingTab ? (
-              <Text style={styles.meta}>No open trades. Connect MetaApi for live positions.</Text>
-            ) : null}
-          </>
-        ) : null}
-
-        {tab === 'history' ? (
-          <>
-            {loadingTab ? <ActivityIndicator color={palette.primary} style={{ marginVertical: 16 }} /> : null}
-            {history.map((d) => (
-              <Card key={d.id} style={styles.rowCard}>
-                <Text style={styles.symbol}>{d.symbol || '—'}</Text>
-                <Text style={styles.meta}>
-                  {sideLabel(d.type)} · {formatTime(d.time)} · Vol {d.volume ?? '—'}
-                </Text>
-                <Text style={[styles.pl, (d.profit ?? 0) >= 0 ? styles.plUp : styles.plDown]}>
-                  ${Number(d.profit ?? 0).toFixed(2)}
-                </Text>
-              </Card>
-            ))}
-            {!history.length && !loadingTab ? <Text style={styles.meta}>No closed trades in the last 30 days.</Text> : null}
-          </>
-        ) : null}
-      </ScrollView>
+          {tab === 'history' ? (
+            <>
+              {loadingTab ? <ActivityIndicator color={palette.primary} style={{ marginVertical: 16 }} /> : null}
+              {history.map((d) => (
+                <Card key={d.id} style={styles.rowCard}>
+                  <Text style={styles.symbol}>{d.symbol || '—'}</Text>
+                  <Text style={styles.meta}>
+                    {sideLabel(d.type)} · {formatTime(d.time)} · Vol {d.volume ?? '—'}
+                  </Text>
+                  <Text style={[styles.pl, (d.profit ?? 0) >= 0 ? styles.plUp : styles.plDown]}>
+                    ${Number(d.profit ?? 0).toFixed(2)}
+                  </Text>
+                </Card>
+              ))}
+              {!history.length && !loadingTab ? <Text style={styles.meta}>No closed trades in the last 30 days.</Text> : null}
+            </>
+          ) : null}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -235,25 +274,33 @@ const styles = StyleSheet.create({
   tabActive: { borderColor: palette.primary, backgroundColor: palette.surfaceElevated },
   tabText: { color: palette.textSecondary, fontSize: 13, fontWeight: '600' },
   tabTextActive: { color: palette.primary },
-  scroll: { padding: 16, paddingTop: 0, paddingBottom: 32 },
+  pricesPane: { flex: 1 },
+  quotesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  quotesTitle: { fontSize: 18, fontWeight: '700', color: palette.textPrimary },
+  quotesMeta: { fontSize: 11, color: palette.textSecondary },
   search: {
+    marginHorizontal: 16,
+    marginBottom: 8,
     backgroundColor: palette.surfaceElevated,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: palette.border,
     color: palette.textPrimary,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    marginBottom: 10,
   },
+  emptyList: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+  emptyMeta: { color: palette.textSecondary, fontSize: 13, textAlign: 'center' },
+  scroll: { padding: 16, paddingTop: 0, paddingBottom: 32 },
   meta: { color: palette.textSecondary, fontSize: 12, marginBottom: 10 },
   rowCard: { marginBottom: 8 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  symbol: { flex: 1, fontSize: 16, fontWeight: '800', color: palette.textPrimary },
-  quoteCol: { alignItems: 'flex-end' },
-  bid: { color: palette.success, fontWeight: '700', fontSize: 14 },
-  ask: { color: palette.danger, fontWeight: '700', fontSize: 14 },
-  spread: { width: 56, textAlign: 'right', color: palette.textSecondary, fontSize: 12 },
+  symbol: { fontSize: 16, fontWeight: '800', color: palette.textPrimary },
   pl: { marginTop: 6, fontWeight: '800', fontSize: 15 },
   plUp: { color: palette.success },
   plDown: { color: palette.danger },

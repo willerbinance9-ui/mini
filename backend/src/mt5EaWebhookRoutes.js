@@ -71,7 +71,7 @@ function priceFeedRateOk(req) {
   const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
   const now = Date.now();
   const last = priceFeedLastByIp.get(ip) || 0;
-  if (now - last < 900) return false;
+  if (now - last < 400) return false;
   priceFeedLastByIp.set(ip, now);
   return true;
 }
