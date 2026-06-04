@@ -171,16 +171,8 @@ export function LiveTradingScreen() {
                   <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={palette.textSecondary} />
                 </View>
                 <View style={styles.balanceRow}>
-                  <View>
-                    <Text style={styles.statLabel}>App balance</Text>
-                    <Text style={styles.statValue}>${Math.floor(acc.internalBalance).toLocaleString()}</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.statLabel}>MT5 equity</Text>
-                    <Text style={styles.statValue}>
-                      {acc.cachedEquity != null ? `$${Math.floor(acc.cachedEquity).toLocaleString()}` : '—'}
-                    </Text>
-                  </View>
+                  <Text style={styles.statLabel}>Balance</Text>
+                  <Text style={styles.statValue}>${Math.floor(acc.internalBalance).toLocaleString()}</Text>
                 </View>
               </Pressable>
 
@@ -252,7 +244,7 @@ export function LiveTradingScreen() {
         }
       >
         <Text style={styles.meta}>
-          {activeAccount?.accountName} · App balance ${Math.floor(activeAccount?.internalBalance || 0).toLocaleString()}
+          {activeAccount?.accountName} · Balance ${Math.floor(activeAccount?.internalBalance || 0).toLocaleString()}
         </Text>
         <TextInput
           style={inputStyle}
@@ -276,7 +268,7 @@ const styles = StyleSheet.create({
   accountCard: { marginBottom: 12 },
   accountHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   accountName: { fontSize: 17, fontWeight: '800', color: palette.textPrimary },
-  balanceRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  balanceRow: { marginTop: 4 },
   statLabel: { fontSize: 11, color: palette.textSecondary, marginBottom: 2 },
   statValue: { fontSize: 20, fontWeight: '800', color: palette.textPrimary },
   expanded: { marginTop: 14, borderTopWidth: 1, borderTopColor: palette.border, paddingTop: 12, gap: 8 },

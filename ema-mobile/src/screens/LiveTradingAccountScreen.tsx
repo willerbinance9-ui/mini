@@ -144,7 +144,7 @@ export function LiveTradingAccountScreen() {
         <Card style={styles.headerCard}>
           <Text style={styles.headerTitle}>{account.accountName || 'Live account'}</Text>
           <Text style={styles.headerMeta}>
-            {account.botLabel} · #{account.login} · App ${Math.floor(account.internalBalance).toLocaleString()}
+            {account.botLabel} · #{account.login} · ${Math.floor(account.internalBalance).toLocaleString()}
           </Text>
         </Card>
       ) : null}
