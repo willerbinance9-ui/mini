@@ -1666,6 +1666,81 @@ async function insertLiveTradingTransfer(row) {
   return data;
 }
 
+async function listAllPlatformLiveTradingAccountsAdmin() {
+  const { data, error } = await supabase
+    .from('mt5_accounts')
+    .select('*')
+    .eq('is_platform_provisioned', true)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  const accounts = data || [];
+  if (!accounts.length) return [];
+
+  const ids = accounts.map((a) => a.id);
+  const userIds = [...new Set(accounts.map((a) => a.user_id))];
+
+  const [{ data: wallets }, { data: users }] = await Promise.all([
+    supabase.from('live_trading_wallets').select('*').in('mt5_account_id', ids),
+    supabase.from('users').select('id, email').in('id', userIds),
+  ]);
+
+  const walletMap = Object.fromEntries((wallets || []).map((w) => [w.mt5_account_id, w]));
+  const userMap = Object.fromEntries((users || []).map((u) => [u.id, u]));
+
+  return accounts.map((acc) => ({
+    ...acc,
+    user_email: userMap[acc.user_id]?.email || '',
+    live_wallet: walletMap[acc.id] || null,
+  }));
+}
+
+async function sumLiveTradingDepositsByAccountIds(accountIds) {
+  const map = {};
+  if (!accountIds?.length) return map;
+  const { data, error } = await supabase
+    .from('live_trading_transfers')
+    .select('mt5_account_id, amount')
+    .in('mt5_account_id', accountIds)
+    .eq('direction', 'to_live');
+  if (error) throw error;
+  for (const row of data || []) {
+    const id = row.mt5_account_id;
+    map[id] = (map[id] || 0) + (Number(row.amount) || 0);
+  }
+  return map;
+}
+
+async function listRecentLiveTradingTransfers(limit = 50) {
+  const cap = Math.min(100, Math.max(1, Number(limit) || 50));
+  const { data, error } = await supabase
+    .from('live_trading_transfers')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(cap);
+  if (error) throw error;
+  const transfers = data || [];
+  if (!transfers.length) return [];
+
+  const accountIds = [...new Set(transfers.map((t) => t.mt5_account_id))];
+  const userIds = [...new Set(transfers.map((t) => t.user_id))];
+
+  const [{ data: accounts }, { data: users }] = await Promise.all([
+    supabase.from('mt5_accounts').select('id, account_name, login, bot_type').in('id', accountIds),
+    supabase.from('users').select('id, email').in('id', userIds),
+  ]);
+
+  const accMap = Object.fromEntries((accounts || []).map((a) => [a.id, a]));
+  const userMap = Object.fromEntries((users || []).map((u) => [u.id, u]));
+
+  return transfers.map((t) => ({
+    ...t,
+    account_name: accMap[t.mt5_account_id]?.account_name || '',
+    login: accMap[t.mt5_account_id]?.login || '',
+    bot_type: accMap[t.mt5_account_id]?.bot_type || null,
+    user_email: userMap[t.user_id]?.email || '',
+  }));
+}
+
 async function listMarketPrices({ search, limit = 200 } = {}) {
   const cap = Math.min(500, Math.max(1, Number(limit) || 200));
   let q = supabase.from('market_prices').select('*').order('symbol', { ascending: true }).limit(cap);
@@ -3849,6 +3924,9 @@ module.exports = {
   ensureLiveTradingWalletRow,
   upsertLiveTradingWalletBalance,
   insertLiveTradingTransfer,
+  listAllPlatformLiveTradingAccountsAdmin,
+  sumLiveTradingDepositsByAccountIds,
+  listRecentLiveTradingTransfers,
   listMarketPrices,
   upsertMarketPricesBatch,
   getLatestMarketPriceUpdate,

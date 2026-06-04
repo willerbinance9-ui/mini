@@ -37,6 +37,19 @@ function useMt5Bridge(account) {
   return Boolean(account?.is_platform_provisioned) || bridgeSnapshotFresh(account);
 }
 
+function sumOpenProfit(account) {
+  if (!bridgeSnapshotFresh(account)) return 0;
+  const positions = positionsFromAccountRow(account);
+  return positions.reduce((sum, p) => sum + (Number(p.profit) || 0), 0);
+}
+
+function computeLiveBalances(account, wallet) {
+  const depositedBalance = Number(wallet?.balance || 0);
+  const openProfit = Math.round(sumOpenProfit(account) * 100) / 100;
+  const displayBalance = Math.round((depositedBalance + openProfit) * 100) / 100;
+  return { depositedBalance, openProfit, displayBalance };
+}
+
 async function enqueueClosePositionCommand(insertMt5EaCommand, accountId, positionTicket) {
   const ticket = Number(positionTicket);
   if (!Number.isFinite(ticket) || ticket <= 0) {
@@ -62,5 +75,7 @@ module.exports = {
   positionsFromAccountRow,
   bridgeSnapshotFresh,
   useMt5Bridge,
+  sumOpenProfit,
+  computeLiveBalances,
   enqueueClosePositionCommand,
 };

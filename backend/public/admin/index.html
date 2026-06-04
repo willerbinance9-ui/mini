@@ -652,6 +652,9 @@
         <button type="button" class="nav-item" id="navVipFarmers" data-tab="vipfarmers">
           <span class="nav-icon">👑</span> VIP Farmers
         </button>
+        <button type="button" class="nav-item superadmin-only" data-tab="livetrading">
+          <span class="nav-icon">📈</span> Live trading
+        </button>
         <button type="button" class="nav-item" data-tab="levels">
           <span class="nav-icon">🎚</span> Levels
         </button>
@@ -1163,6 +1166,57 @@
           </div>
         </div>
 
+        <div id="panelLiveTrading" class="hidden superadmin-only">
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Live trading overview</h3>
+            <p class="hint" style="margin-bottom:12px;">
+              Platform-provisioned live accounts: deposits to bots, wallet balances, open positions, and recent transfers.
+            </p>
+            <div style="flex:0;margin-bottom:12px;">
+              <button type="button" class="btn-primary" id="refreshLiveTradingBtn" style="width:auto;">Refresh</button>
+            </div>
+            <div class="stat-grid" id="liveTradingSummaryGrid" style="max-width:960px;margin-bottom:16px;"></div>
+            <p id="liveTradingStats" class="hint"></p>
+            <div id="liveTradingLoading" class="loading hidden">Loading live trading…</div>
+            <h4 style="margin:16px 0 8px;font-size:0.95rem;">Accounts</h4>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Account</th>
+                    <th>Bot</th>
+                    <th>Login</th>
+                    <th>Total deposited</th>
+                    <th>Wallet</th>
+                    <th>Open P&amp;L</th>
+                    <th>Display balance</th>
+                    <th>Positions</th>
+                    <th>Last activity</th>
+                  </tr>
+                </thead>
+                <tbody id="liveTradingAccountRows"></tbody>
+              </table>
+            </div>
+            <h4 style="margin:20px 0 8px;font-size:0.95rem;">Recent activity</h4>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>User</th>
+                    <th>Account</th>
+                    <th>Direction</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody id="liveTradingActivityRows"></tbody>
+              </table>
+            </div>
+            <p id="liveTradingErr" class="err hidden"></p>
+          </div>
+        </div>
+
         <div id="panelLevels" class="hidden">
           <div class="card">
             <h3 style="margin:0 0 8px;font-size:1rem;">Withdrawal levels</h3>
@@ -1550,6 +1604,7 @@
       tiers: 'Drop tiers',
       drops: 'Airfarming drops',
       vipfarmers: 'VIP Farmers',
+      livetrading: 'Live trading',
       levels: 'Levels',
       account: 'Account',
       announce: 'Announce & notify',
@@ -1717,6 +1772,7 @@
       document.getElementById('panelTiers').classList.toggle('hidden', tab !== 'tiers');
       document.getElementById('panelDrops').classList.toggle('hidden', tab !== 'drops');
       document.getElementById('panelVipFarmers').classList.toggle('hidden', tab !== 'vipfarmers');
+      document.getElementById('panelLiveTrading').classList.toggle('hidden', tab !== 'livetrading');
       document.getElementById('panelLevels').classList.toggle('hidden', tab !== 'levels');
       document.getElementById('panelAccount').classList.toggle('hidden', tab !== 'account');
       document.getElementById('panelAnnounce').classList.toggle('hidden', tab !== 'announce');
@@ -1730,6 +1786,7 @@
         else if (tab === 'tiers') showTiersErr(e);
         else if (tab === 'drops') showDropsErr(e);
         else if (tab === 'vipfarmers') showVipErr(e);
+        else if (tab === 'livetrading') showLiveTradingErr(e);
         else if (tab === 'levels') showLevelsErr(e);
         else if (tab === 'account') showAccountRevenueErr(e);
         else if (tab === 'announce') {
@@ -3362,6 +3419,7 @@
       else if (activeTab === 'tiers') await loadTiers();
       else if (activeTab === 'drops') await loadDrops();
       else if (activeTab === 'vipfarmers') await loadVipFarmers();
+      else if (activeTab === 'livetrading') await loadLiveTrading();
       else if (activeTab === 'levels') await loadLevels();
       else if (activeTab === 'account') await loadAccountRevenue();
       else if (activeTab === 'announce') await loadAnnouncements();
@@ -3707,6 +3765,144 @@
       }
     }
 
+    function showLiveTradingErr(e) {
+      document.getElementById('liveTradingErr').textContent = e.message;
+      document.getElementById('liveTradingErr').classList.remove('hidden');
+    }
+
+    function renderLiveTradingSummary(summary) {
+      const grid = document.getElementById('liveTradingSummaryGrid');
+      if (!summary) {
+        grid.innerHTML = '';
+        return;
+      }
+      const cards = [
+        ['Enrolled users', summary.enrolledUsers],
+        ['Live accounts', summary.accountCount],
+        ['Total deposited', fmtMoney(summary.totalDeposited)],
+        ['Wallet balances', fmtMoney(summary.totalWalletBalance)],
+        ['Open P&amp;L', fmtMoney(summary.totalOpenProfit)],
+      ];
+      grid.innerHTML = cards
+        .map(
+          ([label, val]) =>
+            '<div class="stat-card"><div class="stat-label">' +
+            label +
+            '</div><div class="stat-value">' +
+            escapeHtml(String(val)) +
+            '</div></div>'
+        )
+        .join('');
+    }
+
+    function renderLiveTradingTables(data) {
+      const accBody = document.getElementById('liveTradingAccountRows');
+      accBody.innerHTML = '';
+      const accounts = data.accounts || [];
+      if (!accounts.length) {
+        accBody.innerHTML = '<tr><td colspan="10" style="color:var(--muted);">No live trading accounts yet</td></tr>';
+      }
+      accounts.forEach((a) => {
+        const posDetail =
+          (a.positions || []).length > 0
+            ? '<br><span style="font-size:0.72rem;color:var(--muted);">' +
+              (a.positions || [])
+                .map((p) => escapeHtml(p.symbol || '') + ' ' + fmtMoney(p.profit || 0))
+                .join(' · ') +
+              '</span>'
+            : '';
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' +
+          escapeHtml(a.userEmail || '—') +
+          '</td>' +
+          '<td>' +
+          escapeHtml(a.accountName || '—') +
+          '</td>' +
+          '<td>' +
+          escapeHtml(a.botLabel || '—') +
+          '</td>' +
+          '<td>#' +
+          escapeHtml(String(a.login || '')) +
+          '</td>' +
+          '<td>' +
+          fmtMoney(a.totalDeposited || 0) +
+          '</td>' +
+          '<td>' +
+          fmtMoney(a.walletBalance || 0) +
+          '</td>' +
+          '<td>' +
+          fmtMoney(a.openProfit || 0) +
+          '</td>' +
+          '<td><strong>' +
+          fmtMoney(a.displayBalance || 0) +
+          '</strong></td>' +
+          '<td>' +
+          (a.positionCount || 0) +
+          posDetail +
+          '</td>' +
+          '<td>' +
+          (a.lastActivityAt ? new Date(a.lastActivityAt).toLocaleString() : '—') +
+          '</td>';
+        accBody.appendChild(tr);
+      });
+
+      const actBody = document.getElementById('liveTradingActivityRows');
+      actBody.innerHTML = '';
+      const activity = data.recentActivity || [];
+      if (!activity.length) {
+        actBody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);">No transfers yet</td></tr>';
+      }
+      activity.forEach((t) => {
+        const tr = document.createElement('tr');
+        const dir =
+          t.direction === 'to_live'
+            ? '<span class="pill ok">To live</span>'
+            : '<span class="pill warn">To cash</span>';
+        tr.innerHTML =
+          '<td>' +
+          new Date(t.createdAt).toLocaleString() +
+          '</td>' +
+          '<td>' +
+          escapeHtml(t.userEmail || '—') +
+          '</td>' +
+          '<td>' +
+          escapeHtml(t.accountName || t.login || '—') +
+          ' · ' +
+          escapeHtml(t.botLabel || '') +
+          '</td>' +
+          '<td>' +
+          dir +
+          '</td>' +
+          '<td><strong>' +
+          fmtMoney(t.amount || 0) +
+          '</strong></td>';
+        actBody.appendChild(tr);
+      });
+    }
+
+    async function loadLiveTrading() {
+      document.getElementById('liveTradingErr').classList.add('hidden');
+      document.getElementById('liveTradingLoading').classList.remove('hidden');
+      try {
+        const data = await api('/admin/api/live-trading/overview');
+        renderLiveTradingSummary(data.summary);
+        renderLiveTradingTables(data);
+        document.getElementById('liveTradingStats').textContent =
+          (data.accounts || []).length +
+          ' account(s) · ' +
+          (data.recentActivity || []).length +
+          ' recent transfer(s) shown';
+      } catch (e) {
+        renderLiveTradingSummary(null);
+        document.getElementById('liveTradingAccountRows').innerHTML = '';
+        document.getElementById('liveTradingActivityRows').innerHTML = '';
+        showLiveTradingErr(e);
+      } finally {
+        document.getElementById('liveTradingLoading').classList.add('hidden');
+      }
+    }
+
     function showTiersErr(e) {
       document.getElementById('tiersErr').textContent = e.message;
       document.getElementById('tiersErr').classList.remove('hidden');
@@ -4042,6 +4238,7 @@
     document.getElementById('refreshP2pBtn').onclick = () => loadP2pTrades();
     document.getElementById('p2pStatusFilter').onchange = () => loadP2pTrades();
     document.getElementById('refreshVipBtn').onclick = () => loadVipFarmers().catch(showVipErr);
+    document.getElementById('refreshLiveTradingBtn').onclick = () => loadLiveTrading().catch(showLiveTradingErr);
     document.getElementById('refreshLevelsBtn').onclick = () => loadLevels().catch(showLevelsErr);
     document.getElementById('levelsSearch').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') loadLevels().catch(showLevelsErr);

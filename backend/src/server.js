@@ -53,6 +53,7 @@ const { registerNowpaymentsRoutes, handlePaymentWebhook, handlePayoutWebhook } =
 const { registerAirfarmingRoutes } = require('./airfarmingRoutes');
 const { registerPasswordResetRoutes } = require('./passwordReset');
 const { registerAdminRoutes } = require('./adminRoutes');
+const { registerAdminLiveTradingRoutes } = require('./adminLiveTradingRoutes');
 const { registerAnnouncementRoutes } = require('./announcementRoutes');
 const { adminAuthMiddleware } = require('./middleware/adminAuth');
 const path = require('path');
@@ -471,6 +472,7 @@ registerJournalRoutes(app, { authMiddleware });
 registerExpertRoutes(app, { authMiddleware });
 registerLiveTradingRoutes(app, { authMiddleware });
 registerAdminRoutes(app);
+registerAdminLiveTradingRoutes(app);
 registerAnnouncementRoutes(app, { adminAuthMiddleware });
 app.use(
   '/admin',

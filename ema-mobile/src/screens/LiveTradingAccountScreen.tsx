@@ -18,9 +18,15 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { QuoteRow } from '../components/QuoteRow';
 import { usePolling } from '../hooks/usePolling';
 import { useToast } from '../hooks/useToast';
-import { liveTradingService, type LiveTradingAccount, type MarketPriceRow } from '../services/liveTradingService';
+import {
+  accountDisplayBalance,
+  liveTradingService,
+  type LiveTradingAccount,
+  type MarketPriceRow,
+} from '../services/liveTradingService';
 import type { Mt5HistoryDeal, Mt5Position, RootStackParamList } from '../types';
 import { palette } from '../theme/colors';
+import { sanitizeUserFacingError } from '../utils/userFacingError';
 import { withTimeout } from '../utils/withTimeout';
 
 type Tab = 'quotes' | 'trades' | 'history';
@@ -32,6 +38,18 @@ function formatTime(iso: string | null | undefined) {
   const ms = Date.parse(iso);
   if (!Number.isFinite(ms)) return String(iso);
   return new Date(ms).toLocaleString();
+}
+
+function formatQuoteTime(iso: string | null | undefined) {
+  if (!iso) return '—';
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return '—';
+  return new Date(ms).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
 }
 
 function sideLabel(type: string | undefined) {
@@ -48,6 +66,11 @@ function tickDir(prev: number | undefined, next: number): TickDir {
   return 'flat';
 }
 
+function formatBalance(value: number) {
+  const n = Math.round(value * 100) / 100;
+  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
 export function LiveTradingAccountScreen() {
   const route = useRoute<Route>();
   const insets = useSafeAreaInsets();
@@ -59,7 +82,7 @@ export function LiveTradingAccountScreen() {
   const [prices, setPrices] = useState<MarketPriceRow[]>([]);
   const [priceSearch, setPriceSearch] = useState('');
   const [positions, setPositions] = useState<Mt5Position[]>([]);
-  const [positionsNote, setPositionsNote] = useState<string | null>(null);
+  const [tradesUpdatedAt, setTradesUpdatedAt] = useState<string | null>(null);
   const [historyNote, setHistoryNote] = useState<string | null>(null);
   const [history, setHistory] = useState<Mt5HistoryDeal[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -96,22 +119,16 @@ export function LiveTradingAccountScreen() {
     try {
       const data = await liveTradingService.getPositions(accountId);
       setPositions(data.positions || []);
-      setPositionsNote(
-        data.source === 'mt5_bridge'
-          ? data.snapshotAt
-            ? `MT5 bridge · ${formatTime(data.snapshotAt)}`
-            : 'MT5 bridge'
-          : null
-      );
+      setTradesUpdatedAt(data.snapshotAt || null);
     } catch (e) {
       setPositions([]);
-      setPositionsNote((e as Error).message || 'Attach EmaWebhookEa on your MT5 account');
+      setTradesUpdatedAt(null);
     }
   }, [accountId]);
 
   const loadHistory = useCallback(async () => {
     setHistory([]);
-    setHistoryNote('Trade history via MT5 bridge coming soon');
+    setHistoryNote('Trade history will appear here soon.');
   }, []);
 
   const loadTab = useCallback(async () => {
@@ -131,6 +148,8 @@ export function LiveTradingAccountScreen() {
       loadTab().catch(() => {});
     }, [loadSummary, loadTab])
   );
+
+  usePolling(() => loadSummary().catch(() => {}), 1000, true);
 
   usePolling(
     () => {
@@ -155,10 +174,11 @@ export function LiveTradingAccountScreen() {
     setClosingId(positionId);
     try {
       await liveTradingService.closePosition(accountId, positionId);
-      showToast('Close sent to MT5');
+      showToast('Close order sent');
       await loadTrades();
+      await loadSummary();
     } catch (e) {
-      Alert.alert('Close failed', (e as Error).message || 'Try again');
+      Alert.alert('Close failed', sanitizeUserFacingError((e as Error).message));
     } finally {
       setClosingId(null);
     }
@@ -182,6 +202,8 @@ export function LiveTradingAccountScreen() {
   );
 
   const bottomPad = Math.max(insets.bottom, 12);
+  const displayBal = account ? accountDisplayBalance(account) : 0;
+  const openProfit = account?.openProfit ?? 0;
 
   return (
     <View style={styles.root}>
@@ -189,8 +211,15 @@ export function LiveTradingAccountScreen() {
         <Card style={styles.headerCard}>
           <Text style={styles.headerTitle}>{account.accountName || 'Live account'}</Text>
           <Text style={styles.headerMeta}>
-            {account.botLabel} · #{account.login} · ${Math.floor(account.internalBalance).toLocaleString()}
+            {account.botLabel} · #{account.login}
           </Text>
+          <Text style={styles.headerBalance}>${formatBalance(displayBal)}</Text>
+          {openProfit !== 0 ? (
+            <Text style={[styles.headerPnl, openProfit >= 0 ? styles.plUp : styles.plDown]}>
+              {openProfit >= 0 ? '+' : ''}
+              {openProfit.toFixed(2)} open P&L
+            </Text>
+          ) : null}
         </Card>
       ) : null}
 
@@ -223,10 +252,10 @@ export function LiveTradingAccountScreen() {
                 loadingTab ? (
                   <ActivityIndicator color={palette.primary} style={{ marginVertical: 24 }} />
                 ) : (
-                  <Text style={styles.emptyMeta}>No prices. Run EmaPriceFeedEa (1s) on your server.</Text>
+                  <Text style={styles.emptyMeta}>Quotes will appear when the market feed is connected.</Text>
                 )
               }
-              contentContainerStyle={prices.length === 0 ? styles.emptyList : { paddingBottom: bottomPad + 56 }}
+              contentContainerStyle={prices.length === 0 ? styles.emptyList : { paddingBottom: bottomPad + 72 }}
               initialNumToRender={24}
               windowSize={10}
               removeClippedSubviews
@@ -236,12 +265,14 @@ export function LiveTradingAccountScreen() {
 
         {tab === 'trades' ? (
           <ScrollView
-            contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad + 56 }]}
+            contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad + 72 }]}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={palette.primary} />
             }
           >
-            {positionsNote ? <Text style={styles.bridgeNote}>{positionsNote}</Text> : null}
+            {tradesUpdatedAt ? (
+              <Text style={styles.updatedNote}>Updated {formatQuoteTime(tradesUpdatedAt)}</Text>
+            ) : null}
             {loadingTab ? <ActivityIndicator color={palette.primary} style={{ marginVertical: 16 }} /> : null}
             {positions.map((p) => (
               <Card key={p.id} style={styles.tradeCard}>
@@ -268,15 +299,13 @@ export function LiveTradingAccountScreen() {
               </Card>
             ))}
             {!positions.length && !loadingTab ? (
-              <Text style={styles.emptyMeta}>
-                No open trades. Attach EmaWebhookEa on the MT5 account with the same login.
-              </Text>
+              <Text style={styles.emptyMeta}>No open trades right now.</Text>
             ) : null}
           </ScrollView>
         ) : null}
 
         {tab === 'history' ? (
-          <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad + 56 }]}>
+          <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad + 72 }]}>
             {history.map((d) => (
               <Card key={d.id} style={styles.tradeCard}>
                 <Text style={styles.tradeSymbol}>{d.symbol || '—'}</Text>
@@ -300,7 +329,7 @@ export function LiveTradingAccountScreen() {
           return (
             <Pressable
               key={t}
-              style={styles.bottomTab}
+              style={[styles.bottomTab, active && styles.bottomTabActive]}
               onPress={() => {
                 setTab(t);
                 setTimeout(() => {
@@ -311,6 +340,7 @@ export function LiveTradingAccountScreen() {
               }}
             >
               <Text style={[styles.bottomTabText, active && styles.bottomTabTextActive]}>{label}</Text>
+              {active ? <View style={styles.bottomTabIndicator} /> : null}
             </Pressable>
           );
         })}
@@ -324,6 +354,8 @@ const styles = StyleSheet.create({
   headerCard: { margin: 16, marginBottom: 8 },
   headerTitle: { fontSize: 18, fontWeight: '800', color: palette.textPrimary },
   headerMeta: { fontSize: 13, color: palette.textSecondary, marginTop: 4 },
+  headerBalance: { fontSize: 32, fontWeight: '800', color: palette.textPrimary, marginTop: 10 },
+  headerPnl: { fontSize: 13, fontWeight: '600', marginTop: 4 },
   content: { flex: 1 },
   quotesHeader: {
     flexDirection: 'row',
@@ -349,7 +381,7 @@ const styles = StyleSheet.create({
   emptyList: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   emptyMeta: { color: palette.textSecondary, fontSize: 13, textAlign: 'center', padding: 16 },
   scroll: { padding: 16, paddingTop: 8 },
-  bridgeNote: { color: palette.textSecondary, fontSize: 12, marginBottom: 12 },
+  updatedNote: { color: palette.textSecondary, fontSize: 12, marginBottom: 12 },
   tradeCard: { marginBottom: 10 },
   tradeTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   tradeSymbol: { fontSize: 16, fontWeight: '800', color: palette.textPrimary },
@@ -362,9 +394,18 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: palette.border,
     backgroundColor: palette.surface,
-    paddingTop: 8,
+    paddingTop: 10,
+    minHeight: 56,
   },
-  bottomTab: { flex: 1, alignItems: 'center', paddingVertical: 8 },
-  bottomTabText: { fontSize: 13, fontWeight: '600', color: palette.textSecondary },
-  bottomTabTextActive: { color: '#5B9CF5', fontWeight: '800' },
+  bottomTab: { flex: 1, alignItems: 'center', paddingVertical: 14, minHeight: 56 },
+  bottomTabActive: {},
+  bottomTabText: { fontSize: 15, fontWeight: '600', color: palette.textSecondary },
+  bottomTabTextActive: { color: '#5B9CF5', fontWeight: '800', fontSize: 16 },
+  bottomTabIndicator: {
+    marginTop: 6,
+    width: 28,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#5B9CF5',
+  },
 });

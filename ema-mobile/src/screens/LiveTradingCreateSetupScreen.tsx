@@ -67,7 +67,7 @@ export function LiveTradingCreateSetupScreen() {
     <ScrollView contentContainerStyle={styles.scroll}>
       <Text style={styles.step}>Step 2 of 2</Text>
       <Text style={styles.title}>Set up your account</Text>
-      <Text style={styles.hint}>Real · MT5 · {bot?.title || botType}</Text>
+      <Text style={styles.hint}>Real · Live · {bot?.title || botType}</Text>
 
       <Card>
         <Text style={styles.fieldLabel}>Account nickname</Text>
@@ -99,7 +99,7 @@ export function LiveTradingCreateSetupScreen() {
           maxLength={15}
         />
         <Text style={styles.passwordHint}>
-          Used to log in on MT5. Do not use characters: {'<>"\'&?^*#@'}
+          Used to sign in to your live terminal. Do not use characters: {'<>"\'&?^*#@'}
         </Text>
       </Card>
 

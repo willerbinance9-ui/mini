@@ -14,6 +14,9 @@ export type LiveTradingAccount = {
   leverage: number;
   isPlatformProvisioned: boolean;
   internalBalance: number;
+  depositedBalance?: number;
+  openProfit?: number;
+  displayBalance?: number;
   cachedBalance: number | null;
   cachedEquity: number | null;
   cachedCurrency: string;
@@ -37,20 +40,36 @@ export type MarketPriceRow = {
   updatedAt: string;
 };
 
-export const LIVE_TRADING_BOTS: { id: LiveTradingBotType; title: string; description: string }[] = [
+export const LIVE_TRADING_BOTS: { id: LiveTradingBotType; title: string; description: string; minDeposit: number }[] = [
   {
     id: 'synthetix_ea',
     title: 'Synthetix EA',
     description: 'Synthetic indices & derived markets automation',
+    minDeposit: 1000,
   },
   {
     id: 'quantix_ea',
     title: 'Quantix EA',
     description: 'FX & metals quant strategy automation',
+    minDeposit: 200,
   },
 ];
 
 export const LIVE_TRADING_LEVERAGES = [50, 100, 200, 500, 1000, 2000] as const;
+
+export const LIVE_TRADING_MIN_DEPOSIT: Record<LiveTradingBotType, number> = {
+  synthetix_ea: 1000,
+  quantix_ea: 200,
+};
+
+export function liveTradingMinDeposit(botType: LiveTradingBotType | null | undefined) {
+  if (!botType) return 0;
+  return LIVE_TRADING_MIN_DEPOSIT[botType] ?? 0;
+}
+
+export function accountDisplayBalance(acc: LiveTradingAccount) {
+  return acc.displayBalance ?? acc.internalBalance ?? 0;
+}
 
 export const liveTradingService = {
   listAccounts: () =>

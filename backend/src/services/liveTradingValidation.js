@@ -12,6 +12,23 @@ const BOT_MAGIC = {
 
 const VALID_LEVERAGES = [50, 100, 200, 500, 1000, 2000];
 
+const MIN_DEPOSIT_BY_BOT = {
+  synthetix_ea: 1000,
+  quantix_ea: 200,
+};
+
+function getMinDeposit(botType) {
+  const b = normalizeBotType(botType);
+  if (!b) return 0;
+  return MIN_DEPOSIT_BY_BOT[b] || 0;
+}
+
+function minDepositMessage(botType) {
+  const min = getMinDeposit(botType);
+  const label = botLabel(botType) || 'this bot';
+  return `Minimum deposit for ${label} is $${min.toLocaleString('en-US')}.`;
+}
+
 function validateTradingPassword(password) {
   const p = String(password || '');
   if (p.length < 8 || p.length > 15) {
@@ -65,9 +82,12 @@ module.exports = {
   VALID_LEVERAGES,
   BOT_LABELS,
   BOT_MAGIC,
+  MIN_DEPOSIT_BY_BOT,
   validateTradingPassword,
   validateAccountName,
   normalizeBotType,
   botLabel,
   botMagic,
+  getMinDeposit,
+  minDepositMessage,
 };

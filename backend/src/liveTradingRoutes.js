@@ -18,6 +18,7 @@ const {
 const {
   positionsFromAccountRow,
   useMt5Bridge,
+  computeLiveBalances,
   enqueueClosePositionCommand,
 } = require('./services/mt5BridgeService');
 const { ensureMetaApiAccount } = require('./services/mt5Client');
@@ -29,7 +30,11 @@ const {
   botLabel,
   botMagic,
   VALID_LEVERAGES,
+  getMinDeposit,
+  minDepositMessage,
 } = require('./services/liveTradingValidation');
+
+const LIVE_NOT_CONNECTED_MSG = 'Live trading is not connected yet. Try again in a moment.';
 
 const SCHEMA_MSG =
   'Live trading schema missing. Run backend/sql/migrations/20260614_live_trading_accounts.sql in Supabase.';
@@ -48,6 +53,7 @@ function getLiveServer() {
 
 function toLiveAccountSummary(account, wallet) {
   const botType = account.bot_type || null;
+  const balances = computeLiveBalances(account, wallet);
   return {
     id: account.id,
     login: account.login,
@@ -58,7 +64,10 @@ function toLiveAccountSummary(account, wallet) {
     botMagic: botMagic(botType),
     leverage: Number(account.leverage || 100),
     isPlatformProvisioned: Boolean(account.is_platform_provisioned),
-    internalBalance: Number(wallet?.balance || 0),
+    internalBalance: balances.depositedBalance,
+    depositedBalance: balances.depositedBalance,
+    openProfit: balances.openProfit,
+    displayBalance: balances.displayBalance,
     cachedBalance:
       account.cached_balance !== null && account.cached_balance !== undefined
         ? Number(account.cached_balance)
@@ -178,6 +187,11 @@ function registerLiveTradingRoutes(app, { authMiddleware }) {
       const loaded = await loadAccountWithWallet(req.userId, req.params.id);
       if (!loaded) return res.status(404).json({ message: 'Live account not found' });
 
+      const minDeposit = getMinDeposit(loaded.account.bot_type);
+      if (minDeposit > 0 && amount < minDeposit) {
+        return res.status(400).json({ message: minDepositMessage(loaded.account.bot_type) });
+      }
+
       const wallet = await ensureWalletForUser(req.userId);
       const cash = Number.parseFloat(String(wallet.balance ?? 0)) || 0;
       if (cash < amount) return res.status(400).json({ message: 'Insufficient cash wallet balance' });
@@ -247,9 +261,7 @@ function registerLiveTradingRoutes(app, { authMiddleware }) {
       const loaded = await loadAccountWithWallet(req.userId, req.params.id);
       if (!loaded) return res.status(404).json({ message: 'Live account not found' });
       if (!useMt5Bridge(loaded.account)) {
-        return res.status(503).json({
-          message: 'Positions require EmaWebhookEa on this MT5 account. Attach the EA and wait for telemetry.',
-        });
+        return res.status(503).json({ message: LIVE_NOT_CONNECTED_MSG });
       }
       const positions = positionsFromAccountRow(loaded.account);
       return res.json({
@@ -270,7 +282,7 @@ function registerLiveTradingRoutes(app, { authMiddleware }) {
       const positionId = req.body?.positionId ?? req.body?.ticket;
       if (!positionId) return res.status(400).json({ message: 'positionId is required' });
       if (!useMt5Bridge(loaded.account) && !loaded.account.ea_webhook_token) {
-        return res.status(503).json({ message: 'MT5 EA bridge not configured for this account' });
+        return res.status(503).json({ message: LIVE_NOT_CONNECTED_MSG });
       }
       const row = await enqueueClosePositionCommand(insertMt5EaCommand, loaded.account.id, positionId);
       return res.json({ ok: true, queued: true, commandId: row.id });

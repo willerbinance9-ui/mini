@@ -33,6 +33,7 @@ export function LiveTradingCreateBotScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.botTitle}>{bot.title}</Text>
                 <Text style={styles.botMeta}>{bot.description}</Text>
+                <Text style={styles.botMin}>Min. deposit ${bot.minDeposit.toLocaleString()}</Text>
               </View>
               <Ionicons name='chevron-forward' size={20} color={palette.textSecondary} />
             </View>
@@ -64,4 +65,5 @@ const styles = StyleSheet.create({
   },
   botTitle: { fontSize: 17, fontWeight: '800', color: palette.textPrimary },
   botMeta: { fontSize: 13, color: palette.textSecondary, marginTop: 2, lineHeight: 18 },
+  botMin: { fontSize: 12, color: palette.primary, fontWeight: '700', marginTop: 6 },
 });

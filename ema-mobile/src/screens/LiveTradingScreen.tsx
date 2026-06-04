@@ -18,9 +18,12 @@ import { FormModal } from '../components/FormModal';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { useToast } from '../hooks/useToast';
 import {
+  accountDisplayBalance,
+  liveTradingMinDeposit,
   liveTradingService,
   type LiveTradingAccount,
 } from '../services/liveTradingService';
+import { sanitizeUserFacingError } from '../utils/userFacingError';
 import type { RootStackParamList } from '../types';
 import { palette } from '../theme/colors';
 import { withTimeout } from '../utils/withTimeout';
@@ -43,7 +46,6 @@ export function LiveTradingScreen() {
   const navigation = useNavigation<Nav>();
   const { showToast } = useToast();
   const [accounts, setAccounts] = useState<LiveTradingAccount[]>([]);
-  const [serverHint, setServerHint] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [fundModalOpen, setFundModalOpen] = useState(false);
@@ -56,12 +58,11 @@ export function LiveTradingScreen() {
   const load = useCallback(async () => {
     const data = await withTimeout(liveTradingService.listAccounts(), 12000, 'Live accounts');
     setAccounts(data.accounts || []);
-    setServerHint(data.server || '');
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      load().catch((e) => Alert.alert('Live Trading', (e as Error).message || 'Failed to load accounts'));
+      load().catch((e) => Alert.alert('Live Trading', sanitizeUserFacingError((e as Error).message)));
     }, [load])
   );
 
@@ -70,7 +71,7 @@ export function LiveTradingScreen() {
     try {
       await load();
     } catch (e) {
-      Alert.alert('Live Trading', (e as Error).message || 'Refresh failed');
+      Alert.alert('Live Trading', sanitizeUserFacingError((e as Error).message));
     } finally {
       setRefreshing(false);
     }
@@ -105,6 +106,11 @@ export function LiveTradingScreen() {
       Alert.alert('Validation', 'Enter a valid amount.');
       return;
     }
+    const min = liveTradingMinDeposit(activeAccount?.botType);
+    if (min > 0 && n < min) {
+      Alert.alert('Validation', `Minimum deposit is $${min.toLocaleString()}.`);
+      return;
+    }
     setBusy(true);
     try {
       await liveTradingService.fund(activeAccountId, n);
@@ -112,7 +118,7 @@ export function LiveTradingScreen() {
       showToast('Funds sent to live account');
       await load();
     } catch (e) {
-      Alert.alert('Funding failed', (e as Error).message || 'Try again');
+      Alert.alert('Funding failed', sanitizeUserFacingError((e as Error).message));
     } finally {
       setBusy(false);
     }
@@ -131,7 +137,7 @@ export function LiveTradingScreen() {
       showToast('Returned to cash wallet');
       await load();
     } catch (e) {
-      Alert.alert('Withdraw failed', (e as Error).message || 'Try again');
+      Alert.alert('Withdraw failed', sanitizeUserFacingError((e as Error).message));
     } finally {
       setBusy(false);
     }
@@ -145,9 +151,7 @@ export function LiveTradingScreen() {
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={palette.primary} />}
       >
-        <Text style={styles.hint}>
-          Real accounts · Server {serverHint || '—'} · Fund from your cash wallet, then trade in-app.
-        </Text>
+        <Text style={styles.hint}>Fund from your cash wallet, then trade in-app.</Text>
 
         {accounts.length === 0 ? (
           <Card>
@@ -172,8 +176,11 @@ export function LiveTradingScreen() {
                 </View>
                 <View style={styles.balanceRow}>
                   <Text style={styles.statLabel}>Balance</Text>
-                  <Text style={styles.statValue}>${Math.floor(acc.internalBalance).toLocaleString()}</Text>
+                  <Text style={styles.statValue}>${Math.floor(accountDisplayBalance(acc)).toLocaleString()}</Text>
                 </View>
+                {(acc.openProfit ?? 0) !== 0 ? (
+                  <Text style={styles.pnlHint}>Includes open profit/loss</Text>
+                ) : null}
               </Pressable>
 
               {expanded ? (
@@ -225,6 +232,11 @@ export function LiveTradingScreen() {
         <Text style={styles.meta}>
           {activeAccount?.accountName} · Cash available ${Math.floor(cashWallet).toLocaleString()}
         </Text>
+        {activeAccount?.botType ? (
+          <Text style={styles.meta}>
+            Minimum deposit ${liveTradingMinDeposit(activeAccount.botType).toLocaleString()}
+          </Text>
+        ) : null}
         <TextInput
           style={inputStyle}
           value={amount}
@@ -244,7 +256,8 @@ export function LiveTradingScreen() {
         }
       >
         <Text style={styles.meta}>
-          {activeAccount?.accountName} · Balance ${Math.floor(activeAccount?.internalBalance || 0).toLocaleString()}
+          {activeAccount?.accountName} · Balance $
+          {Math.floor(activeAccount ? accountDisplayBalance(activeAccount) : 0).toLocaleString()}
         </Text>
         <TextInput
           style={inputStyle}
@@ -271,6 +284,7 @@ const styles = StyleSheet.create({
   balanceRow: { marginTop: 4 },
   statLabel: { fontSize: 11, color: palette.textSecondary, marginBottom: 2 },
   statValue: { fontSize: 20, fontWeight: '800', color: palette.textPrimary },
+  pnlHint: { fontSize: 11, color: palette.textSecondary, marginTop: 4 },
   expanded: { marginTop: 14, borderTopWidth: 1, borderTopColor: palette.border, paddingTop: 12, gap: 8 },
   copyRow: { gap: 4 },
   copyLabel: { fontSize: 11, color: palette.textSecondary },

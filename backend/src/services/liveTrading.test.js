@@ -1,4 +1,9 @@
-const { validateTradingPassword, validateAccountName, normalizeBotType } = require('./liveTradingValidation');
+const {
+  validateTradingPassword,
+  validateAccountName,
+  normalizeBotType,
+  getMinDeposit,
+} = require('./liveTradingValidation');
 const { normalizePriceBatch } = require('./priceFeedNormalize');
 
 function assert(cond, msg) {
@@ -16,6 +21,9 @@ assert(name.ok && name.value === 'My Live 1', 'valid nickname');
 
 const bot = normalizeBotType('Synthetix_EA');
 assert(bot === 'synthetix_ea', 'bot normalize');
+
+assert(getMinDeposit('synthetix_ea') === 1000, 'synthetix min deposit');
+assert(getMinDeposit('quantix_ea') === 200, 'quantix min deposit');
 
 const batch = normalizePriceBatch({
   prices: [
