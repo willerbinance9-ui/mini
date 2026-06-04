@@ -4,6 +4,7 @@ import { palette } from '../theme/colors';
 
 const QUOTE_UP = '#5B9CF5';
 const QUOTE_DOWN = '#FF444F';
+export const QUOTE_STALE_MS = 3 * 60 * 1000;
 
 function splitQuotePrice(value: number, digits: number) {
   const s = value.toFixed(digits);
@@ -14,13 +15,14 @@ function splitQuotePrice(value: number, digits: number) {
 
 function formatChange(changePts: number | null | undefined, changePct: number | null | undefined) {
   if (changePts == null || changePct == null || !Number.isFinite(changePts)) return null;
+  const sign = changePts >= 0 ? '+' : '';
   const pts =
     Math.abs(changePts) >= 100
       ? Math.round(changePts).toLocaleString()
       : Math.abs(changePts) >= 10
         ? changePts.toFixed(1)
         : changePts.toFixed(2);
-  return `${pts} ${changePct.toFixed(2)}%`;
+  return `${sign}${pts} ${changePct.toFixed(2)}%`;
 }
 
 function formatQuoteTime(iso: string | undefined) {
@@ -35,38 +37,67 @@ function formatLevel(value: number | null | undefined, digits: number) {
   return value.toFixed(digits);
 }
 
+export function isQuoteStale(updatedAt: string | undefined, now = Date.now()) {
+  if (!updatedAt) return true;
+  const ms = Date.parse(updatedAt);
+  if (!Number.isFinite(ms)) return true;
+  return now - ms > QUOTE_STALE_MS;
+}
+
 type QuoteRowProps = {
   row: MarketPriceRow;
   bidDir?: 'up' | 'down' | 'flat';
   askDir?: 'up' | 'down' | 'flat';
 };
 
+function quoteColor(dir: 'up' | 'down' | 'flat' | undefined, stale: boolean) {
+  if (stale || !dir || dir === 'flat') return palette.textPrimary;
+  return dir === 'up' ? QUOTE_UP : QUOTE_DOWN;
+}
+
 function PriceCell({
   value,
   digits,
   dir,
+  stale,
 }: {
   value: number;
   digits: number;
   dir?: 'up' | 'down' | 'flat';
+  stale: boolean;
 }) {
   const { main, pip } = splitQuotePrice(value, digits);
-  const color = dir === 'up' ? QUOTE_UP : dir === 'down' ? QUOTE_DOWN : palette.textPrimary;
+  const color = quoteColor(dir, stale);
   return (
     <View style={styles.priceCell}>
       <Text style={[styles.priceMain, { color }]} numberOfLines={1}>
         {main}
-        <Text style={styles.pricePip}>{pip}</Text>
+        <Text style={[styles.pricePip, { color }]}>{pip}</Text>
       </Text>
     </View>
   );
 }
 
+function SpreadIndicator({ dir, stale }: { dir: 'up' | 'down' | 'flat'; stale: boolean }) {
+  const color = quoteColor(dir, stale);
+  const arrow = stale || dir === 'flat' ? '⇅' : dir === 'up' ? '▲' : '▼';
+  return <Text style={[styles.spreadArrow, { color }]}>{arrow}</Text>;
+}
+
 export function QuoteRow({ row, bidDir = 'flat', askDir = 'flat' }: QuoteRowProps) {
   const digits = row.digits ?? 5;
+  const stale = isQuoteStale(row.updatedAt);
   const changeText = formatChange(row.changePts, row.changePct);
-  const isUp = (row.changePts ?? 0) >= 0;
-  const changeColor = changeText == null ? palette.textSecondary : isUp ? QUOTE_UP : QUOTE_DOWN;
+  const dayUp = (row.changePts ?? 0) >= 0;
+  const changeColor = stale
+    ? palette.textPrimary
+    : changeText == null
+      ? palette.textSecondary
+      : dayUp
+        ? QUOTE_UP
+        : QUOTE_DOWN;
+  const spreadDir: 'up' | 'down' | 'flat' =
+    bidDir === 'up' || askDir === 'up' ? (bidDir === 'down' || askDir === 'down' ? 'flat' : 'up') : askDir === 'down' ? 'down' : 'flat';
 
   return (
     <View style={styles.row}>
@@ -76,20 +107,23 @@ export function QuoteRow({ row, bidDir = 'flat', askDir = 'flat' }: QuoteRowProp
             {changeText}
           </Text>
         ) : (
-          <Text style={styles.changeLineMuted}>—</Text>
+          <Text style={[styles.changeLine, { color: palette.textPrimary }]}>—</Text>
         )}
         <Text style={styles.symbol} numberOfLines={1}>
           {row.symbol}
         </Text>
         <View style={styles.metaLine}>
-          <Text style={styles.timeText}>{formatQuoteTime(row.updatedAt)}</Text>
-          <Text style={styles.spreadText}>⇅ {row.spread.toFixed(Math.min(digits, 5))}</Text>
+          <Text style={[styles.timeText, stale && styles.timeStale]}>{formatQuoteTime(row.updatedAt)}</Text>
+          <SpreadIndicator dir={spreadDir} stale={stale} />
+          <Text style={[styles.spreadText, stale && styles.timeStale]}>
+            {row.spread.toFixed(Math.min(digits, 5))}
+          </Text>
         </View>
       </View>
       <View style={styles.right}>
         <View style={styles.bidAskRow}>
-          <PriceCell value={row.bid} digits={digits} dir={bidDir} />
-          <PriceCell value={row.ask} digits={digits} dir={askDir} />
+          <PriceCell value={row.bid} digits={digits} dir={bidDir} stale={stale} />
+          <PriceCell value={row.ask} digits={digits} dir={askDir} stale={stale} />
         </View>
         <Text style={styles.lhLine} numberOfLines={1}>
           L: {formatLevel(row.dayLow, digits)}  H: {formatLevel(row.dayHigh, digits)}
@@ -120,11 +154,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 2,
   },
-  changeLineMuted: {
-    fontSize: 12,
-    color: palette.textSecondary,
-    marginBottom: 2,
-  },
   symbol: {
     fontSize: 16,
     fontWeight: '700',
@@ -134,11 +163,18 @@ const styles = StyleSheet.create({
   metaLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   timeText: {
     fontSize: 11,
     color: palette.textSecondary,
+  },
+  timeStale: {
+    color: palette.textPrimary,
+  },
+  spreadArrow: {
+    fontSize: 10,
+    fontWeight: '800',
   },
   spreadText: {
     fontSize: 11,

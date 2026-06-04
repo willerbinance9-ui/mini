@@ -73,6 +73,11 @@ const { registerLocalMoneyRoutes, handleFlutterwaveWebhook } = require('./localM
 const { registerP2pRoutes } = require('./p2pRoutes');
 const { requireComplianceProfile } = require('./middleware/requireComplianceProfile');
 const { isComplianceProfileComplete } = require('./complianceProfile');
+const {
+  positionsFromAccountRow,
+  useMt5Bridge,
+  enqueueClosePositionCommand,
+} = require('./services/mt5BridgeService');
 
 const app = express();
 app.use(cors());
@@ -837,6 +842,11 @@ app.get('/mt5/accounts/:id/positions', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'MT5 account not found' });
     }
 
+    if (useMt5Bridge(account)) {
+      const positions = positionsFromAccountRow(account);
+      return res.json({ positions, source: 'mt5_bridge', snapshotAt: account.ea_snapshot_at || null });
+    }
+
     const { accountId } = await ensureMetaApiAccount({
       metaapiAccountId: account.metaapi_account_id,
       login: account.login,
@@ -877,6 +887,11 @@ app.post('/mt5/accounts/:id/positions/close', authMiddleware, async (req, res) =
     if (!account) return res.status(404).json({ message: 'MT5 account not found' });
     const positionId = req.body?.positionId;
     if (!positionId) return res.status(400).json({ message: 'positionId is required' });
+
+    if (useMt5Bridge(account) || account.ea_webhook_token) {
+      const row = await enqueueClosePositionCommand(insertMt5EaCommand, account.id, positionId);
+      return res.json({ ok: true, queued: true, commandId: row.id, source: 'mt5_bridge' });
+    }
 
     const accountId = await resolveMt5MetaApiAccountId(account, req.userId);
     const result = await closeMt5Position({ accountId, positionId: String(positionId) });

@@ -25,14 +25,17 @@ struct EaCommand
 {
    string id;
    string client_id;
+   string command_type;
    string side;
    string symbol;
    double volume;
    double stop_loss;
    double take_profit;
    long   magic;
+   long   position_ticket;
    bool   has_sl;
    bool   has_tp;
+   bool   has_ticket;
 };
 
 CTrade g_trade;
@@ -172,16 +175,22 @@ bool FillCommandFromJsonObject(const string obj, EaCommand &cmd)
    if(!JsonGetString(obj, 0, "id", cmd.id) || StringLen(cmd.id) < 8)
       return false;
    JsonGetString(obj, 0, "clientId", cmd.client_id);
+   JsonGetString(obj, 0, "commandType", cmd.command_type);
+   if(StringLen(cmd.command_type) < 1)
+      cmd.command_type = "market";
    JsonGetString(obj, 0, "side", cmd.side);
    JsonGetString(obj, 0, "symbol", cmd.symbol);
+   cmd.has_ticket = JsonGetLongAfterKey(obj, 0, "positionTicket", cmd.position_ticket);
    bool vol_null = false;
    bool dn = false, tn = false;
    if(!JsonGetNumberAfterKey(obj, 0, "volume", cmd.volume, vol_null) || vol_null)
-      return false;
+      cmd.volume = 0;
    cmd.has_sl = JsonGetNumberAfterKey(obj, 0, "stopLoss", cmd.stop_loss, dn) && !dn;
    cmd.has_tp = JsonGetNumberAfterKey(obj, 0, "takeProfit", cmd.take_profit, tn) && !tn;
    if(!JsonGetLongAfterKey(obj, 0, "magic", cmd.magic))
       cmd.magic = 0;
+   if(cmd.command_type == "close_position" && cmd.has_ticket && cmd.position_ticket > 0)
+      return true;
    return (StringLen(cmd.symbol) > 0 && cmd.volume > 0);
 }
 
@@ -275,6 +284,45 @@ bool HttpGet(const string url, const string headers, int timeout_ms, string &res
 }
 
 //+------------------------------------------------------------------+
+string BuildPositionsJson()
+{
+   string out = "[";
+   bool first = true;
+   int total = PositionsTotal();
+   for(int i = total - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0)
+         continue;
+      if(!PositionSelectByTicket(ticket))
+         continue;
+      string sym = PositionGetString(POSITION_SYMBOL);
+      long ptype = PositionGetInteger(POSITION_TYPE);
+      double vol = PositionGetDouble(POSITION_VOLUME);
+      double open_p = PositionGetDouble(POSITION_PRICE_OPEN);
+      double cur_p = PositionGetDouble(POSITION_PRICE_CURRENT);
+      double profit = PositionGetDouble(POSITION_PROFIT);
+      double swap = PositionGetDouble(POSITION_SWAP);
+      int dg = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+      if(!first)
+         out += ",";
+      first = false;
+      out += "{";
+      out += "\"ticket\":" + IntegerToString((long)ticket) + ",";
+      out += "\"symbol\":\"" + JsonEscape(sym) + "\",";
+      out += "\"type\":\"" + (ptype == POSITION_TYPE_BUY ? "buy" : "sell") + "\",";
+      out += "\"volume\":" + DoubleToString(vol, 2) + ",";
+      out += "\"openPrice\":" + DoubleToString(open_p, dg) + ",";
+      out += "\"currentPrice\":" + DoubleToString(cur_p, dg) + ",";
+      out += "\"profit\":" + DoubleToString(profit, 2) + ",";
+      out += "\"swap\":" + DoubleToString(swap, 2);
+      out += "}";
+   }
+   out += "]";
+   return out;
+}
+
+//+------------------------------------------------------------------+
 bool PostTelemetry(const string api_base)
 {
    if(StringLen(InpEaBearerToken) < 16)
@@ -295,7 +343,8 @@ bool PostTelemetry(const string api_base)
    body += "\"bid\":" + DoubleToString(bid, dg) + ",";
    body += "\"ask\":" + DoubleToString(ask, dg) + ",";
    body += "\"equity\":" + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2) + ",";
-   body += "\"balance\":" + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2);
+   body += "\"balance\":" + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2) + ",";
+   body += "\"positions\":" + BuildPositionsJson();
    body += "}";
    string headers = "Content-Type: application/json\r\nAuthorization: Bearer " + InpEaBearerToken + "\r\n";
    string resp;
@@ -350,10 +399,33 @@ double NormalizeVolume(const string sym, double vol)
 }
 
 //+------------------------------------------------------------------+
+bool ExecuteClosePosition(const EaCommand &cmd, long &ticket_out, string &err_out)
+{
+   ticket_out = 0;
+   err_out = "";
+   ulong ticket = (ulong)cmd.position_ticket;
+   if(ticket == 0 || !PositionSelectByTicket(ticket))
+   {
+      err_out = "Position not found: " + IntegerToString(cmd.position_ticket);
+      return false;
+   }
+   g_trade.SetDeviationInPoints((int)InpTradeDeviationPts);
+   if(!g_trade.PositionClose(ticket))
+   {
+      err_out = g_trade.ResultRetcodeDescription();
+      return false;
+   }
+   ticket_out = (long)ticket;
+   return true;
+}
+
+//+------------------------------------------------------------------+
 bool ExecuteOneCommand(const EaCommand &cmd, long &ticket_out, string &err_out)
 {
    ticket_out = 0;
    err_out = "";
+   if(cmd.command_type == "close_position")
+      return ExecuteClosePosition(cmd, ticket_out, err_out);
    string sym = cmd.symbol;
    if(!SymbolSelect(sym, true))
    {

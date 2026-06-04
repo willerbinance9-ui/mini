@@ -1,4 +1,5 @@
 import { api } from './api';
+import type { Mt5Position } from '../types';
 
 export type LiveTradingBotType = 'synthetix_ea' | 'quantix_ea';
 
@@ -84,4 +85,13 @@ export const liveTradingService = {
       `/live-trading/prices${q}`
     );
   },
+  getPositions: (accountId: string) =>
+    api.get<{ positions: Mt5Position[]; source?: string; snapshotAt?: string | null }>(
+      `/live-trading/accounts/${encodeURIComponent(accountId)}/positions`
+    ),
+  closePosition: (accountId: string, positionId: string) =>
+    api.post<{ ok: boolean; queued?: boolean }>(
+      `/live-trading/accounts/${encodeURIComponent(accountId)}/positions/close`,
+      { positionId }
+    ),
 };

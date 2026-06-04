@@ -538,6 +538,23 @@ async function insertMt5EaTelemetry({ mt5AccountId, payload }) {
   return data;
 }
 
+async function updateMt5EaAccountSnapshot(mt5AccountId, { positions, balance, equity }) {
+  const patch = {
+    ea_positions_snapshot: Array.isArray(positions) ? positions : [],
+    ea_snapshot_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  if (balance != null && Number.isFinite(Number(balance))) {
+    patch.cached_balance = Number(balance);
+    patch.balance_last_updated_at = new Date().toISOString();
+  }
+  if (equity != null && Number.isFinite(Number(equity))) {
+    patch.cached_equity = Number(equity);
+  }
+  const { error } = await supabase.from('mt5_accounts').update(patch).eq('id', mt5AccountId);
+  if (error) throw error;
+}
+
 async function insertMt5EaCommand(row) {
   const { data, error } = await supabase.from('mt5_ea_commands').insert(row).select('*').single();
   if (error) throw error;
@@ -547,7 +564,9 @@ async function insertMt5EaCommand(row) {
 async function listPendingMt5EaCommands(mt5AccountId, limit = 50) {
   const { data, error } = await supabase
     .from('mt5_ea_commands')
-    .select('id, client_id, side, symbol, volume, stop_loss, take_profit, magic, status, created_at')
+    .select(
+      'id, client_id, command_type, side, symbol, volume, stop_loss, take_profit, magic, position_ticket, status, created_at'
+    )
     .eq('mt5_account_id', mt5AccountId)
     .eq('status', 'pending')
     .order('created_at', { ascending: true })
@@ -3760,6 +3779,7 @@ module.exports = {
   getMt5AccountByLoginAndServer,
   setMt5EaWebhookToken,
   insertMt5EaTelemetry,
+  updateMt5EaAccountSnapshot,
   insertMt5EaCommand,
   listPendingMt5EaCommands,
   ackMt5EaCommand,

@@ -4,6 +4,7 @@ const {
   getMt5AccountByEaWebhookToken,
   getMt5AccountByLoginAndServer,
   insertMt5EaTelemetry,
+  updateMt5EaAccountSnapshot,
   listPendingMt5EaCommands,
   ackMt5EaCommand,
   upsertMarketPricesBatch,
@@ -77,6 +78,7 @@ function priceFeedRateOk(req) {
 }
 
 const { normalizePriceBatch } = require('./services/priceFeedNormalize');
+const { normalizeEaPositionsFromPayload } = require('./services/mt5BridgeService');
 
 function registerMt5EaWebhookRoutes(app) {
   const router = express.Router();
@@ -95,7 +97,13 @@ function registerMt5EaWebhookRoutes(app) {
         if (!account) return res.status(401).json({ message: 'Unauthorized' });
         const payload = req.body && typeof req.body === 'object' ? req.body : {};
         await insertMt5EaTelemetry({ mt5AccountId: account.id, payload });
-        return res.json({ ok: true });
+        const positions = normalizeEaPositionsFromPayload(payload.positions);
+        await updateMt5EaAccountSnapshot(account.id, {
+          positions,
+          balance: payload.balance,
+          equity: payload.equity,
+        });
+        return res.json({ ok: true, positions: positions.length });
       } catch (e) {
         if (isMissingTableError(e)) {
           return res.status(503).json({
@@ -119,12 +127,14 @@ function registerMt5EaWebhookRoutes(app) {
         commands: rows.map((r) => ({
           id: r.id,
           clientId: r.client_id,
+          commandType: r.command_type || 'market',
           side: r.side,
           symbol: r.symbol,
           volume: Number(r.volume),
           stopLoss: r.stop_loss != null ? Number(r.stop_loss) : null,
           takeProfit: r.take_profit != null ? Number(r.take_profit) : null,
           magic: r.magic,
+          positionTicket: r.position_ticket != null ? Number(r.position_ticket) : null,
           createdAt: r.created_at,
         })),
       });

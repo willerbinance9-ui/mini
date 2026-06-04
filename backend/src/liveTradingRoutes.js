@@ -9,11 +9,17 @@ const {
   ensureLiveTradingWalletRow,
   upsertLiveTradingWalletBalance,
   insertLiveTradingTransfer,
+  insertMt5EaCommand,
   setMt5AccountMetaApiId,
   listMarketPrices,
   getLatestMarketPriceUpdate,
   isMissingTableError,
 } = require('./db');
+const {
+  positionsFromAccountRow,
+  useMt5Bridge,
+  enqueueClosePositionCommand,
+} = require('./services/mt5BridgeService');
 const { ensureMetaApiAccount } = require('./services/mt5Client');
 const { mapPriceRowForApi } = require('./services/priceFeedNormalize');
 const {
@@ -233,6 +239,44 @@ function registerLiveTradingRoutes(app, { authMiddleware }) {
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: SCHEMA_MSG });
       return res.status(500).json({ message: e?.message || 'Return to cash failed' });
+    }
+  });
+
+  app.get('/live-trading/accounts/:id/positions', authMiddleware, async (req, res) => {
+    try {
+      const loaded = await loadAccountWithWallet(req.userId, req.params.id);
+      if (!loaded) return res.status(404).json({ message: 'Live account not found' });
+      if (!useMt5Bridge(loaded.account)) {
+        return res.status(503).json({
+          message: 'Positions require EmaWebhookEa on this MT5 account. Attach the EA and wait for telemetry.',
+        });
+      }
+      const positions = positionsFromAccountRow(loaded.account);
+      return res.json({
+        positions,
+        source: 'mt5_bridge',
+        snapshotAt: loaded.account.ea_snapshot_at || null,
+      });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: SCHEMA_MSG });
+      return res.status(500).json({ message: e?.message || 'Failed to load positions' });
+    }
+  });
+
+  app.post('/live-trading/accounts/:id/positions/close', authMiddleware, async (req, res) => {
+    try {
+      const loaded = await loadAccountWithWallet(req.userId, req.params.id);
+      if (!loaded) return res.status(404).json({ message: 'Live account not found' });
+      const positionId = req.body?.positionId ?? req.body?.ticket;
+      if (!positionId) return res.status(400).json({ message: 'positionId is required' });
+      if (!useMt5Bridge(loaded.account) && !loaded.account.ea_webhook_token) {
+        return res.status(503).json({ message: 'MT5 EA bridge not configured for this account' });
+      }
+      const row = await enqueueClosePositionCommand(insertMt5EaCommand, loaded.account.id, positionId);
+      return res.json({ ok: true, queued: true, commandId: row.id });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: SCHEMA_MSG });
+      return res.status(500).json({ message: e?.message || 'Failed to queue close' });
     }
   });
 
