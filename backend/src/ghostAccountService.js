@@ -30,6 +30,8 @@ const {
   getCryptoBalancesByUserId,
   updateAirfarmingAutoFundSetting,
   listAllGhostAccountsAdmin,
+  listAllGhostAccountMembersAdmin,
+  listUsersAdmin,
 } = require('./db');
 const { computeProfit } = require('./airfarmingDrops');
 const { ELIGIBILITY_SNAPSHOT_MS, computeDropPhase } = require('./airfarmingDropUtils');
@@ -798,6 +800,135 @@ async function buildGhostNetworkAdmin(ghostAccountId) {
   };
 }
 
+async function buildGhostParticleNetworkAdmin({ userLimit = 500 } = {}) {
+  await processAllGhostLendQueues();
+
+  const cap = Math.min(500, Math.max(50, Number(userLimit) || 500));
+  const users = await listUsersAdmin({ limit: cap });
+  const ghostAccounts = await listAllGhostAccountsAdmin(200);
+  const ghostMembers = await listAllGhostAccountMembersAdmin(500);
+
+  const ownerByUserId = new Map();
+  const memberMetaByUserId = new Map();
+  for (const ga of ghostAccounts) {
+    ownerByUserId.set(ga.owner_user_id, ga);
+  }
+  for (const row of ghostMembers) {
+    const ga = row.ghost_accounts || {};
+    memberMetaByUserId.set(row.member_user_id, {
+      ghostAccountId: row.ghost_account_id,
+      ownerUserId: ga.owner_user_id,
+    });
+  }
+
+  const edges = [];
+  for (const row of ghostMembers) {
+    const ga = row.ghost_accounts || {};
+    const ownerUserId = ga.owner_user_id;
+    if (!ownerUserId) continue;
+    const memberNode = await buildMemberNetworkNode(
+      row.member_user_id,
+      null,
+      row.ghost_account_id
+    );
+    memberNode.email =
+      memberNode.email === '—'
+        ? (users.find((u) => u.id === row.member_user_id)?.email || '—')
+        : memberNode.email;
+
+    edges.push({
+      fromUserId: ownerUserId,
+      toUserId: row.member_user_id,
+      ghostAccountId: row.ghost_account_id,
+      lendAmount: memberNode.lendAmount,
+      needed: memberNode.needed,
+      lendStatus: memberNode.lendStatus,
+      pendingTransfer: memberNode.lendStatus === 'scheduled',
+      activeTransfer: memberNode.lendStatus === 'lent',
+      servingSoon: memberNode.servingSoon,
+      dueAt: memberNode.dueAt,
+      airfarmingBalance: memberNode.airfarmingBalance,
+    });
+  }
+
+  const nodes = users.map((u) => {
+    const ownerGa = ownerByUserId.get(u.id);
+    const memberMeta = memberMetaByUserId.get(u.id);
+    let ghostRole = 'none';
+    let connected = false;
+    let ghostAccountId = null;
+    const base = {
+      userId: u.id,
+      email: u.email || '—',
+      ghostRole,
+      connected,
+      ghostAccountId,
+    };
+
+    if (ownerGa) {
+      ghostRole = 'owner';
+      connected = true;
+      ghostAccountId = ownerGa.id;
+      const memberCount = ghostMembers.filter(
+        (m) => m.ghost_account_id === ownerGa.id
+      ).length;
+      return {
+        ...base,
+        ghostRole,
+        connected,
+        ghostAccountId,
+        poolBalance: Number(ownerGa.pool_balance || 0),
+        memberCount,
+        accountStatus: ownerGa.status,
+      };
+    }
+
+    if (memberMeta) {
+      ghostRole = 'member';
+      connected = true;
+      ghostAccountId = memberMeta.ghostAccountId;
+      const edge = edges.find((e) => e.toUserId === u.id);
+      return {
+        ...base,
+        ghostRole,
+        connected,
+        ghostAccountId,
+        ownerUserId: memberMeta.ownerUserId,
+        airfarmingBalance: edge?.airfarmingBalance ?? 0,
+        needed: edge?.needed ?? 0,
+        lendAmount: edge?.lendAmount ?? null,
+        lendStatus: edge?.lendStatus ?? null,
+        pendingTransfer: edge?.pendingTransfer ?? false,
+        activeTransfer: edge?.activeTransfer ?? false,
+        servingSoon: edge?.servingSoon ?? false,
+        dueAt: edge?.dueAt ?? null,
+        hasDrop: Boolean(edge?.dueAt),
+      };
+    }
+
+    return base;
+  });
+
+  const ghostOwnerCount = ghostAccounts.length;
+  const ghostMemberCount = ghostMembers.length;
+  const pendingTransfers = edges.filter((e) => e.pendingTransfer).length;
+  const servingSoonCount = edges.filter((e) => e.servingSoon).length;
+
+  return {
+    nodes,
+    edges,
+    stats: {
+      totalUsers: nodes.length,
+      ghostOwners: ghostOwnerCount,
+      ghostMembers: ghostMemberCount,
+      unconnected: nodes.filter((n) => !n.connected).length,
+      pendingTransfers,
+      servingSoonCount,
+    },
+    pollIntervalSec: 5,
+  };
+}
+
 module.exports = {
   GHOST_MIN_ELIGIBILITY_USD,
   GHOST_MIN_ALLOCATION_USD,
@@ -819,4 +950,5 @@ module.exports = {
   maskEmail,
   listGhostAccountsAdminSummary,
   buildGhostNetworkAdmin,
+  buildGhostParticleNetworkAdmin,
 };

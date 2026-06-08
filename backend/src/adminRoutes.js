@@ -71,6 +71,7 @@ const {
   processAllGhostLendQueues,
   listGhostAccountsAdminSummary,
   buildGhostNetworkAdmin,
+  buildGhostParticleNetworkAdmin,
 } = require('./ghostAccountService');
 
 function newId() {
@@ -1534,6 +1535,18 @@ function registerAdminRoutes(app) {
       if (isMissingTableError(e)) return res.status(503).json({ message: ghostSchemaMsg });
       console.error('[admin/ghost-accounts]', e);
       return res.status(500).json({ message: e.message || 'Failed to load ghost accounts' });
+    }
+  });
+
+  app.get('/admin/api/ghost-accounts/particle-network', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const userLimit = Number(req.query.limit) || 500;
+      const network = await buildGhostParticleNetworkAdmin({ userLimit });
+      return res.json(network);
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: ghostSchemaMsg });
+      console.error('[admin/ghost-accounts/particle-network]', e);
+      return res.status(500).json({ message: e.message || 'Failed to load particle network' });
     }
   });
 

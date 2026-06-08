@@ -198,26 +198,35 @@
       background: linear-gradient(90deg, hsl(120, 72%, 42%), hsl(60, 72%, 45%), hsl(0, 72%, 42%));
       border: 1px solid var(--border);
     }
+    .ghost-particle-panel {
+      padding: 0 !important;
+      overflow: hidden;
+      background: #000;
+      border-color: #1a1a1a;
+    }
+    .ghost-particle-header {
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
     .ghost-network-wrap {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 12px;
-      margin: 16px 0;
+      align-items: stretch;
+      gap: 0;
+      margin: 0;
     }
     .ghost-network-canvas-box {
       position: relative;
       background: #000;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
       overflow: hidden;
+      min-height: 62vh;
     }
     #ghostNetworkCanvas {
       display: block;
       width: 100%;
-      max-width: 520px;
-      height: auto;
-      aspect-ratio: 1;
+      height: 62vh;
+      min-height: 420px;
     }
     .ghost-network-legend {
       display: flex;
@@ -237,8 +246,6 @@
     .ghost-legend-soon { background: #5eb3ff; box-shadow: 0 0 8px #5eb3ff; }
     .ghost-serving-soon td { color: #5eb3ff !important; }
     .ghost-serving-soon strong { color: #7ec8ff !important; }
-    .ghost-account-row { cursor: pointer; }
-    .ghost-account-row.selected { background: rgba(94, 179, 255, 0.12); }
     #ghostNetworkTooltip {
       position: absolute;
       pointer-events: none;
@@ -1224,61 +1231,32 @@
         </div>
 
         <div id="panelGhost" class="hidden superadmin-only">
-          <div class="card">
-            <h3 style="margin:0 0 8px;font-size:1rem;">Ghost Account networks</h3>
-            <p class="hint" style="margin-bottom:12px;">
-              Shared pool owners and members. Dots connect owner to each member — <span style="color:#e8e8e8;">white</span> by default,
-              <span style="color:#5eb3ff;">blue</span> when a member drop is due in under 5 minutes.
-            </p>
-            <div class="row" style="align-items:flex-end;margin-bottom:12px;">
-              <button type="button" class="btn-primary" id="refreshGhostBtn" style="width:auto;">Refresh</button>
-            </div>
-            <p id="ghostStats" class="hint"></p>
-            <div id="ghostLoading" class="loading hidden">Loading ghost accounts…</div>
-            <div style="overflow-x:auto;margin-bottom:16px;">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Owner</th>
-                    <th>Members</th>
-                    <th>Pool</th>
-                    <th>Available</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody id="ghostAccountRows"></tbody>
-              </table>
-            </div>
-            <div id="ghostNetworkSection" class="hidden">
-              <h4 style="margin:0 0 8px;font-size:0.95rem;" id="ghostNetworkTitle">Network</h4>
-              <div class="ghost-network-wrap">
-                <div class="ghost-network-legend">
-                  <span><span class="ghost-legend-dot ghost-legend-idle"></span>Idle</span>
-                  <span><span class="ghost-legend-dot ghost-legend-soon"></span>Serving in &lt; 5 min</span>
-                </div>
-                <div class="ghost-network-canvas-box">
-                  <canvas id="ghostNetworkCanvas" width="520" height="520"></canvas>
-                  <div id="ghostNetworkTooltip"></div>
+          <div class="card ghost-particle-panel">
+            <div class="ghost-particle-header">
+              <h3 style="margin:0 0 6px;font-size:1rem;">Ghost particle network</h3>
+              <p class="hint" style="margin:0 0 10px;">
+                Every account is a dot on the sphere. <span style="color:#e8e8e8;">White</span> lines link ghost pool owners to members.
+                Lines turn <span style="color:#5eb3ff;">blue</span> for pending transfers when a member drop is due in under 5 minutes.
+                Hover a dot for balances and transfer state.
+              </p>
+              <div class="row" style="align-items:center;margin-bottom:8px;">
+                <button type="button" class="btn-primary" id="refreshGhostBtn" style="width:auto;">Refresh</button>
+                <div class="ghost-network-legend" style="margin-left:16px;">
+                  <span><span class="ghost-legend-dot ghost-legend-idle"></span>Connected / idle</span>
+                  <span><span class="ghost-legend-dot ghost-legend-soon"></span>Serving &lt; 5 min</span>
+                  <span style="opacity:0.45;">· dim = not in ghost</span>
                 </div>
               </div>
-              <h4 style="margin:16px 0 8px;font-size:0.95rem;">Member balances</h4>
-              <div style="overflow-x:auto;">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Member</th>
-                      <th>Have</th>
-                      <th>Need</th>
-                      <th>Drop due</th>
-                      <th>Lend</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody id="ghostMemberRows"></tbody>
-                </table>
+              <p id="ghostStats" class="hint" style="margin:0;"></p>
+              <div id="ghostLoading" class="loading hidden">Loading particle network…</div>
+            </div>
+            <div class="ghost-network-wrap">
+              <div class="ghost-network-canvas-box">
+                <canvas id="ghostNetworkCanvas" width="960" height="640"></canvas>
+                <div id="ghostNetworkTooltip"></div>
               </div>
             </div>
-            <p id="ghostErr" class="err hidden"></p>
+            <p id="ghostErr" class="err hidden" style="padding:12px 20px;"></p>
           </div>
         </div>
 
@@ -4092,16 +4070,21 @@
       });
     }
 
-    let selectedGhostAccountId = null;
     let ghostNetworkData = null;
     let ghostNetworkAnimId = null;
     let ghostNetworkPollTimer = null;
     let ghostNetworkRotation = 0;
-    let ghostNetworkHovered = -1;
 
     function showGhostErr(e) {
       document.getElementById('ghostErr').textContent = e.message;
       document.getElementById('ghostErr').classList.remove('hidden');
+    }
+
+    function stopGhostNetworkAnim() {
+      if (ghostNetworkAnimId) {
+        cancelAnimationFrame(ghostNetworkAnimId);
+        ghostNetworkAnimId = null;
+      }
     }
 
     function stopGhostNetworkPoll() {
@@ -4109,20 +4092,18 @@
         clearInterval(ghostNetworkPollTimer);
         ghostNetworkPollTimer = null;
       }
-      if (ghostNetworkAnimId) {
-        cancelAnimationFrame(ghostNetworkAnimId);
-        ghostNetworkAnimId = null;
-      }
+      stopGhostNetworkAnim();
     }
 
     function startGhostNetworkPoll() {
-      stopGhostNetworkPoll();
-      if (!selectedGhostAccountId || activeTab !== 'ghost') return;
+      if (ghostNetworkPollTimer) {
+        clearInterval(ghostNetworkPollTimer);
+        ghostNetworkPollTimer = null;
+      }
+      if (activeTab !== 'ghost') return;
       const sec = ghostNetworkData?.pollIntervalSec || 5;
       ghostNetworkPollTimer = setInterval(() => {
-        if (activeTab === 'ghost' && selectedGhostAccountId) {
-          loadGhostNetwork(selectedGhostAccountId).catch(showGhostErr);
-        }
+        if (activeTab === 'ghost') loadGhostParticleNetwork(true).catch(showGhostErr);
       }, sec * 1000);
     }
 
@@ -4143,11 +4124,28 @@
       const sin = Math.sin(rotY);
       const rx = x * cos - z * sin;
       const rz = x * sin + z * cos;
-      const persp = 1 / (1 + rz * 0.0015);
+      const persp = 1 / (1 + rz * 0.0018);
       return { px: cx + rx * persp * scale, py: cy + y * persp * scale, depth: rz };
     }
 
-    function renderGhostNetworkCanvas(data) {
+    function ghostNodeRadius(node) {
+      if (node.ghostRole === 'owner') return 7;
+      if (node.connected) return 5;
+      return 2;
+    }
+
+    function ghostNodeColor(node) {
+      if (node.servingSoon) return '#5eb3ff';
+      if (node.ghostRole === 'owner') return '#ffffff';
+      if (node.connected) return '#d8e8ff';
+      return 'rgba(180, 200, 230, 0.35)';
+    }
+
+    function ghostEdgeColor(edge) {
+      return edge.servingSoon ? '#5eb3ff' : '#e8e8e8';
+    }
+
+    function renderGhostParticleCanvas(data) {
       const canvas = document.getElementById('ghostNetworkCanvas');
       if (!canvas || !data) return;
       const ctx = canvas.getContext('2d');
@@ -4155,72 +4153,98 @@
       const h = canvas.height;
       const cx = w / 2;
       const cy = h / 2;
-      const members = data.members || [];
-      const n = members.length;
-      const radius = Math.min(w, h) * 0.36;
+      const rawNodes = data.nodes || [];
+      const edges = data.edges || [];
+      const n = rawNodes.length;
+      const radius = Math.min(w, h) * 0.38;
 
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, w, h);
 
-      const ownerColor = '#ffffff';
-      const owner = { px: cx, py: cy, r: 10, label: 'Pool' };
+      for (let i = 0; i < 120; i++) {
+        const p = fibonacciSpherePoint(i, 120, radius * 1.05);
+        const proj = project3d(p.x, p.y, p.z, ghostNetworkRotation * 0.6, cx, cy, 1);
+        ctx.beginPath();
+        ctx.arc(proj.px, proj.py, 1, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(120, 170, 220, 0.12)';
+        ctx.fill();
+      }
 
-      const nodes = members.map((m, i) => {
+      const nodeById = new Map();
+      const drawNodes = rawNodes.map((node, i) => {
         const p = fibonacciSpherePoint(i, Math.max(n, 2), radius);
         const proj = project3d(p.x, p.y, p.z, ghostNetworkRotation, cx, cy, 1);
-        return {
-          member: m,
-          px: proj.px,
-          py: proj.py,
-          depth: proj.depth,
-          r: 5,
-          idx: i,
-        };
+        const r = ghostNodeRadius(node);
+        const item = { node, px: proj.px, py: proj.py, depth: proj.depth, r, idx: i };
+        nodeById.set(node.userId, item);
+        return item;
       });
-      nodes.sort((a, b) => a.depth - b.depth);
+      drawNodes.sort((a, b) => a.depth - b.depth);
 
-      nodes.forEach((node) => {
-        const color = node.member.servingSoon ? '#5eb3ff' : '#e8e8e8';
+      const edgeDraws = edges
+        .map((edge) => {
+          const from = nodeById.get(edge.fromUserId);
+          const to = nodeById.get(edge.toUserId);
+          if (!from || !to) return null;
+          return {
+            edge,
+            from,
+            to,
+            depth: (from.depth + to.depth) / 2,
+          };
+        })
+        .filter(Boolean);
+      edgeDraws.sort((a, b) => a.depth - b.depth);
+
+      edgeDraws.forEach((ed) => {
+        const color = ghostEdgeColor(ed.edge);
         ctx.beginPath();
-        ctx.moveTo(owner.px, owner.py);
-        ctx.lineTo(node.px, node.py);
+        ctx.moveTo(ed.from.px, ed.from.py);
+        ctx.lineTo(ed.to.px, ed.to.py);
         ctx.strokeStyle = color;
-        ctx.globalAlpha = node.member.servingSoon ? 0.95 : 0.55;
-        ctx.lineWidth = node.member.servingSoon ? 2 : 1;
+        ctx.globalAlpha = ed.edge.servingSoon ? 0.95 : ed.edge.pendingTransfer ? 0.75 : 0.45;
+        ctx.lineWidth = ed.edge.servingSoon ? 2.2 : ed.edge.pendingTransfer ? 1.6 : 1;
         ctx.stroke();
         ctx.globalAlpha = 1;
       });
 
-      nodes.forEach((node) => {
-        const color = node.member.servingSoon ? '#5eb3ff' : '#e8e8e8';
+      drawNodes.forEach((dn) => {
+        const color = ghostNodeColor(dn.node);
         ctx.beginPath();
-        ctx.arc(node.px, node.py, node.r, 0, Math.PI * 2);
+        ctx.arc(dn.px, dn.py, dn.r, 0, Math.PI * 2);
         ctx.fillStyle = color;
-        ctx.fill();
-        if (node.member.servingSoon) {
+        if (dn.node.servingSoon) {
           ctx.shadowColor = '#5eb3ff';
-          ctx.shadowBlur = 12;
-          ctx.fill();
-          ctx.shadowBlur = 0;
+          ctx.shadowBlur = 14;
         }
+        ctx.fill();
+        ctx.shadowBlur = 0;
       });
 
-      ctx.beginPath();
-      ctx.arc(owner.px, owner.py, owner.r, 0, Math.PI * 2);
-      ctx.fillStyle = ownerColor;
-      ctx.fill();
-      ctx.font = '11px system-ui,sans-serif';
-      ctx.fillStyle = '#aaa';
-      ctx.textAlign = 'center';
-      ctx.fillText('Pool', owner.px, owner.py + 22);
-
-      ghostNetworkRotation += 0.004;
+      ghostNetworkRotation += 0.003;
       ghostNetworkAnimId = requestAnimationFrame(() => {
-        if (activeTab === 'ghost' && ghostNetworkData) renderGhostNetworkCanvas(ghostNetworkData);
+        if (activeTab === 'ghost' && ghostNetworkData) renderGhostParticleCanvas(ghostNetworkData);
       });
 
-      canvas._ghostNodes = nodes;
-      canvas._ghostOwner = owner;
+      canvas._ghostNodes = drawNodes;
+    }
+
+    function ghostNodeTooltipHtml(node) {
+      let html = '<strong>' + escapeHtml(node.email) + '</strong><br>';
+      if (node.ghostRole === 'owner') {
+        html += 'Ghost pool owner<br>Pool: ' + fmtMoney(node.poolBalance || 0) +
+          ' · Members: ' + (node.memberCount || 0);
+      } else if (node.ghostRole === 'member') {
+        html += 'Ghost member<br>Have: ' + fmtMoney(node.airfarmingBalance || 0) +
+          ' · Need: ' + fmtMoney(node.needed || 0);
+        if (node.lendStatus) html += '<br>Transfer: ' + escapeHtml(node.lendStatus) +
+          (node.lendAmount != null ? ' ' + fmtMoney(node.lendAmount) : '');
+        if (node.dueAt) html += '<br>Drop: ' + new Date(node.dueAt).toLocaleString();
+        if (node.servingSoon) html += '<br><span style="color:#5eb3ff;">Serving in &lt; 5 min</span>';
+      } else {
+        html += 'Not connected to ghost';
+      }
+      return html;
     }
 
     function setupGhostCanvasHover() {
@@ -4236,24 +4260,20 @@
         const my = (ev.clientY - rect.top) * scaleY;
         const nodes = canvas._ghostNodes || [];
         let hit = -1;
-        for (let i = 0; i < nodes.length; i++) {
+        for (let i = nodes.length - 1; i >= 0; i--) {
           const dx = mx - nodes[i].px;
           const dy = my - nodes[i].py;
-          if (dx * dx + dy * dy <= (nodes[i].r + 8) * (nodes[i].r + 8)) {
+          const hitR = nodes[i].r + (nodes[i].node.connected ? 10 : 4);
+          if (dx * dx + dy * dy <= hitR * hitR) {
             hit = i;
             break;
           }
         }
         if (hit >= 0) {
-          const m = nodes[hit].member;
           tip.style.display = 'block';
           tip.style.left = (ev.clientX - rect.left + 12) + 'px';
           tip.style.top = (ev.clientY - rect.top + 12) + 'px';
-          tip.innerHTML =
-            '<strong>' + escapeHtml(m.email) + '</strong><br>' +
-            'Have: ' + fmtMoney(m.airfarmingBalance) + '<br>' +
-            'Need: ' + fmtMoney(m.needed) + '<br>' +
-            (m.dueAt ? 'Drop: ' + new Date(m.dueAt).toLocaleString() : 'No scheduled drop');
+          tip.innerHTML = ghostNodeTooltipHtml(nodes[hit].node);
         } else {
           tip.style.display = 'none';
         }
@@ -4263,96 +4283,39 @@
       });
     }
 
-    function renderGhostMemberTable(data) {
-      const tbody = document.getElementById('ghostMemberRows');
-      const members = data.members || [];
-      if (!members.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="hint">No members yet.</td></tr>';
-        return;
-      }
-      tbody.innerHTML = members.map((m) => {
-        const rowClass = m.servingSoon ? 'ghost-serving-soon' : '';
-        const dropLabel = m.dueAt
-          ? new Date(m.dueAt).toLocaleString() + (m.secondsRemaining != null ? ' (' + fmtCountdown(m.secondsRemaining) + ')' : '')
-          : '—';
-        const status = m.servingSoon
-          ? '<span style="color:#5eb3ff;">Serving soon</span>'
-          : m.hasDrop
-            ? escapeHtml(m.dropPhase || 'waiting')
-            : 'No drop';
-        return '<tr class="' + rowClass + '">' +
-          '<td><strong>' + escapeHtml(m.email) + '</strong></td>' +
-          '<td>' + fmtMoney(m.airfarmingBalance) + '</td>' +
-          '<td>' + fmtMoney(m.needed) + '</td>' +
-          '<td>' + escapeHtml(dropLabel) + '</td>' +
-          '<td>' + (m.lendAmount != null ? fmtMoney(m.lendAmount) + ' (' + escapeHtml(m.lendStatus || '—') + ')' : '—') + '</td>' +
-          '<td>' + status + '</td>' +
-          '</tr>';
-      }).join('');
+    function renderGhostStats(data) {
+      const s = data.stats || {};
+      document.getElementById('ghostStats').textContent =
+        (s.totalUsers || 0) + ' accounts · ' +
+        (s.ghostOwners || 0) + ' ghost owners · ' +
+        (s.ghostMembers || 0) + ' members · ' +
+        (s.unconnected || 0) + ' unconnected · ' +
+        (s.pendingTransfers || 0) + ' pending transfers · ' +
+        (s.servingSoonCount || 0) + ' serving soon';
     }
 
-    async function loadGhostNetwork(id) {
-      const data = await api('/admin/api/ghost-accounts/' + encodeURIComponent(id) + '/network');
-      ghostNetworkData = data;
-      document.getElementById('ghostNetworkSection').classList.remove('hidden');
-      document.getElementById('ghostNetworkTitle').textContent =
-        'Network — ' + (data.account?.ownerEmail || 'Owner') +
-        ' · ' + (data.members?.length || 0) + ' member(s)';
-      renderGhostMemberTable(data);
-      if (ghostNetworkAnimId) cancelAnimationFrame(ghostNetworkAnimId);
-      renderGhostNetworkCanvas(data);
-      setupGhostCanvasHover();
-      startGhostNetworkPoll();
+    async function loadGhostParticleNetwork(silent) {
+      if (!silent) {
+        document.getElementById('ghostErr').classList.add('hidden');
+        document.getElementById('ghostLoading').classList.remove('hidden');
+      }
+      try {
+        const data = await api('/admin/api/ghost-accounts/particle-network');
+        ghostNetworkData = data;
+        renderGhostStats(data);
+        if (ghostNetworkAnimId) cancelAnimationFrame(ghostNetworkAnimId);
+        renderGhostParticleCanvas(data);
+        setupGhostCanvasHover();
+        startGhostNetworkPoll();
+      } catch (e) {
+        showGhostErr(e);
+      } finally {
+        if (!silent) document.getElementById('ghostLoading').classList.add('hidden');
+      }
     }
 
     async function loadGhostAccounts() {
-      document.getElementById('ghostErr').classList.add('hidden');
-      document.getElementById('ghostLoading').classList.remove('hidden');
-      try {
-        const data = await api('/admin/api/ghost-accounts');
-        const accounts = data.accounts || [];
-        const tbody = document.getElementById('ghostAccountRows');
-        if (!accounts.length) {
-          tbody.innerHTML = '<tr><td colspan="5" class="hint">No ghost accounts enrolled yet.</td></tr>';
-          document.getElementById('ghostNetworkSection').classList.add('hidden');
-          selectedGhostAccountId = null;
-          stopGhostNetworkPoll();
-        } else {
-          tbody.innerHTML = accounts.map((a) => {
-            const sel = a.id === selectedGhostAccountId ? ' selected' : '';
-            return '<tr class="ghost-account-row' + sel + '" data-ghost-id="' + escapeHtml(a.id) + '">' +
-              '<td><strong>' + escapeHtml(a.ownerEmail) + '</strong></td>' +
-              '<td>' + a.memberCount + '</td>' +
-              '<td>' + fmtMoney(a.poolBalance) + '</td>' +
-              '<td>' + fmtMoney(a.poolAvailable) + '</td>' +
-              '<td>' + escapeHtml(a.status) + '</td>' +
-              '</tr>';
-          }).join('');
-          tbody.querySelectorAll('tr[data-ghost-id]').forEach((tr) => {
-            tr.onclick = () => {
-              selectedGhostAccountId = tr.getAttribute('data-ghost-id');
-              tbody.querySelectorAll('tr').forEach((r) => r.classList.remove('selected'));
-              tr.classList.add('selected');
-              loadGhostNetwork(selectedGhostAccountId).catch(showGhostErr);
-            };
-          });
-          if (!selectedGhostAccountId && accounts[0]) {
-            selectedGhostAccountId = accounts[0].id;
-            const first = tbody.querySelector('tr[data-ghost-id]');
-            if (first) first.classList.add('selected');
-            await loadGhostNetwork(selectedGhostAccountId);
-          } else if (selectedGhostAccountId) {
-            await loadGhostNetwork(selectedGhostAccountId);
-          }
-        }
-        document.getElementById('ghostStats').textContent = accounts.length + ' ghost account(s)';
-      } catch (e) {
-        document.getElementById('ghostAccountRows').innerHTML = '';
-        document.getElementById('ghostNetworkSection').classList.add('hidden');
-        showGhostErr(e);
-      } finally {
-        document.getElementById('ghostLoading').classList.add('hidden');
-      }
+      await loadGhostParticleNetwork(false);
     }
 
     async function loadLiveTrading() {
@@ -4713,7 +4676,7 @@
     document.getElementById('p2pStatusFilter').onchange = () => loadP2pTrades();
     document.getElementById('refreshVipBtn').onclick = () => loadVipFarmers().catch(showVipErr);
     document.getElementById('refreshLiveTradingBtn').onclick = () => loadLiveTrading().catch(showLiveTradingErr);
-    document.getElementById('refreshGhostBtn').onclick = () => loadGhostAccounts().catch(showGhostErr);
+    document.getElementById('refreshGhostBtn').onclick = () => loadGhostParticleNetwork(false).catch(showGhostErr);
     document.getElementById('refreshLevelsBtn').onclick = () => loadLevels().catch(showLevelsErr);
     document.getElementById('levelsSearch').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') loadLevels().catch(showLevelsErr);

@@ -4079,6 +4079,17 @@ async function listAllGhostAccountsAdmin(limit = 100) {
   return data || [];
 }
 
+async function listAllGhostAccountMembersAdmin(limit = 500) {
+  const { data, error } = await supabase
+    .from('ghost_account_members')
+    .select('*, ghost_accounts(id, owner_user_id, pool_balance, status)')
+    .order('created_at', { ascending: true })
+    .limit(Math.min(500, Math.max(1, Number(limit) || 500)));
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
 module.exports = {
   utcTodayYmd,
   getUserByEmail,
@@ -4323,4 +4334,5 @@ module.exports = {
   insertGhostAccountLedger,
   listGhostAccountLedger,
   listAllGhostAccountsAdmin,
+  listAllGhostAccountMembersAdmin,
 };
