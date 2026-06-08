@@ -736,7 +736,7 @@
               <div class="user-detail-group">
                 <h3 class="user-detail-group-title">Account &amp; wallets</h3>
                 <div class="user-detail-grid">
-              <section class="card admin-section superadmin-only">
+              <section class="card admin-section">
                 <h3 class="admin-section-title">Account status</h3>
                 <p id="userAccountStatusDesc" class="admin-section-desc"></p>
                 <div id="userWalletList" class="hint" style="font-size:0.82rem;line-height:1.6;"></div>
@@ -756,11 +756,11 @@
               <div class="user-detail-group">
                 <h3 class="user-detail-group-title">Airfarming</h3>
                 <div class="user-detail-grid">
-              <section class="card admin-section">
+              <section class="card admin-section superadmin-only">
                 <h3 class="admin-section-title">Drop controls</h3>
                 <p id="userPauseStatus" class="admin-section-desc"></p>
                 <div class="btn-toolbar">
-                  <button type="button" id="toggleUserPauseBtn" class="btn-warn">Pause drops</button>
+                  <button type="button" id="toggleUserPauseBtn" class="btn-warn">Start seeding</button>
                 </div>
               </section>
 
@@ -1615,6 +1615,24 @@
     let editingId = null;
     let maxPercent = 57.9;
     let maxProfitPerDrop = 5000;
+    function dropModeLabel(paused) {
+      return paused ? 'seeding' : 'serving';
+    }
+
+    function dropModePill(paused, untilIso) {
+      let pill = paused
+        ? '<span class="pill pill-paused">seeding</span>'
+        : '<span class="pill pill-ok">serving</span>';
+      if (paused && untilIso) {
+        pill += '<br><span style="color:var(--muted);font-size:0.65rem;">until ' + new Date(untilIso).toLocaleString() + '</span>';
+      }
+      return pill;
+    }
+
+    function dropToggleActionLabel(paused) {
+      return paused ? 'Serve' : 'Seed';
+    }
+
     let activeTab = 'users';
     let viewingUserId = null;
     let viewingUserDetail = null;
@@ -1804,18 +1822,13 @@
       }
       users.forEach((u) => {
         const tr = document.createElement('tr');
-        let pausePill = u.dropsPaused
-          ? '<span class="pill pill-paused">paused</span>'
-          : '<span class="pill pill-ok">active</span>';
+        let pausePill = dropModePill(u.dropsPaused, u.dropsPauseUntil);
         const statusCell = u.isBanned
           ? '<span class="pill pill-ban">banned</span>'
           : '<span class="pill pill-ok">active</span>';
         const vipCell = u.vipActive
           ? '<span class="pill pill-ok">active</span><br><span style="color:var(--muted);font-size:0.7rem;">' + fmtMoney(u.vipPrincipalUsd || 0) + '</span>'
           : '<span style="color:var(--muted);">—</span>';
-        if (u.dropsPaused && u.dropsPauseUntil) {
-          pausePill += '<br><span style="color:var(--muted);font-size:0.65rem;">until ' + new Date(u.dropsPauseUntil).toLocaleString() + '</span>';
-        }
         tr.innerHTML =
           '<td>' + escapeHtml(u.email) + '<br><span style="color:var(--muted);font-size:0.7rem;">' + escapeHtml(u.id.slice(0, 8)) + '…</span></td>' +
           '<td>' + statusCell + '</td>' +
@@ -1826,7 +1839,7 @@
           '<td style="white-space:nowrap;">' +
           (adminRole === 'superadmin'
             ? ('<button type="button" class="' + (u.dropsPaused ? 'btn-primary' : 'btn-warn') + '" data-pause-user="' + u.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">' +
-              (u.dropsPaused ? 'Resume' : 'Pause') + '</button>')
+              dropToggleActionLabel(u.dropsPaused) + '</button>')
             : '') +
           '<button type="button" class="btn-ghost" data-user="' + u.id + '">View</button></td>';
         tbody.appendChild(tr);
@@ -1978,14 +1991,14 @@
         '<div class="stat"><div class="val">' + fmtMoney(d.usdtBalance || 0) + '</div><div class="lbl">USDT</div></div>' +
         '<div class="stat"><div class="val">' + (vip ? fmtMoney(vip.principalUsd || 0) : '—') + '</div><div class="lbl">VIP principal</div></div>' +
         '<div class="stat"><div class="val">' + (vip ? (vip.matured ? 'Matured' : (vip.daysLeft + 'd left')) : 'No active') + '</div><div class="lbl">VIP status</div></div>' +
-        '<div class="stat"><div class="val">' + (af?.dropsPaused ? 'Paused' : 'Active') + '</div><div class="lbl">Drops</div></div>' +
+        '<div class="stat"><div class="val">' + (af?.dropsPaused ? 'Seeding' : 'Serving') + '</div><div class="lbl">Drops</div></div>' +
         '<div class="stat"><div class="val" id="statDeposits90">—</div><div class="lbl">Deposits 90d</div></div>' +
         '<div class="stat"><div class="val" id="statProfits90">—</div><div class="lbl">Profits 90d</div></div>' +
         '<div class="stat"><div class="val">' + (af?.autoFundEnabled ? 'On' : 'Off') + '</div><div class="lbl">Auto-fund</div></div>';
       document.getElementById('userPauseStatus').textContent =
         af?.dropsPaused
-          ? 'Drops are paused for this user. Tap Resume to unpause.'
-          : 'Drops are active. Tap Pause to stop scheduled payouts for this user.';
+          ? 'Drops are in seeding mode for this user. Tap Start serving to resume payouts.'
+          : 'Drops are serving for this user. Tap Start seeding to stop scheduled payouts.';
       updatePauseButton(af);
       const txBody = document.getElementById('userTxRows');
       txBody.innerHTML = '';
@@ -2406,10 +2419,10 @@
       }
       btn.style.display = '';
       if (af?.dropsPaused) {
-        btn.textContent = 'Resume drops';
+        btn.textContent = 'Start serving';
         btn.className = 'btn-primary';
       } else {
-        btn.textContent = 'Pause drops';
+        btn.textContent = 'Start seeding';
         btn.className = 'btn-warn';
       }
     }
@@ -2731,13 +2744,13 @@
 
     async function toggleUserPause() {
       if (adminRole !== 'superadmin') {
-        showUserPageAlert('Superadmin required to manage drop pause.', 'error');
+        showUserPageAlert('Superadmin required to manage drop serve/seed mode.', 'error');
         return;
       }
       const paused = Boolean(viewingUserDetail?.airfarming?.dropsPaused);
       try {
         await patchUserPause(paused ? { clearPause: true } : { dropsPaused: true });
-        showUserPageAlert(paused ? 'Drops resumed for this user.' : 'Drops paused for this user.', 'success');
+        showUserPageAlert(paused ? 'User is now serving drops.' : 'User is now seeding drops.', 'success');
       } catch (e) {
         showUserPageAlert(e.message, 'error');
       }
@@ -2768,7 +2781,7 @@
           void loadUserCharts(userId);
         }
       } catch (e) {
-        alert(e.message || 'Failed to update pause');
+        alert(e.message || 'Failed to update serve/seed mode');
       } finally {
         if (btnEl) btnEl.disabled = false;
       }
@@ -2799,7 +2812,7 @@
         const bands = p.bandIndexes.length ? ' tiers ' + p.bandIndexes.join(',') : ' all tiers';
         div.innerHTML =
           '<span>' + new Date(p.startsAt).toLocaleString() + ' → ' + new Date(p.endsAt).toLocaleString() + bands +
-          (p.activeNow ? ' <span class="pill pill-paused">active</span>' : '') + '</span>';
+          (p.activeNow ? ' <span class="pill pill-paused">seeding</span>' : '') + '</span>';
         if (p.activeNow) {
           const btn = document.createElement('button');
           btn.type = 'button';
@@ -2865,7 +2878,7 @@
       }
       drops.forEach((d) => {
         const tr = document.createElement('tr');
-        const paused = d.dropsPaused ? ' <span class="pill pill-paused">paused</span>' : '';
+        const paused = d.dropsPaused ? ' <span class="pill pill-paused">seeding</span>' : '';
         const vip = d.isVipPriority ? ' <span class="pill" style="background:rgba(245,158,11,0.18);border-color:rgba(245,158,11,0.45);color:#fbbf24;">VIP</span>' : '';
         tr.innerHTML =
           '<td>' + escapeHtml(d.userEmail) + paused + vip + '<br><span style="color:var(--muted);font-size:0.7rem;">#' + d.dropIndex + ' · ' + d.weekStart + '</span></td>' +
@@ -2877,7 +2890,7 @@
           '<td>' +
           '<button type="button" class="btn-ghost" data-id="' + d.id + '" style="margin-right:6px;">Edit</button>' +
           '<button type="button" class="btn-primary" data-postpone-drop="' + d.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">+1h</button>' +
-          '<button type="button" class="btn-warn" data-pause-user-drop="' + d.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Pause user</button>' +
+          '<button type="button" class="btn-warn" data-pause-user-drop="' + d.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Seed user</button>' +
           '<button type="button" class="btn-danger" data-delete-drop="' + d.id + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Delete</button>' +
           '</td>';
         tbody.appendChild(tr);
@@ -2931,7 +2944,7 @@
 
     async function pauseUserFromDrop(id, btnEl) {
       if (!id) return;
-      if (!confirm('Pause all drops for this user?')) return;
+      if (!confirm('Set this user to seeding mode (stop all drops)?')) return;
       document.getElementById('loadErr').classList.add('hidden');
       try {
         if (btnEl) btnEl.disabled = true;
@@ -3461,8 +3474,8 @@
         const dropPill = blocked
           ? '<span class="pill pill-paused">blocked (red)</span>'
           : row.dropsPaused
-            ? '<span class="pill pill-paused">paused</span>'
-            : '<span class="pill pill-ok">active</span>';
+            ? '<span class="pill pill-paused">seeding</span>'
+            : '<span class="pill pill-ok">serving</span>';
         const stats = row.stats || {};
         tr.innerHTML =
           '<td><div class="level-meter">' +
@@ -3949,7 +3962,7 @@
       applied: 'Applied',
       waiting: 'Waiting',
       not_eligible: 'Not eligible',
-      paused: 'Paused',
+      paused: 'Seeding',
     };
 
     function renderAiPlansList() {
