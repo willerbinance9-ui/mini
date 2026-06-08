@@ -29,9 +29,10 @@ const {
   userIsBanned,
   getCryptoBalancesByUserId,
   updateAirfarmingAutoFundSetting,
+  listAllGhostAccountsAdmin,
 } = require('./db');
 const { computeProfit } = require('./airfarmingDrops');
-const { ELIGIBILITY_SNAPSHOT_MS } = require('./airfarmingDropUtils');
+const { ELIGIBILITY_SNAPSHOT_MS, computeDropPhase } = require('./airfarmingDropUtils');
 const { totalUsdtFamilyAvailable } = require('./usdtBalances');
 const { getWithdrawalTrustScoreForUser } = require('./services/withdrawalTrustScore');
 const { splitPlatformFee } = require('./platformRevenueService');
@@ -652,6 +653,151 @@ async function buildGhostAccountStatus(ownerUserId) {
   };
 }
 
+async function listGhostAccountsAdminSummary() {
+  const rows = await listAllGhostAccountsAdmin(200);
+  if (!rows.length) return [];
+
+  const ownerIds = rows.map((r) => r.owner_user_id);
+  const owners = await getUsersByIds(ownerIds);
+  const emailById = new Map(owners.map((u) => [u.id, u.email]));
+
+  const out = [];
+  for (const row of rows) {
+    const members = await listGhostAccountMembers(row.id);
+    const committed = await sumCommittedGhostLendAmounts(row.id);
+    const poolBalance = Number(row.pool_balance || 0);
+    out.push({
+      id: row.id,
+      ownerUserId: row.owner_user_id,
+      ownerEmail: emailById.get(row.owner_user_id) || '—',
+      memberCount: members.length,
+      poolBalance,
+      poolAvailable: roundMoney(poolBalance - committed),
+      poolCommitted: committed,
+      status: row.status,
+      createdAt: row.created_at,
+    });
+  }
+  return out;
+}
+
+async function buildMemberNetworkNode(memberUserId, email, ghostAccountId) {
+  const weekStart = mondayUtcYmd();
+  const drops = await listScheduledAirfarmingDropsForUser(memberUserId, weekStart, 1);
+  const drop = drops[0] || null;
+  const af = await getAirfarmingWalletByUserId(memberUserId);
+  const airfarmingBalance = roundMoney(Number.parseFloat(String(af?.balance ?? 0)) || 0);
+
+  let needed = 0;
+  let dropId = null;
+  let dueAt = null;
+  let secondsRemaining = null;
+  let dropPhase = 'idle';
+  let dropStatus = null;
+  let minBalance = null;
+  let maxBalance = null;
+  let percent = null;
+  let lendStatus = null;
+  let lendAmount = null;
+
+  if (drop) {
+    const deficit = await computeLendDeficit(memberUserId, drop);
+    needed = deficit.needed;
+    dropId = drop.id;
+    dueAt = drop.due_at;
+    dropStatus = drop.status;
+    minBalance = Number(drop.min_balance);
+    maxBalance = Number(drop.max_balance);
+    percent = Number(drop.percent);
+    const nowMs = Date.now();
+    const dueMs = new Date(drop.due_at).getTime();
+    secondsRemaining = Math.max(0, Math.floor((dueMs - nowMs) / 1000));
+    dropPhase = computeDropPhase(drop, nowMs);
+
+    const lends = await listGhostAccountLends(ghostAccountId, { limit: 50 });
+    const lend = lends.find((l) => l.drop_id === drop.id);
+    if (lend) {
+      lendStatus = lend.status;
+      lendAmount = Number(lend.lend_amount || 0);
+    }
+  }
+
+  const hasDrop = Boolean(drop && drop.status === 'scheduled');
+  const servingSoon =
+    hasDrop &&
+    dropStatus === 'scheduled' &&
+    (dropPhase === 'preparing' || (secondsRemaining != null && secondsRemaining <= 300));
+
+  return {
+    userId: memberUserId,
+    email: email || '—',
+    airfarmingBalance,
+    needed,
+    hasDrop,
+    dropId,
+    dueAt,
+    secondsRemaining,
+    dropPhase,
+    dropStatus,
+    minBalance,
+    maxBalance,
+    percent,
+    lendStatus,
+    lendAmount,
+    servingSoon,
+  };
+}
+
+async function buildGhostNetworkAdmin(ghostAccountId) {
+  let account = await getGhostAccountById(ghostAccountId);
+  if (!account) throw new Error('Ghost account not found');
+
+  if (account.status === 'active') {
+    await processGhostLendQueue(account.id);
+    account = await getGhostAccountById(ghostAccountId);
+  }
+
+  const owner = await getUserById(account.owner_user_id);
+  const members = await listGhostAccountMembers(account.id);
+  const memberIds = members.map((m) => m.member_user_id);
+  const users = await getUsersByIds(memberIds);
+  const emailById = new Map(users.map((u) => [u.id, u.email]));
+
+  const memberNodes = [];
+  for (const m of members) {
+    memberNodes.push(
+      await buildMemberNetworkNode(
+        m.member_user_id,
+        emailById.get(m.member_user_id),
+        account.id
+      )
+    );
+  }
+
+  const committed = await sumCommittedGhostLendAmounts(account.id);
+  const poolBalance = Number(account.pool_balance || 0);
+
+  return {
+    account: {
+      id: account.id,
+      ownerUserId: account.owner_user_id,
+      ownerEmail: owner?.email || '—',
+      poolBalance,
+      poolAvailable: roundMoney(poolBalance - committed),
+      poolCommitted: committed,
+      status: account.status,
+      memberCount: members.length,
+    },
+    owner: {
+      userId: account.owner_user_id,
+      email: owner?.email || '—',
+      poolBalance,
+    },
+    members: memberNodes,
+    pollIntervalSec: 5,
+  };
+}
+
 module.exports = {
   GHOST_MIN_ELIGIBILITY_USD,
   GHOST_MIN_ALLOCATION_USD,
@@ -671,4 +817,6 @@ module.exports = {
   getGhostSponsorAccountIdForMember,
   syncScheduledLendsForAccount,
   maskEmail,
+  listGhostAccountsAdminSummary,
+  buildGhostNetworkAdmin,
 };

@@ -66,7 +66,12 @@ const {
 } = require('./platformRevenueService');
 const { getWithdrawalTrustScoreForUser } = require('./services/withdrawalTrustScore');
 const { RED_DROP_BLOCK_SCORE } = require('./services/withdrawalTrustScoreCompute');
-const { recallLendForDrop, processAllGhostLendQueues } = require('./ghostAccountService');
+const {
+  recallLendForDrop,
+  processAllGhostLendQueues,
+  listGhostAccountsAdminSummary,
+  buildGhostNetworkAdmin,
+} = require('./ghostAccountService');
 
 function newId() {
   return crypto.randomUUID();
@@ -1517,6 +1522,32 @@ function registerAdminRoutes(app) {
       createdAt: row.created_at,
     };
   }
+
+  const ghostSchemaMsg =
+    'Ghost Account schema missing. Run backend/sql/migrations/20260618_ghost_accounts.sql in Supabase.';
+
+  app.get('/admin/api/ghost-accounts', adminAuthMiddleware, requireSuperAdmin, async (_req, res) => {
+    try {
+      const accounts = await listGhostAccountsAdminSummary();
+      return res.json({ accounts, count: accounts.length });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: ghostSchemaMsg });
+      console.error('[admin/ghost-accounts]', e);
+      return res.status(500).json({ message: e.message || 'Failed to load ghost accounts' });
+    }
+  });
+
+  app.get('/admin/api/ghost-accounts/:id/network', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const network = await buildGhostNetworkAdmin(req.params.id);
+      return res.json(network);
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: ghostSchemaMsg });
+      if (e.message === 'Ghost account not found') return res.status(404).json({ message: e.message });
+      console.error('[admin/ghost-accounts/network]', e);
+      return res.status(500).json({ message: e.message || 'Failed to load ghost network' });
+    }
+  });
 
   app.post('/admin/api/notifications', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
