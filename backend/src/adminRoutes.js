@@ -561,7 +561,7 @@ function registerAdminRoutes(app) {
     }
   );
 
-  app.patch('/admin/api/users/:id/airfarming', adminAuthMiddleware, async (req, res) => {
+  app.patch('/admin/api/users/:id/airfarming', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const detail = await getAdminUserDetail(req.params.id);
       if (!detail) return res.status(404).json({ message: 'User not found' });

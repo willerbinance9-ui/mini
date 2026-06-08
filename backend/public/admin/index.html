@@ -736,7 +736,7 @@
               <div class="user-detail-group">
                 <h3 class="user-detail-group-title">Account &amp; wallets</h3>
                 <div class="user-detail-grid">
-              <section class="card admin-section">
+              <section class="card admin-section superadmin-only">
                 <h3 class="admin-section-title">Account status</h3>
                 <p id="userAccountStatusDesc" class="admin-section-desc"></p>
                 <div id="userWalletList" class="hint" style="font-size:0.82rem;line-height:1.6;"></div>
@@ -1037,7 +1037,7 @@
             <h3 style="margin:0 0 8px;font-size:1rem;">Pending withdrawals</h3>
             <p class="hint" style="margin-bottom:12px;">
               All user withdrawals stay <strong>pending</strong> until you approve them here. Rejecting refunds the user
-              (cash wallet, crypto, or mobile money). Crypto payouts are sent to NOWPayments only after approval.
+              (cash wallet, crypto, or mobile money). Crypto payouts are sent to the provider only after approval.
             </p>
             <p id="withdrawStats" class="hint"></p>
             <div id="withdrawalsLoading" class="loading hidden">Loading withdrawals…</div>
@@ -1824,8 +1824,10 @@
           '<td>' + vipCell + '</td>' +
           '<td>' + pausePill + '</td>' +
           '<td style="white-space:nowrap;">' +
-          '<button type="button" class="' + (u.dropsPaused ? 'btn-primary' : 'btn-warn') + '" data-pause-user="' + u.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">' +
-          (u.dropsPaused ? 'Resume' : 'Pause') + '</button>' +
+          (adminRole === 'superadmin'
+            ? ('<button type="button" class="' + (u.dropsPaused ? 'btn-primary' : 'btn-warn') + '" data-pause-user="' + u.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">' +
+              (u.dropsPaused ? 'Resume' : 'Pause') + '</button>')
+            : '') +
           '<button type="button" class="btn-ghost" data-user="' + u.id + '">View</button></td>';
         tbody.appendChild(tr);
       });
@@ -2398,6 +2400,11 @@
     function updatePauseButton(af) {
       const btn = document.getElementById('toggleUserPauseBtn');
       if (!btn) return;
+      if (adminRole !== 'superadmin') {
+        btn.style.display = 'none';
+        return;
+      }
+      btn.style.display = '';
       if (af?.dropsPaused) {
         btn.textContent = 'Resume drops';
         btn.className = 'btn-primary';
@@ -2723,6 +2730,10 @@
     }
 
     async function toggleUserPause() {
+      if (adminRole !== 'superadmin') {
+        showUserPageAlert('Superadmin required to manage drop pause.', 'error');
+        return;
+      }
       const paused = Boolean(viewingUserDetail?.airfarming?.dropsPaused);
       try {
         await patchUserPause(paused ? { clearPause: true } : { dropsPaused: true });
@@ -2733,6 +2744,10 @@
     }
 
     async function quickTogglePause(userId, btnEl) {
+      if (adminRole !== 'superadmin') {
+        alert('Superadmin required.');
+        return;
+      }
       const u = users.find((x) => x.id === userId);
       const paused = Boolean(u?.dropsPaused);
       try {

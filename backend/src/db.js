@@ -2697,7 +2697,7 @@ async function listPendingWithdrawalsAdmin({ limit = 200 } = {}) {
       row.source === 'cash_wallet'
         ? 'Cash wallet'
         : row.source === 'nowpayments'
-          ? 'Crypto (NOWPayments)'
+          ? 'Crypto'
           : 'Mobile money',
   }));
 }

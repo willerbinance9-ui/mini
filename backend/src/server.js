@@ -619,7 +619,7 @@ app.post('/wallet/deposit', authMiddleware, async (req, res) => {
     const referenceId = req.body.referenceId || `DEP-${Date.now()}`;
     if (method === 'crypto') {
       return res.status(400).json({
-        message: 'Crypto deposits use NOWPayments. Open Wallet → Crypto tab to deposit.',
+        message: 'Crypto deposits are available in Wallet -> Crypto tab.',
       });
     }
     if (!amount || amount <= 0) return res.status(400).json({ message: 'Invalid amount' });
