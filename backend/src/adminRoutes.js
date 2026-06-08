@@ -1509,7 +1509,7 @@ function registerAdminRoutes(app) {
     };
   }
 
-  app.post('/admin/api/notifications', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/notifications', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const title = String(req.body?.title || '').trim();
       const body = String(req.body?.body || '').trim();

@@ -1307,7 +1307,7 @@
             <p id="announceOk" class="hint hidden" style="color:var(--ok);"></p>
             <p id="announceErr" class="err hidden"></p>
           </div>
-          <div class="card">
+          <div class="card superadmin-only">
             <h3 style="margin:0 0 8px;font-size:1rem;">Push notifications (inbox)</h3>
             <p class="hint" style="margin-bottom:12px;">
               Appears in the app <strong>Notifications</strong> screen (bell icon). Leave email empty and check broadcast to notify every user; otherwise enter one user&apos;s email for a targeted message.
@@ -1701,7 +1701,7 @@
       if (directDrop) directDrop.classList.toggle('hidden', !isSuper);
       const danger = document.getElementById('dangerUserSection');
       if (danger) danger.classList.toggle('hidden', !isSuper);
-      if (!isSuper && ['drops', 'aiearnings', 'tiers'].includes(activeTab)) setTab('users');
+      if (!isSuper && ['drops', 'aiearnings', 'tiers', 'livetrading'].includes(activeTab)) setTab('users');
     }
 
     function setAdminSession(me) {
@@ -4335,6 +4335,7 @@
     });
     document.getElementById('vipStatusFilter').onchange = () => loadVipFarmers().catch(showVipErr);
     async function sendAdminNotification() {
+      if (adminRole !== 'superadmin') return;
       document.getElementById('notifyErr').classList.add('hidden');
       document.getElementById('notifyOk').classList.add('hidden');
       const broadcast = document.getElementById('notifyBroadcast').checked;
