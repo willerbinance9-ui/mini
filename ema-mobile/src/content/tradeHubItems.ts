@@ -1,11 +1,11 @@
-export type TradeHubItemId = 'airfarming' | 'vip' | 'expert' | 'liveTrading';
+export type TradeHubItemId = 'airfarming' | 'ghost' | 'vip' | 'expert' | 'liveTrading';
 
 export type TradeHubItem = {
   id: TradeHubItemId;
   title: string;
   meta: string;
   roi: string;
-  route: 'AirfarmingTrade' | 'VipFarmersTrade' | 'ExpertAutoTrading' | 'LiveTrading';
+  route: 'AirfarmingTrade' | 'GhostAccount' | 'VipFarmersTrade' | 'ExpertAutoTrading' | 'LiveTrading';
 };
 
 export const TRADE_HUB_ITEMS: TradeHubItem[] = [
@@ -15,6 +15,13 @@ export const TRADE_HUB_ITEMS: TradeHubItem[] = [
     meta: 'Normal drop opportunities (2–4 per week)',
     roi: 'Event range: 20% to 85%',
     route: 'AirfarmingTrade',
+  },
+  {
+    id: 'ghost',
+    title: 'Ghost Account',
+    meta: 'Pool balance for member drops · 5k+ allocation',
+    roi: 'Fund members at T-24h · recall profit to pool',
+    route: 'GhostAccount',
   },
   {
     id: 'vip',

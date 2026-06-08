@@ -22,6 +22,12 @@ const {
 } = require('./db');
 const { buildDropStatus, dropToHistoryRow } = require('./airfarmingDrops');
 const { getWithdrawalTrustScoreForUser } = require('./services/withdrawalTrustScore');
+const {
+  getGhostSponsorAccountIdForMember,
+  processGhostLendQueue,
+  isDropGhostFunded,
+} = require('./ghostAccountService');
+const { getScheduledAirfarmingDrop } = require('./db');
 
 function newId() {
   return crypto.randomUUID();
@@ -90,7 +96,15 @@ function registerAirfarmingRoutes(app, { authMiddleware }) {
     try {
       const state = await ensureWeekState(req.userId);
       let { cashWallet, airfarmingBalance } = await balancesForUser(req.userId);
-      const autoFundEnabled = Boolean(state.auto_fund_enabled);
+      const sponsorId = await getGhostSponsorAccountIdForMember(req.userId);
+      if (sponsorId) {
+        await processGhostLendQueue(sponsorId).catch(() => {});
+      }
+      let autoFundEnabled = Boolean(state.auto_fund_enabled);
+      const scheduled = await getScheduledAirfarmingDrop(req.userId, state.week_start);
+      if (scheduled?.id && (await isDropGhostFunded(scheduled.id))) {
+        autoFundEnabled = false;
+      }
       const withdrawalTrustScore = await getWithdrawalTrustScoreForUser(req.userId);
       const { nextDrop, upcomingDrops, eligibilityNotice, lastSettledDrop, pollIntervalSec } =
         await buildDropStatus(req.userId, state.week_start, airfarmingBalance, { autoFundEnabled });

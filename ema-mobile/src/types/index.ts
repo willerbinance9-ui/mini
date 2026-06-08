@@ -39,6 +39,7 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<RootTabParamList> | undefined;
   P2P: NavigatorScreenParams<P2PStackParamList> | undefined;
   AirfarmingTrade: undefined;
+  GhostAccount: undefined;
   VipFarmersTrade: undefined;
   ExpertAutoTrading: undefined;
   LiveTrading: undefined;

@@ -66,6 +66,7 @@ const {
 } = require('./platformRevenueService');
 const { getWithdrawalTrustScoreForUser } = require('./services/withdrawalTrustScore');
 const { RED_DROP_BLOCK_SCORE } = require('./services/withdrawalTrustScoreCompute');
+const { recallLendForDrop, processAllGhostLendQueues } = require('./ghostAccountService');
 
 function newId() {
   return crypto.randomUUID();
@@ -964,6 +965,8 @@ function registerAdminRoutes(app) {
         await processDueDrops(userId, weekStart, { autoFundEnabled: true }).catch(() => {});
       }
 
+      await processAllGhostLendQueues().catch(() => {});
+
       const rows = await listPendingAirfarmingDropsAdmin(Number(req.query.limit) || 300);
       const users = await getUsersByIds(rows.map((r) => r.user_id));
       const emailByUserId = new Map(users.map((u) => [u.id, u.email]));
@@ -1023,6 +1026,9 @@ function registerAdminRoutes(app) {
           status: 'paid',
           paid_at: now,
         });
+        await recallLendForDrop(drop.id, { netProfit }).catch((e) =>
+          console.error('[ghost/recall/approve]', e)
+        );
         return res.json({ ok: true, payout: updated });
       } catch (e) {
         if (isMissingTableError(e)) {
@@ -1053,6 +1059,9 @@ function registerAdminRoutes(app) {
           profit_amount: 0,
           paid_at: new Date().toISOString(),
         });
+        await recallLendForDrop(drop.id, { netProfit: 0 }).catch((e) =>
+          console.error('[ghost/recall/reject]', e)
+        );
         return res.json({ ok: true, payout: updated });
       } catch (e) {
         if (isMissingTableError(e)) {

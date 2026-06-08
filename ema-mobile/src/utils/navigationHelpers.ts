@@ -84,6 +84,10 @@ export function navigateToAirfarmingTrade(navigation: NavLike) {
   getRootNavigation(navigation).navigate('AirfarmingTrade');
 }
 
+export function navigateToGhostAccount(navigation: NavLike) {
+  getRootNavigation(navigation).navigate('GhostAccount');
+}
+
 export function navigateToVipFarmersTrade(navigation: NavLike) {
   getRootNavigation(navigation).navigate('VipFarmersTrade');
 }

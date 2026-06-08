@@ -3885,6 +3885,200 @@ async function listContractAccrualsForUserOnDate(userId, dateYmd) {
   return data || [];
 }
 
+// --- Ghost Account ---
+
+async function getGhostAccountByOwnerUserId(ownerUserId) {
+  const { data, error } = await supabase
+    .from('ghost_accounts')
+    .select('*')
+    .eq('owner_user_id', ownerUserId)
+    .maybeSingle();
+  if (error && isSchemaError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function getGhostAccountById(ghostAccountId) {
+  const { data, error } = await supabase
+    .from('ghost_accounts')
+    .select('*')
+    .eq('id', ghostAccountId)
+    .maybeSingle();
+  if (error && isSchemaError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function insertGhostAccount(row) {
+  const { data, error } = await supabase.from('ghost_accounts').insert(row).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+async function updateGhostAccount(id, patch) {
+  const { data, error } = await supabase
+    .from('ghost_accounts')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function getGhostAccountMemberByUserId(memberUserId) {
+  const { data, error } = await supabase
+    .from('ghost_account_members')
+    .select('*, ghost_accounts(*)')
+    .eq('member_user_id', memberUserId)
+    .maybeSingle();
+  if (error && isSchemaError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function listGhostAccountMembers(ghostAccountId) {
+  const { data, error } = await supabase
+    .from('ghost_account_members')
+    .select('*')
+    .eq('ghost_account_id', ghostAccountId)
+    .order('created_at', { ascending: true });
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function insertGhostAccountMember(row) {
+  const { data, error } = await supabase.from('ghost_account_members').insert(row).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+async function deleteGhostAccountMember(ghostAccountId, memberUserId) {
+  const { error } = await supabase
+    .from('ghost_account_members')
+    .delete()
+    .eq('ghost_account_id', ghostAccountId)
+    .eq('member_user_id', memberUserId);
+  if (error) throw error;
+}
+
+async function getGhostAccountLendByDropId(dropId) {
+  const { data, error } = await supabase
+    .from('ghost_account_lends')
+    .select('*')
+    .eq('drop_id', dropId)
+    .maybeSingle();
+  if (error && isSchemaError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function getGhostAccountLendById(lendId) {
+  const { data, error } = await supabase
+    .from('ghost_account_lends')
+    .select('*')
+    .eq('id', lendId)
+    .maybeSingle();
+  if (error && isSchemaError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function insertGhostAccountLend(row) {
+  const { data, error } = await supabase.from('ghost_account_lends').insert(row).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+async function updateGhostAccountLend(id, patch) {
+  const { data, error } = await supabase
+    .from('ghost_account_lends')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function listGhostAccountLends(ghostAccountId, { status, limit = 100 } = {}) {
+  let query = supabase
+    .from('ghost_account_lends')
+    .select('*')
+    .eq('ghost_account_id', ghostAccountId)
+    .order('created_at', { ascending: false })
+    .limit(Math.min(200, Math.max(1, Number(limit) || 100)));
+  if (status) query = query.eq('status', status);
+  const { data, error } = await query;
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function listGhostAccountLendsByStatus(statuses, limit = 200) {
+  const { data, error } = await supabase
+    .from('ghost_account_lends')
+    .select('*')
+    .in('status', statuses)
+    .order('created_at', { ascending: true })
+    .limit(Math.min(500, Math.max(1, Number(limit) || 200)));
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function countActiveGhostLendsForAccount(ghostAccountId) {
+  const { count, error } = await supabase
+    .from('ghost_account_lends')
+    .select('id', { count: 'exact', head: true })
+    .eq('ghost_account_id', ghostAccountId)
+    .eq('status', 'lent');
+  if (error && isSchemaError(error)) return 0;
+  if (error) throw error;
+  return count || 0;
+}
+
+async function sumCommittedGhostLendAmounts(ghostAccountId) {
+  const { data, error } = await supabase
+    .from('ghost_account_lends')
+    .select('lend_amount')
+    .eq('ghost_account_id', ghostAccountId)
+    .in('status', ['scheduled', 'lent']);
+  if (error && isSchemaError(error)) return 0;
+  if (error) throw error;
+  return (data || []).reduce((sum, r) => sum + Number(r.lend_amount || 0), 0);
+}
+
+async function insertGhostAccountLedger(row) {
+  const { data, error } = await supabase.from('ghost_account_ledger').insert(row).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+async function listGhostAccountLedger(ghostAccountId, limit = 50) {
+  const { data, error } = await supabase
+    .from('ghost_account_ledger')
+    .select('*')
+    .eq('ghost_account_id', ghostAccountId)
+    .order('created_at', { ascending: false })
+    .limit(Math.min(100, Math.max(1, Number(limit) || 50)));
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function listAllGhostAccountsAdmin(limit = 100) {
+  const { data, error } = await supabase
+    .from('ghost_accounts')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(Math.min(200, Math.max(1, Number(limit) || 100)));
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
 module.exports = {
   utcTodayYmd,
   getUserByEmail,
@@ -4110,4 +4304,23 @@ module.exports = {
   getUserDropSchedule,
   upsertUserDropSchedule,
   deleteScheduledAirfarmingDropsForUserWeek,
+  getGhostAccountByOwnerUserId,
+  getGhostAccountById,
+  insertGhostAccount,
+  updateGhostAccount,
+  getGhostAccountMemberByUserId,
+  listGhostAccountMembers,
+  insertGhostAccountMember,
+  deleteGhostAccountMember,
+  getGhostAccountLendByDropId,
+  getGhostAccountLendById,
+  insertGhostAccountLend,
+  updateGhostAccountLend,
+  listGhostAccountLends,
+  listGhostAccountLendsByStatus,
+  countActiveGhostLendsForAccount,
+  sumCommittedGhostLendAmounts,
+  insertGhostAccountLedger,
+  listGhostAccountLedger,
+  listAllGhostAccountsAdmin,
 };
