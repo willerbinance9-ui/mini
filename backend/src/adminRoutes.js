@@ -32,6 +32,7 @@ const {
   getAirfarmingPlatformSettings,
   updateAirfarmingPlatformSettings,
   listPendingWithdrawalsAdmin,
+  upsertAdminWithdrawalPriority,
   listPendingAirfarmingDropsAdmin,
   listP2pTradesDisputedAdmin,
   listP2pTradesAdmin,
@@ -1320,7 +1321,36 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/admin/api/withdrawals/:source/:id/approve', adminAuthMiddleware, async (req, res) => {
+  app.post(
+    '/admin/api/withdrawals/:source/:id/priority',
+    adminAuthMiddleware,
+    async (req, res) => {
+      try {
+        const row = await upsertAdminWithdrawalPriority({
+          source: req.params.source,
+          withdrawalId: req.params.id,
+          adminUser: req.adminUser,
+        });
+        return res.json({
+          ok: true,
+          message: 'Withdrawal marked as priority.',
+          adminPriority: true,
+          adminPushedAt: row.admin_pushed_at,
+          adminPushedBy: row.admin_pushed_by,
+        });
+      } catch (e) {
+        const status = e.status || 500;
+        if (status >= 500) console.error('[admin/withdrawals/priority]', e);
+        return res.status(status).json({ message: e.message || 'Failed to mark priority' });
+      }
+    }
+  );
+
+  app.post(
+    '/admin/api/withdrawals/:source/:id/approve',
+    adminAuthMiddleware,
+    requireSuperAdmin,
+    async (req, res) => {
     try {
       const result = await approveWithdrawal({
         source: req.params.source,
@@ -1332,7 +1362,8 @@ function registerAdminRoutes(app) {
       if (status >= 500) console.error('[admin/withdrawals/approve]', e);
       return res.status(status).json({ message: e.message || 'Failed to approve withdrawal' });
     }
-  });
+    }
+  );
 
   app.post('/admin/api/withdrawals/:source/:id/reject', adminAuthMiddleware, async (req, res) => {
     try {

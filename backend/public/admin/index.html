@@ -1035,9 +1035,8 @@
         <div id="panelWithdrawals" class="hidden">
           <div class="card">
             <h3 style="margin:0 0 8px;font-size:1rem;">Pending withdrawals</h3>
-            <p class="hint" style="margin-bottom:12px;">
-              All user withdrawals stay <strong>pending</strong> until you approve them here. Rejecting refunds the user
-              (cash wallet, crypto, or mobile money). Crypto payouts are sent to the provider only after approval.
+            <p id="withdrawalsHelp" class="hint" style="margin-bottom:12px;">
+              Pending withdrawals can be marked <strong>priority</strong> or <strong>cancelled</strong>. Cancelling refunds the user.
             </p>
             <p id="withdrawStats" class="hint"></p>
             <div id="withdrawalsLoading" class="loading hidden">Loading withdrawals…</div>
@@ -1050,6 +1049,7 @@
                     <th>Amount</th>
                     <th>Destination</th>
                     <th>Requested</th>
+                    <th>Admin push</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -3261,33 +3261,72 @@
     function renderWithdrawalsTable() {
       const tbody = document.getElementById('withdrawRows');
       tbody.innerHTML = '';
+      const helpEl = document.getElementById('withdrawalsHelp');
+      if (helpEl) {
+        helpEl.innerHTML = adminRole === 'superadmin'
+          ? 'Superadmin: approve payouts here. <strong>Admin push</strong> shows when an admin marked a withdrawal as priority.'
+          : 'Mark withdrawals as <strong>priority</strong> to push them up the queue, or <strong>cancel</strong> to refund the user. Payout release is handled by platform operations.';
+      }
       if (!pendingWithdrawals.length) {
-        tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);">No pending withdrawals</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted);">No pending withdrawals</td></tr>';
       }
       pendingWithdrawals.forEach((w) => {
         const tr = document.createElement('tr');
         const dest = w.source === 'local_money'
           ? escapeHtml(String(w.destination || '')) + (w.countryCode ? ' · ' + w.countryCode : '')
           : escapeHtml(String(w.destination || '—').slice(0, 48));
+        const priorityPill = w.adminPriority
+          ? ' <span class="pill pill-ok">Priority</span>'
+          : '';
+        const adminPushPill =
+          adminRole === 'superadmin' && w.adminPushedAt
+            ? ' <span class="pill" style="background:rgba(245,158,11,0.18);border-color:rgba(245,158,11,0.45);color:#fbbf24;">Admin push · ' +
+              escapeHtml(w.adminPushedBy || 'admin') +
+              '</span>'
+            : '';
+        const key = w.source + ':' + w.id;
+        let actionCell = '';
+        if (adminRole === 'superadmin') {
+          actionCell =
+            '<button type="button" class="btn-primary" data-approve-withdraw="' + key + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Approve</button>' +
+            '<button type="button" class="btn-danger" data-reject-withdraw="' + key + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Cancel</button>';
+        } else if (w.adminPriority) {
+          actionCell =
+            '<span class="pill pill-ok" style="margin-right:8px;">Priority set</span>' +
+            '<button type="button" class="btn-danger" data-reject-withdraw="' + key + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Cancel</button>';
+        } else {
+          actionCell =
+            '<button type="button" class="btn-primary" data-priority-withdraw="' + key + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Priority</button>' +
+            '<button type="button" class="btn-danger" data-reject-withdraw="' + key + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Cancel</button>';
+        }
         tr.innerHTML =
-          '<td>' + escapeHtml(w.userEmail) + '</td>' +
+          '<td>' + escapeHtml(w.userEmail) + priorityPill + adminPushPill + '</td>' +
           '<td><span class="pill">' + escapeHtml(w.sourceLabel) + '</span></td>' +
           '<td><strong>' + formatWithdrawAmount(w) + '</strong></td>' +
           '<td style="font-size:0.78rem;max-width:220px;word-break:break-all;">' + dest + '</td>' +
           '<td>' + new Date(w.createdAt).toLocaleString() + '</td>' +
-          '<td style="white-space:nowrap;">' +
-          '<button type="button" class="btn-primary" data-approve-withdraw="' + w.source + ':' + w.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Approve</button>' +
-          '<button type="button" class="btn-danger" data-reject-withdraw="' + w.source + ':' + w.id + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Reject</button></td>';
+          (adminRole === 'superadmin' && w.adminPushedAt
+            ? '<td style="font-size:0.75rem;color:var(--muted);">' + new Date(w.adminPushedAt).toLocaleString() + '</td>'
+            : '<td style="font-size:0.75rem;color:var(--muted);">—</td>') +
+          '<td style="white-space:nowrap;">' + actionCell + '</td>';
         tbody.appendChild(tr);
       });
       tbody.querySelectorAll('button[data-approve-withdraw]').forEach((btn) => {
         btn.onclick = () => actOnWithdraw(btn.getAttribute('data-approve-withdraw'), 'approve', btn);
       });
+      tbody.querySelectorAll('button[data-priority-withdraw]').forEach((btn) => {
+        btn.onclick = () => actOnWithdraw(btn.getAttribute('data-priority-withdraw'), 'priority', btn);
+      });
       tbody.querySelectorAll('button[data-reject-withdraw]').forEach((btn) => {
         btn.onclick = () => actOnWithdraw(btn.getAttribute('data-reject-withdraw'), 'reject', btn);
       });
+      const pushedCount = pendingWithdrawals.filter((w) => w.adminPushedAt).length;
       document.getElementById('withdrawStats').textContent =
-        pendingWithdrawals.length + ' withdrawal(s) awaiting your approval';
+        pendingWithdrawals.length +
+        ' pending withdrawal(s)' +
+        (adminRole === 'superadmin' && pushedCount
+          ? ' · ' + pushedCount + ' admin push(es)'
+          : '');
     }
 
     function renderDropPayoutsTable() {
@@ -3355,12 +3394,35 @@
       const id = key.slice(colon + 1);
       if (!source || !id) return;
 
+      if (action === 'priority') {
+        if (!window.confirm('Mark this withdrawal as priority?')) return;
+        document.getElementById('withdrawalsErr').classList.add('hidden');
+        try {
+          if (btnEl) btnEl.disabled = true;
+          await api('/admin/api/withdrawals/' + source + '/' + id + '/priority', { method: 'POST' });
+          alert('Withdrawal marked as priority. It will be processed soon.');
+          await loadPendingWithdrawals();
+        } catch (e) {
+          showWithdrawalsErr(e);
+        } finally {
+          if (btnEl) btnEl.disabled = false;
+        }
+        return;
+      }
+
       let rejectNote = '';
       if (action === 'reject') {
-        const noteInput = window.prompt('Optional note for rejection:', '');
+        const noteInput = window.prompt('Optional note for cancellation:', '');
         if (noteInput === null) return;
         rejectNote = noteInput;
-      } else if (!window.confirm('Approve this withdrawal?')) {
+        if (!window.confirm('Cancel this withdrawal and refund the user?')) return;
+      } else if (action === 'approve') {
+        if (adminRole !== 'superadmin') {
+          alert('Only superadmin can approve payouts.');
+          return;
+        }
+        if (!window.confirm('Approve this withdrawal?')) return;
+      } else {
         return;
       }
 

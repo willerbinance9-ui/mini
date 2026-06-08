@@ -2611,6 +2611,57 @@ async function getUserWithdrawalDepositStats(userId) {
   return stats;
 }
 
+const WITHDRAWAL_QUEUE_SOURCES = new Set(['cash_wallet', 'nowpayments', 'local_money']);
+
+async function listAdminWithdrawalQueueMetaForItems(items) {
+  const map = new Map();
+  if (!items?.length) return map;
+  const ids = items.map((i) => i.id);
+  const { data, error } = await supabase.from('admin_withdrawal_queue_meta').select('*').in('withdrawal_id', ids);
+  if (error) {
+    if (isMissingTableError(error)) return map;
+    throw error;
+  }
+  for (const row of data || []) {
+    map.set(`${row.source}:${row.withdrawal_id}`, row);
+  }
+  return map;
+}
+
+async function upsertAdminWithdrawalPriority({ source, withdrawalId, adminUser }) {
+  const src = String(source || '').trim();
+  if (!WITHDRAWAL_QUEUE_SOURCES.has(src)) {
+    const err = new Error('Invalid withdrawal source');
+    err.status = 400;
+    throw err;
+  }
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('admin_withdrawal_queue_meta')
+    .upsert(
+      {
+        source: src,
+        withdrawal_id: withdrawalId,
+        admin_priority: true,
+        admin_pushed_at: now,
+        admin_pushed_by: String(adminUser || 'admin').slice(0, 64),
+        updated_at: now,
+      },
+      { onConflict: 'source,withdrawal_id' }
+    )
+    .select('*')
+    .single();
+  if (error) {
+    if (isMissingTableError(error)) {
+      const err = new Error('Withdrawal queue schema missing. Run migration 20260617_admin_withdrawal_queue_meta.sql');
+      err.status = 503;
+      throw err;
+    }
+    throw error;
+  }
+  return data;
+}
+
 /** All withdrawals awaiting manual admin approval. */
 async function listPendingWithdrawalsAdmin({ limit = 200 } = {}) {
   const cap = Math.min(500, Math.max(1, Number(limit) || 200));
@@ -2684,22 +2735,40 @@ async function listPendingWithdrawalsAdmin({ limit = 200 } = {}) {
     });
   }
 
-  items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const metaByKey = await listAdminWithdrawalQueueMetaForItems(items);
 
   const userIds = [...new Set(items.map((i) => i.userId))];
   const users = await getUsersByIds(userIds);
   const emailByUserId = new Map(users.map((u) => [u.id, u.email]));
 
-  return items.slice(0, cap).map((row) => ({
-    ...row,
-    userEmail: emailByUserId.get(row.userId) || '—',
-    sourceLabel:
-      row.source === 'cash_wallet'
-        ? 'Cash wallet'
-        : row.source === 'nowpayments'
-          ? 'Crypto'
-          : 'Mobile money',
-  }));
+  const enriched = items.map((row) => {
+    const meta = metaByKey.get(`${row.source}:${row.id}`);
+    return {
+      ...row,
+      userEmail: emailByUserId.get(row.userId) || '—',
+      sourceLabel:
+        row.source === 'cash_wallet'
+          ? 'Cash wallet'
+          : row.source === 'nowpayments'
+            ? 'Crypto'
+            : 'Mobile money',
+      adminPriority: Boolean(meta?.admin_priority),
+      adminPushedAt: meta?.admin_pushed_at || null,
+      adminPushedBy: meta?.admin_pushed_by || null,
+    };
+  });
+
+  enriched.sort((a, b) => {
+    if (a.adminPriority !== b.adminPriority) return a.adminPriority ? -1 : 1;
+    if (a.adminPushedAt && b.adminPushedAt) {
+      return new Date(b.adminPushedAt) - new Date(a.adminPushedAt);
+    }
+    if (a.adminPushedAt) return -1;
+    if (b.adminPushedAt) return 1;
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  return enriched.slice(0, cap);
 }
 
 async function insertSupportTicket(row) {
@@ -3979,6 +4048,7 @@ module.exports = {
   getLocalMoneyOrderById,
   getLocalMoneyOrderForUser,
   listPendingWithdrawalsAdmin,
+  upsertAdminWithdrawalPriority,
   getUserWithdrawalDepositStats,
   planRowToApi,
   allocationRowToApi,
