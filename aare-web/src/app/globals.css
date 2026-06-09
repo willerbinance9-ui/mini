@@ -99,26 +99,11 @@ body {
   transition: transform 0.3s ease, border-color 0.3s ease;
 }
 .card-hover:hover {
-  transform: translateY(-4px);
-  border-color: color-mix(in srgb, var(--foreground) 35%, var(--card-border));
+  border-color: color-mix(in srgb, var(--foreground) 25%, var(--card-border));
 }
 
 .btn-shine {
-  position: relative;
-  overflow: hidden;
-}
-.btn-shine::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.15) 50%, transparent 60%);
-  transform: translateX(-100%);
-}
-.light .btn-shine::after {
-  background: linear-gradient(105deg, transparent 40%, rgba(0,0,0,0.08) 50%, transparent 60%);
-}
-.btn-shine:hover::after {
-  animation: shimmer 0.75s ease;
+  /* legacy class — no animation */
 }
 
 @media (prefers-reduced-motion: reduce) {

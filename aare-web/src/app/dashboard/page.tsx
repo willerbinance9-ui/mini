@@ -12,11 +12,9 @@ export default function DashboardPage() {
     <>
       <SiteHeader />
       <main className="mx-auto max-w-5xl flex-1 px-4 py-12 sm:px-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">Partner portal</p>
-        <h1 className="mt-2 text-3xl font-bold">Dashboard</h1>
-        <p className="mt-4 max-w-2xl text-muted">
-          Sign up, complete identity verification, and apply for API access from your account. Once approved, choose a
-          package and manage users, balances, keys, and commission here.
+        <h1 className="text-2xl font-bold sm:text-3xl">Dashboard</h1>
+        <p className="mt-3 max-w-2xl text-sm text-muted">
+          KYC, partnership application, package selection, and API tenant details.
         </p>
         <div className="mt-10">
           <PortalDashboard />

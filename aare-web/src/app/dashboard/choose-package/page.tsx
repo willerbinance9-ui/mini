@@ -86,11 +86,10 @@ export default function ChoosePackagePage() {
     <>
       <SiteHeader />
       <main className="mx-auto max-w-5xl flex-1 px-4 py-12 sm:px-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400">Application approved</p>
-        <h1 className="mt-2 text-3xl font-bold">Choose your API package</h1>
-        <p className="mt-4 max-w-2xl text-muted">
-          Your partnership application was approved. Select the monthly package that matches the services you want to
-          embed through the Partner API. Billing starts when your API key is activated.
+        <h1 className="text-2xl font-bold sm:text-3xl">Choose API package</h1>
+        <p className="mt-3 max-w-2xl text-sm text-muted">
+          Your application was approved. Pick the monthly plan for the scopes you need. Billing starts when your key is
+          active.
         </p>
 
         <div className="mt-10">

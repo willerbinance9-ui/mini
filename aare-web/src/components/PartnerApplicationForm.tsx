@@ -287,8 +287,8 @@ export function PartnerApplicationForm({ embedded = false }: Props) {
 
   if (!embedded && !authLoading && me && !me.canApplyForApi) {
     return (
-      <div className="glass-strong glow-ring rounded-3xl p-8 text-center sm:p-12">
-        <h2 className="text-2xl font-bold text-foreground">Identity verification required</h2>
+      <div className="rounded-xl border border-card-border p-8 text-center sm:p-10">
+        <h2 className="text-xl font-semibold">Identity verification required</h2>
         <p className="mx-auto mt-4 max-w-lg text-muted">
           Complete KYC in your dashboard before applying for the Partner API. Upload your permit ID or passport for
           automatic review.
@@ -302,8 +302,8 @@ export function PartnerApplicationForm({ embedded = false }: Props) {
 
   if (!embedded && !authLoading && !me) {
     return (
-      <div className="glass-strong glow-ring rounded-3xl p-8 text-center sm:p-12">
-        <h2 className="text-2xl font-bold text-foreground">Account required</h2>
+      <div className="rounded-xl border border-card-border p-8 text-center sm:p-10">
+        <h2 className="text-xl font-semibold">Account required</h2>
         <p className="mx-auto mt-4 max-w-lg text-muted">
           Create an Aare account, verify your phone on login, and complete identity verification before applying.
         </p>
@@ -337,12 +337,9 @@ export function PartnerApplicationForm({ embedded = false }: Props) {
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="glass-strong glow-ring rounded-3xl p-8 text-center sm:p-12"
+        className="rounded-xl border border-card-border p-8 text-center sm:p-10"
       >
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-card-border text-2xl">
-          ✓
-        </div>
-        <h2 className="text-2xl font-bold text-foreground">Application submitted</h2>
+        <h2 className="text-xl font-semibold">Application submitted</h2>
         <p className="mx-auto mt-4 max-w-lg text-muted">{done.message}</p>
         <p className="mt-2 font-mono text-xs text-muted">Reference: {done.id}</p>
         <Link href="/dashboard" className="mt-6 inline-block text-sm font-semibold hover:underline">
@@ -354,7 +351,7 @@ export function PartnerApplicationForm({ embedded = false }: Props) {
 
   const shellClass = embedded
     ? "rounded-xl border border-card-border bg-surface/40 p-4 sm:p-6"
-    : "glass-strong glow-ring rounded-3xl p-6 sm:p-10";
+    : "rounded-xl border border-card-border p-6 sm:p-8";
 
   return (
     <div className={shellClass}>
@@ -653,7 +650,7 @@ export function PartnerApplicationForm({ embedded = false }: Props) {
           <button
             type="button"
             onClick={next}
-            className="btn-shine rounded-full border border-foreground bg-foreground px-6 py-2.5 text-sm font-semibold text-background"
+            className="rounded-full border border-foreground bg-foreground px-6 py-2.5 text-sm font-medium text-background"
           >
             Continue
           </button>
@@ -662,7 +659,7 @@ export function PartnerApplicationForm({ embedded = false }: Props) {
             type="button"
             onClick={submit}
             disabled={submitting}
-            className="btn-shine rounded-full border border-foreground bg-foreground px-6 py-2.5 text-sm font-semibold text-background disabled:opacity-60"
+            className="rounded-full border border-foreground bg-foreground px-6 py-2.5 text-sm font-medium text-background disabled:opacity-60"
           >
             {submitting ? "Submitting…" : "Submit application"}
           </button>

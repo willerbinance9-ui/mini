@@ -1,5 +1,5 @@
 export const PRICE_CHANGE_NOTICE =
-  "Prices shown are current as of today and may change on 30 June 2026. Existing partners will be notified before any adjustment.";
+  "Listed prices are valid until 30 June 2026. We will email active partners before any change.";
 
 export type ApiPackageId = "airfarming_only" | "airfarming_vip" | "full";
 
@@ -20,12 +20,12 @@ export const API_PACKAGES: ApiPackage[] = [
     name: "Airfarming",
     priceMonthly: 300,
     priceLabel: "$300",
-    tagline: "Scheduled yield drops only",
+    tagline: "Yield drops only",
     features: [
-      "Airfarming drop programs",
-      "User & wallet API",
-      "Deposits & withdrawals",
-      "Webhooks & compliance",
+      "Airfarming programs",
+      "Users, wallets, deposits",
+      "Withdrawals & webhooks",
+      "Compliance endpoints",
     ],
     scopes: ["users", "wallet", "airfarming", "deposits", "withdrawals", "compliance", "webhooks"],
   },
@@ -34,27 +34,26 @@ export const API_PACKAGES: ApiPackage[] = [
     name: "Airfarming + VIP",
     priceMonthly: 500,
     priceLabel: "$500",
-    tagline: "Yield drops plus locked-term VIP farmers",
+    tagline: "Drops and VIP farmers",
     features: [
       "Everything in Airfarming",
       "VIP farmer products",
-      "Extended yield programs",
-      "Priority onboarding support",
+      "Same wallet & webhook stack",
     ],
     scopes: ["users", "wallet", "airfarming", "vip", "deposits", "withdrawals", "compliance", "webhooks"],
     highlighted: true,
   },
   {
     id: "full",
-    name: "Full platform",
+    name: "Full",
     priceMonthly: 700,
     priceLabel: "$700",
-    tagline: "Complete income stack for power partners",
+    tagline: "All programs",
     features: [
-      "Everything in Airfarming + VIP",
-      "Live trading (wallet-funded MT5)",
-      "Ghost account pool lending",
-      "All API scopes enabled",
+      "Airfarming + VIP",
+      "Live trading (MT5)",
+      "Ghost account pools",
+      "Full API scopes",
     ],
     scopes: ["users", "wallet", "airfarming", "vip", "deposits", "withdrawals", "compliance", "webhooks", "live_trading", "ghost_account"],
   },

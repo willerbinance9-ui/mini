@@ -122,7 +122,7 @@ export function ApiExplorer() {
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      <div className="glass-strong glow-ring space-y-4 rounded-2xl p-6">
+      <div className="space-y-4 rounded-xl border border-card-border p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">Request</h2>
           <label className="flex items-center gap-2 text-xs text-muted">
@@ -214,14 +214,14 @@ export function ApiExplorer() {
           type="button"
           onClick={send}
           disabled={loading}
-          className="btn-shine w-full rounded-full border border-foreground bg-foreground py-3 text-sm font-semibold text-background disabled:opacity-60"
+          className="w-full rounded-full border border-foreground bg-foreground py-3 text-sm font-medium text-background disabled:opacity-60"
         >
           {loading ? "Sending…" : "Send request"}
         </button>
       </div>
 
       <div className="space-y-4">
-        <div className="glass-strong rounded-2xl p-6">
+        <div className="rounded-xl border border-card-border p-6">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold">Response</h2>
             {status !== null ? (
@@ -240,7 +240,7 @@ export function ApiExplorer() {
         </div>
 
         {history.length > 0 ? (
-          <div className="glass-strong rounded-2xl p-6">
+          <div className="rounded-xl border border-card-border p-6">
             <h3 className="mb-2 text-sm font-semibold">Recent requests</h3>
             <ul className="space-y-1 text-xs text-muted">
               {history.map((h, i) => (

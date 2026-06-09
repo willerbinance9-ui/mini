@@ -18,4 +18,4 @@ export const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "https://aare.cc";
 
 export const APP_NAME = "Aare";
-export const TAGLINE = "Build on Min. Ship your own app.";
+export const TAGLINE = "Partner API docs and onboarding for Min.";

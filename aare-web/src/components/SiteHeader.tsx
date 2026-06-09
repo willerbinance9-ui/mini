@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { Logo } from "./Logo";
 import { ServicesMenu } from "./ServicesMenu";
@@ -36,12 +36,7 @@ export function SiteHeader({ showSearch = false }: { showSearch?: boolean }) {
   }, []);
 
   return (
-    <motion.header
-      initial={{ y: -12, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.4 }}
-      className="sticky top-0 z-40 border-b border-card-border bg-background/90 backdrop-blur-xl"
-    >
+    <header className="sticky top-0 z-40 border-b border-card-border bg-background/95 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
         <Logo />
 
@@ -107,7 +102,7 @@ export function SiteHeader({ showSearch = false }: { showSearch?: boolean }) {
           </Link>
           <Link
             href="/explorer"
-            className="btn-shine hidden rounded-full border border-foreground bg-foreground px-4 py-2 text-xs font-semibold text-background transition hover:opacity-90 sm:inline-block"
+            className="hidden rounded-full border border-foreground bg-foreground px-4 py-2 text-xs font-medium text-background sm:inline-block"
           >
             Try API
           </Link>
@@ -235,6 +230,6 @@ export function SiteHeader({ showSearch = false }: { showSearch?: boolean }) {
           </>
         ) : null}
       </AnimatePresence>
-    </motion.header>
+    </header>
   );
 }

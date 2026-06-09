@@ -7,8 +7,8 @@ export default function DocsHomePage() {
   return (
     <article className="prose-aare max-w-3xl">
       <AnimatedReveal>
-        <p className="not-prose text-xs font-semibold uppercase tracking-[0.2em] text-muted">Min Partner API · v1</p>
-        <h1 className="not-prose mt-2 text-3xl font-bold sm:text-4xl">Introduction</h1>
+        <p className="not-prose text-sm text-muted">Min Partner API · v1</p>
+        <h1 className="not-prose mt-2 text-3xl font-bold">Introduction</h1>
       </AnimatedReveal>
       <p>
         {TAGLINE} The Min Partner API lets you register users, move funds, embed income programs, and receive

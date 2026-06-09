@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     default: `${APP_NAME} — Min Partner API`,
     template: `%s · ${APP_NAME}`,
   },
-  description: `${TAGLINE} Official developer documentation and API explorer for the Min Partner API.`,
+  description: `${TAGLINE} REST reference, explorer, and partner onboarding.`,
   metadataBase: new URL(SITE_URL),
   openGraph: {
     url: SITE_URL,

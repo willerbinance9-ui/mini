@@ -6,7 +6,7 @@ import { commissionPayoutNotes } from "@/content/pricing";
 
 export const metadata = {
   title: "Pricing",
-  description: "Partner API monthly packages — airfarming, VIP, and full platform access.",
+  description: "Monthly API packages for Min partner integrations.",
 };
 
 export default function PricingPage() {
@@ -14,33 +14,33 @@ export default function PricingPage() {
     <>
       <SiteHeader />
       <main className="mx-auto max-w-5xl flex-1 px-4 py-12 sm:px-6">
-        <h1 className="text-3xl font-bold sm:text-4xl">Pricing</h1>
-        <p className="mt-4 max-w-2xl text-muted">
-          Monthly API packages for approved partners. Commission on embedded income programs is separate at 5%.
+        <h1 className="text-3xl font-bold">Pricing</h1>
+        <p className="mt-3 max-w-xl text-muted">
+          Monthly API fee by program scope. 5% commission on income through your tenant is additional.
         </p>
 
-        <div className="mt-12">
+        <div className="mt-10">
           <PricingPackages />
         </div>
 
-        <section className="mt-16">
-          <h2 className="text-xl font-semibold">Commission payouts</h2>
-          <ul className="mt-4 space-y-2 text-muted">
+        <section className="mt-14">
+          <h2 className="text-lg font-semibold">Commission</h2>
+          <ul className="mt-3 space-y-2 text-sm text-muted">
             {commissionPayoutNotes.map((n) => (
-              <li key={n}>• {n}</li>
+              <li key={n}>{n}</li>
             ))}
           </ul>
         </section>
 
-        <div className="mt-10 flex flex-wrap gap-4">
+        <div className="mt-10 flex flex-wrap gap-3">
           <Link
             href="/signup"
-            className="btn-shine rounded-full border border-foreground bg-foreground px-8 py-3 text-sm font-semibold text-background"
+            className="rounded-full border border-foreground bg-foreground px-6 py-2.5 text-sm font-medium text-background"
           >
             Create account
           </Link>
-          <Link href="/partnership" className="rounded-full border border-card-border px-8 py-3 text-sm">
-            Apply for access
+          <Link href="/docs" className="rounded-full border border-card-border px-6 py-2.5 text-sm text-muted">
+            Documentation
           </Link>
         </div>
       </main>
