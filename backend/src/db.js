@@ -632,6 +632,8 @@ async function updatePortalAccount(accountId, patch) {
   if (patch.application_id !== undefined) row.application_id = patch.application_id;
   if (patch.full_name !== undefined) row.full_name = patch.full_name;
   if (patch.phone_verified_at !== undefined) row.phone_verified_at = patch.phone_verified_at;
+  if (patch.api_package !== undefined) row.api_package = patch.api_package;
+  if (patch.api_package_selected_at !== undefined) row.api_package_selected_at = patch.api_package_selected_at;
   const { data, error } = await supabase
     .from('partner_portal_accounts')
     .update(row)

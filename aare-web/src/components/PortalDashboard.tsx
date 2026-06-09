@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { usePortalAuth } from "@/context/PortalAuthContext";
 import { PortalKycWizard } from "@/components/PortalKycWizard";
 import { portalGetOverview, type PortalOverview } from "@/lib/portal";
+import { packageById } from "@/content/api-packages";
 
 function fmtUsd(n: number) {
   return "$" + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -121,6 +122,22 @@ export function PortalDashboard() {
                 Our team is reviewing your application. Fewer than 10% of applicants qualify — we will email you when
                 there is an update.
               </p>
+            ) : null}
+            {app.status === "approved" && me.needsPackageSelection ? (
+              <div className="sm:col-span-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <p className="text-sm text-emerald-200">Your application is approved — choose your API package to continue.</p>
+                <Link href="/dashboard/choose-package" className="mt-3 inline-block text-sm font-semibold hover:underline">
+                  Choose package →
+                </Link>
+              </div>
+            ) : null}
+            {app.status === "approved" && me.apiPackage ? (
+              <div className="sm:col-span-2">
+                <span className="text-muted">API package </span>
+                <span className="font-semibold">
+                  {packageById(me.apiPackage)?.name} ({packageById(me.apiPackage)?.priceLabel}/mo)
+                </span>
+              </div>
             ) : null}
             {app.status === "rejected" ? (
               <p className="sm:col-span-2 text-rose-300">

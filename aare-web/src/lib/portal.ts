@@ -16,6 +16,8 @@ export type PortalKyc = {
   reviewedAt: string | null;
 };
 
+export type ApiPackageId = "airfarming_only" | "airfarming_vip" | "full";
+
 export type PortalAccount = {
   id: string;
   email: string;
@@ -25,6 +27,8 @@ export type PortalAccount = {
   phoneVerified: boolean;
   partnerId: string | null;
   applicationId: string | null;
+  apiPackage: ApiPackageId | null;
+  apiPackageSelectedAt: string | null;
   createdAt: string;
 };
 
@@ -55,6 +59,8 @@ export type PortalMe = {
   kyc: PortalKyc;
   kycStatus: string;
   canApplyForApi: boolean;
+  apiPackage: ApiPackageId | null;
+  needsPackageSelection: boolean;
 };
 
 export type PortalOverview = {
@@ -143,6 +149,7 @@ type PortalAuthPayload = {
 };
 
 export function portalMeFromAuth(res: PortalAuthPayload): PortalMe {
+  const approved = res.application?.status === "approved";
   return {
     account: res.account,
     application: res.application,
@@ -152,7 +159,20 @@ export function portalMeFromAuth(res: PortalAuthPayload): PortalMe {
     kyc: res.kyc,
     kycStatus: res.kyc.status,
     canApplyForApi: res.canApplyForApi,
+    apiPackage: res.account.apiPackage ?? null,
+    needsPackageSelection: Boolean(approved && !res.account.apiPackage),
   };
+}
+
+export async function portalSelectApiPackage(packageId: ApiPackageId) {
+  return portalFetch<{
+    account: PortalAccount;
+    apiPackage: ApiPackageId;
+    needsPackageSelection: boolean;
+  }>("/v1/portal/api-package", {
+    method: "PUT",
+    body: JSON.stringify({ package: packageId }),
+  });
 }
 
 export async function portalRegister(payload: {

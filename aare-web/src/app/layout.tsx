@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { PortalAuthProvider } from "@/context/PortalAuthContext";
+import { PortalPackageRedirect } from "@/components/PortalPackageRedirect";
 import { CommandPalette } from "@/components/CommandPalette";
 import { APP_NAME, SITE_URL, TAGLINE } from "@/lib/constants";
 
@@ -42,6 +43,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           <PortalAuthProvider>
+            <PortalPackageRedirect />
             {children}
             <CommandPalette />
           </PortalAuthProvider>

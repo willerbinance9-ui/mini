@@ -45,6 +45,8 @@ const upload = multer({
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
 const MAX_OTP_ATTEMPTS = 5;
 
+const API_PACKAGES = new Set(['airfarming_only', 'airfarming_vip', 'full']);
+
 function toPortalPublic(account) {
   return {
     id: account.id,
@@ -55,8 +57,15 @@ function toPortalPublic(account) {
     phoneVerified: Boolean(account.phone_verified_at),
     partnerId: account.partner_id,
     applicationId: account.application_id,
+    apiPackage: account.api_package || null,
+    apiPackageSelectedAt: account.api_package_selected_at || null,
     createdAt: account.created_at,
   };
+}
+
+function needsPackageSelection(account, application) {
+  const approved = application?.status === 'approved';
+  return Boolean(approved && !account.api_package);
 }
 
 function toApplicationPublic(app) {
@@ -313,8 +322,9 @@ function registerPartnerPortalRoutes(app) {
   app.get('/v1/portal/me', portalAuthMiddleware, async (req, res) => {
     try {
       const { application, partner, partnerId, kyc } = await resolvePortalContext(req.portalAccount);
+      const account = req.portalAccount;
       return res.json({
-        account: toPortalPublic(req.portalAccount),
+        account: toPortalPublic(account),
         application: toApplicationPublic(application),
         partner: partner
           ? { id: partner.id, name: partner.name, slug: partner.slug, status: partner.status }
@@ -324,10 +334,42 @@ function registerPartnerPortalRoutes(app) {
         kyc: toKycPublic(kyc),
         kycStatus: kyc?.status || 'draft',
         canApplyForApi: canApplyForApi(kyc),
+        apiPackage: account.api_package || null,
+        needsPackageSelection: needsPackageSelection(account, application),
       });
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: SCHEMA_MSG });
       return res.status(500).json({ message: e?.message || 'Failed to load account' });
+    }
+  });
+
+  app.put('/v1/portal/api-package', portalAuthMiddleware, async (req, res) => {
+    try {
+      const { application } = await resolvePortalContext(req.portalAccount);
+      if (application?.status !== 'approved') {
+        return res.status(403).json({
+          message: 'Choose a package after your partnership application is approved.',
+        });
+      }
+
+      const pkg = String(req.body?.package || req.body?.apiPackage || '').trim();
+      if (!API_PACKAGES.has(pkg)) {
+        return res.status(400).json({ message: 'Invalid package. Choose airfarming_only, airfarming_vip, or full.' });
+      }
+
+      const account = await updatePortalAccount(req.portalAccountId, {
+        api_package: pkg,
+        api_package_selected_at: new Date().toISOString(),
+      });
+
+      return res.json({
+        account: toPortalPublic(account),
+        apiPackage: account.api_package,
+        needsPackageSelection: false,
+      });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: SCHEMA_MSG });
+      return res.status(500).json({ message: e?.message || 'Failed to save package' });
     }
   });
 

@@ -1,42 +1,16 @@
-export const pricingTiers = [
-  {
-    name: "Partnership application",
-    price: "Free to apply",
-    description: "Submit the 8-step questionnaire. Approval is discretionary.",
-    features: [
-      "Personalized API scope review",
-      "No guarantee of enrollment",
-      "~90% of applicants may not qualify",
-      "Investment-oriented partners only",
-    ],
-  },
-  {
-    name: "Partner API access",
-    price: "5% commission",
-    description: "Revenue share on income programs embedded through your integration.",
-    features: [
-      "Live trading wallet programs",
-      "Airfarming drop yield",
-      "Ghost account pool returns",
-      "VIP farmer accruals",
-      "Granular API scopes (users, wallet, webhooks, …)",
-    ],
-  },
-  {
-    name: "Enterprise / custom",
-    price: "Contact us",
-    description: "Higher volume partners with custom limits, SLAs, or white-label needs.",
-    features: [
-      "Dedicated onboarding",
-      "Custom scope packages",
-      "Priority support channel",
-      "Commission terms in agreement",
-    ],
-  },
-];
+import { API_PACKAGES, PRICE_CHANGE_NOTICE } from "@/content/api-packages";
+
+export { PRICE_CHANGE_NOTICE };
+
+export const pricingTiers = API_PACKAGES.map((p) => ({
+  name: p.name,
+  price: `${p.priceLabel} / month`,
+  description: p.tagline,
+  features: p.features,
+}));
 
 export const commissionPayoutNotes = [
-  "Commission is calculated on gross income attributed to partner-tenant users.",
-  "Payout schedule and settlement method are defined in your partnership agreement.",
+  "Monthly package fee covers API access to selected service scopes.",
+  "Partners also earn 5% commission on income generated through embedded programs.",
   "View accrued commission in the Partner Dashboard when your API key is active.",
 ];

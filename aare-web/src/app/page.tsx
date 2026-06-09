@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { HomeHero } from "@/components/HomeHero";
 import { MarqueeStrip } from "@/components/MarqueeStrip";
 import { CommissionBanner } from "@/components/CommissionBanner";
+import { PricingPackages } from "@/components/PricingPackages";
 import { AnimatedReveal, StaggerGrid, StaggerItem } from "@/components/AnimatedReveal";
 import { services } from "@/content/services";
 
@@ -78,7 +79,29 @@ export default function HomePage() {
 
         <CommissionBanner />
 
-        <section className="border-y border-card-border bg-surface/30 py-24">
+        <section id="pricing" className="border-y border-card-border bg-surface/30 py-24">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6">
+            <AnimatedReveal className="mb-12 max-w-2xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">Pricing</p>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Partner API packages</h2>
+              <p className="mt-4 text-muted">
+                Choose the income programs you embed after approval. All plans include user management, wallets,
+                deposits, withdrawals, and webhooks within your selected scope.
+              </p>
+            </AnimatedReveal>
+            <PricingPackages />
+            <AnimatedReveal className="mt-10 text-center">
+              <Link
+                href="/pricing"
+                className="text-sm text-muted underline-offset-4 hover:text-foreground hover:underline"
+              >
+                Full pricing details →
+              </Link>
+            </AnimatedReveal>
+          </div>
+        </section>
+
+        <section className="border-b border-card-border bg-surface/30 py-24">
           <div className="mx-auto max-w-7xl px-4 sm:px-6">
             <AnimatedReveal className="mb-14 text-center">
               <h2 className="text-3xl font-bold tracking-tight">Trusted by design</h2>
