@@ -1,4 +1,4 @@
-import { API_BASE } from "@/lib/constants";
+import { BACKEND_ORIGIN, getFetchApiBase } from "@/lib/constants";
 
 export const PORTAL_TOKEN_KEY = "aare_portal_token";
 
@@ -116,10 +116,10 @@ async function portalFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+    res = await fetch(`${getFetchApiBase()}${path}`, { ...init, headers });
   } catch {
     throw new Error(
-      `Cannot reach API at ${API_BASE}. Check NEXT_PUBLIC_API_BASE or try again later.`
+      `Cannot reach API (${BACKEND_ORIGIN}). Try again in a moment.`
     );
   }
   const body = await res.json().catch(() => ({}));

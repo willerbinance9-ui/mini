@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { API_BASE } from "@/lib/constants";
+import { getFetchApiBase } from "@/lib/constants";
 
 const KEY_STORAGE = "aare_partner_api_key";
 
@@ -34,7 +34,7 @@ export function PartnerDashboard() {
   }, []);
 
   async function partnerGet(key: string, path: string) {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const res = await fetch(`${getFetchApiBase()}${path}`, {
       headers: { Authorization: `Bearer ${key}` },
     });
     const body = await res.json().catch(() => ({}));

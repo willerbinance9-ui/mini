@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { API_BASE } from "@/lib/constants";
+import { getFetchApiBase } from "@/lib/constants";
 import { usePortalAuth } from "@/context/PortalAuthContext";
 import { PORTAL_TOKEN_KEY } from "@/lib/portal";
 import { PARTNERSHIP_TERMS, PARTNERSHIP_DISCLAIMER } from "@/content/partnership-terms";
@@ -244,7 +244,7 @@ export function PartnerApplicationForm() {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
 
-      const res = await fetch(`${API_BASE}/v1/public/partner-applications`, {
+      const res = await fetch(`${getFetchApiBase()}/v1/public/partner-applications`, {
         method: "POST",
         headers,
         body: JSON.stringify({

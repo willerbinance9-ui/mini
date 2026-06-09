@@ -1,4 +1,4 @@
-import { API_BASE } from "@/lib/constants";
+import { BACKEND_ORIGIN } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +18,8 @@ async function fetchJson(url: string) {
 
 async function statusFromLegacyHealth(): Promise<StatusPayload> {
   const [health, dbHealth] = await Promise.all([
-    fetchJson(`${API_BASE}/health`),
-    fetchJson(`${API_BASE}/health/db`),
+    fetchJson(`${BACKEND_ORIGIN}/health`),
+    fetchJson(`${BACKEND_ORIGIN}/health/db`),
   ]);
 
   const apiOk = health?.status === "ok";
@@ -49,7 +49,7 @@ async function statusFromLegacyHealth(): Promise<StatusPayload> {
 
 export async function GET() {
   try {
-    const res = await fetch(`${API_BASE}/v1/public/status`, {
+    const res = await fetch(`${BACKEND_ORIGIN}/v1/public/status`, {
       cache: "no-store",
       signal: AbortSignal.timeout(12_000),
     });
