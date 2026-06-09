@@ -17,6 +17,9 @@ import {
   type GhostMemberLookup,
 } from '../services/ghostAccountService';
 import { palette } from '../theme/colors';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../types';
 
 function fmtUsd(n: number) {
   return '$' + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -33,6 +36,7 @@ function fmtDate(iso: string | null) {
 }
 
 export function GhostAccountScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [status, setStatus] = useState<GhostAccountStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -171,26 +175,76 @@ export function GhostAccountScreen() {
   }
 
   if (!status.enrolled) {
+    const needed =
+      status.amountNeeded && status.amountNeeded > 0
+        ? status.amountNeeded
+        : Math.max(0, status.minEligibilityUsd + 0.01 - status.totalUsdt);
+    const progress = Math.min(1, status.totalUsdt / (status.minEligibilityUsd + 0.01));
+    const breakdown = status.balanceBreakdown;
+
     return (
       <ScrollView
         style={styles.container}
-        contentContainerStyle={{ padding: 16 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
       >
         <Text style={styles.sub}>
-          Share one pool across member drops. Requires more than {fmtUsd(status.minEligibilityUsd)} total USDT.
+          Share one pool across member drops. Requires more than {fmtUsd(status.minEligibilityUsd)} across cash,
+          crypto, and airfarming balances.
         </Text>
         <Card>
-          <Text style={styles.label}>Your total USDT</Text>
+          <Text style={styles.label}>Eligible balance</Text>
           <Text style={styles.big}>{fmtUsd(status.totalUsdt)}</Text>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+          </View>
           <Text style={[styles.hint, { marginTop: 8 }]}>
             {status.eligible
-              ? `Eligible. First allocation must be at least ${fmtUsd(status.minAllocationUsd)}.`
-              : `Need more than ${fmtUsd(status.minEligibilityUsd)} to enroll.`}
+              ? `You qualify. First pool allocation must be at least ${fmtUsd(status.minAllocationUsd)} from cash.`
+              : `Deposit or move ${fmtUsd(needed)} more to enroll.`}
           </Text>
-          {status.eligible ? (
-            <PrimaryButton title="Enroll in Ghost Account" onPress={onEnroll} style={{ marginTop: 16 }} />
+
+          {breakdown ? (
+            <View style={styles.breakdownBox}>
+              <Text style={styles.breakdownRow}>
+                <Text style={styles.hint}>Cash wallet </Text>
+                <Text style={styles.breakdownVal}>{fmtUsd(breakdown.cashUsd)}</Text>
+              </Text>
+              <Text style={styles.breakdownRow}>
+                <Text style={styles.hint}>Crypto USDT </Text>
+                <Text style={styles.breakdownVal}>{fmtUsd(breakdown.cryptoUsd)}</Text>
+              </Text>
+              <Text style={styles.breakdownRow}>
+                <Text style={styles.hint}>Airfarming </Text>
+                <Text style={styles.breakdownVal}>{fmtUsd(breakdown.airfarmingUsd)}</Text>
+              </Text>
+            </View>
           ) : null}
+
+          {status.eligible ? (
+            <PrimaryButton label="Enroll in Ghost Account" onPress={onEnroll} style={{ marginTop: 16 }} />
+          ) : (
+            <View style={{ marginTop: 16, gap: 10 }}>
+              <PrimaryButton label="Deposit funds" onPress={() => navigation.navigate('Wallet')} />
+              {breakdown && breakdown.airfarmingUsd > 0 ? (
+                <PrimaryButton
+                  label="Return airfarming to cash"
+                  onPress={() => navigation.navigate('AirfarmingTrade')}
+                  style={styles.secondaryBtn}
+                />
+              ) : null}
+            </View>
+          )}
+        </Card>
+
+        <Card>
+          <Text style={styles.sectionTitle}>How Ghost Account works</Text>
+          <Text style={styles.hint}>
+            1. Enroll when your combined balance exceeds {fmtUsd(status.minEligibilityUsd)}.{'\n'}
+            2. Allocate at least {fmtUsd(status.minAllocationUsd)} from cash into the pool.{'\n'}
+            3. Add members by email — the pool tops up their airfarming balance before drops.{'\n'}
+            4. Principal and net profit return to your pool after each drop.
+          </Text>
         </Card>
       </ScrollView>
     );
@@ -242,7 +296,7 @@ export function GhostAccountScreen() {
           value={allocateAmount}
           onChangeText={setAllocateAmount}
         />
-        <PrimaryButton title="Allocate from cash" onPress={onAllocate} />
+        <PrimaryButton label="Allocate from cash" onPress={onAllocate} />
         <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Withdraw uncommitted</Text>
         <TextInput
           style={styles.input}
@@ -252,7 +306,7 @@ export function GhostAccountScreen() {
           value={deallocateAmount}
           onChangeText={setDeallocateAmount}
         />
-        <PrimaryButton title="Return to cash" onPress={onDeallocate} />
+        <PrimaryButton label="Return to cash" onPress={onDeallocate} />
       </Card>
 
       <Card>
@@ -267,12 +321,12 @@ export function GhostAccountScreen() {
           value={memberEmail}
           onChangeText={setMemberEmail}
         />
-        <PrimaryButton title="Look up" onPress={onLookup} />
+        <PrimaryButton label="Look up" onPress={onLookup} />
         {lookupError ? <Text style={styles.err}>{lookupError}</Text> : null}
         {lookupResult ? (
           <View style={styles.lookupBox}>
             <Text style={styles.lookupEmail}>{lookupResult.displayEmail}</Text>
-            <PrimaryButton title="Add to Ghost Account" onPress={onAddMember} style={{ marginTop: 8 }} />
+            <PrimaryButton label="Add to Ghost Account" onPress={onAddMember} style={{ marginTop: 8 }} />
           </View>
         ) : null}
       </Card>
@@ -284,7 +338,7 @@ export function GhostAccountScreen() {
             <View key={m.memberUserId} style={styles.memberRow}>
               <Text style={styles.memberEmail}>{m.emailMasked}</Text>
               <PrimaryButton
-                title="Remove"
+                label="Remove"
                 onPress={() => onRemoveMember(m.memberUserId, m.emailMasked)}
                 style={styles.removeBtn}
               />
@@ -372,4 +426,30 @@ const styles = StyleSheet.create({
   removeBtn: { paddingHorizontal: 12, minWidth: 90 },
   lendRow: { marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: palette.border },
   lendTitle: { color: palette.textPrimary, fontWeight: '600' },
+  progressTrack: {
+    marginTop: 12,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: palette.surface,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 4,
+    backgroundColor: palette.primary,
+  },
+  breakdownBox: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    gap: 6,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  breakdownVal: { color: palette.textPrimary, fontWeight: '600', fontSize: 13 },
+  secondaryBtn: { backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border },
 });

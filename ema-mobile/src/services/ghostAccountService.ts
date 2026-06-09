@@ -25,12 +25,20 @@ export type GhostUpcomingLend = {
   poolAvailableAfterLend: number | null;
 };
 
+export type GhostBalanceBreakdown = {
+  cashUsd: number;
+  cryptoUsd: number;
+  airfarmingUsd: number;
+};
+
 export type GhostAccountStatus = {
   enrolled: boolean;
   eligible: boolean;
   minEligibilityUsd: number;
   minAllocationUsd: number;
   totalUsdt: number;
+  amountNeeded?: number;
+  balanceBreakdown?: GhostBalanceBreakdown;
   account?: {
     id: string;
     status: string;
@@ -66,6 +74,14 @@ function normalizeStatus(raw: Record<string, unknown>): GhostAccountStatus {
     minEligibilityUsd: Number(raw.minEligibilityUsd ?? 4900),
     minAllocationUsd: Number(raw.minAllocationUsd ?? 5000),
     totalUsdt: Number(raw.totalUsdt ?? 0),
+    amountNeeded: Number(raw.amountNeeded ?? 0),
+    balanceBreakdown: raw.balanceBreakdown
+      ? {
+          cashUsd: Number((raw.balanceBreakdown as any).cashUsd ?? 0),
+          cryptoUsd: Number((raw.balanceBreakdown as any).cryptoUsd ?? 0),
+          airfarmingUsd: Number((raw.balanceBreakdown as any).airfarmingUsd ?? 0),
+        }
+      : undefined,
     account: raw.account
       ? {
           id: String((raw.account as any).id),

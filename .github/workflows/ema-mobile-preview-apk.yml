@@ -1,0 +1,50 @@
+name: EMA Mobile Preview APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ema-mobile/**"
+      - ".github/workflows/ema-mobile-preview-apk.yml"
+
+concurrency:
+  group: ema-mobile-preview-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: EAS Android APK (preview)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ema-mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ema-mobile/package-lock.json
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Android APK (preview profile)
+        run: eas build --platform android --profile preview --non-interactive --wait
+
+      - name: Build summary
+        if: success()
+        run: |
+          echo "## Preview APK build finished" >> "$GITHUB_STEP_SUMMARY"
+          echo "Open the [Expo builds dashboard](https://expo.dev/accounts/willerbinance/projects/pureharvest/builds) to download the APK." >> "$GITHUB_STEP_SUMMARY"
