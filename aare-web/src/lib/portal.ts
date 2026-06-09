@@ -104,6 +104,8 @@ export function clearPortalToken() {
   localStorage.removeItem(PORTAL_TOKEN_KEY);
 }
 
+const FETCH_TIMEOUT_MS = 45_000;
+
 async function portalFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -116,15 +118,41 @@ async function portalFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   let res: Response;
   try {
-    res = await fetch(`${getFetchApiBase()}${path}`, { ...init, headers });
-  } catch {
-    throw new Error(
-      `Cannot reach API (${BACKEND_ORIGIN}). Try again in a moment.`
-    );
+    res = await fetch(`${getFetchApiBase()}${path}`, {
+      ...init,
+      headers,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === "TimeoutError") {
+      throw new Error("Request timed out. The API may be waking up — try again in a few seconds.");
+    }
+    throw new Error(`Cannot reach API (${BACKEND_ORIGIN}). Try again in a moment.`);
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.message || `HTTP ${res.status}`);
   return body as T;
+}
+
+type PortalAuthPayload = {
+  token: string;
+  account: PortalAccount;
+  application: PortalApplication | null;
+  kyc: PortalKyc;
+  canApplyForApi: boolean;
+};
+
+export function portalMeFromAuth(res: PortalAuthPayload): PortalMe {
+  return {
+    account: res.account,
+    application: res.application,
+    partner: null,
+    partnerId: res.account.partnerId,
+    hasPartnerAccess: false,
+    kyc: res.kyc,
+    kycStatus: res.kyc.status,
+    canApplyForApi: res.canApplyForApi,
+  };
 }
 
 export async function portalRegister(payload: {

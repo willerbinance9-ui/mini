@@ -5,6 +5,7 @@ import {
   clearPortalToken,
   portalGetMe,
   portalLogin,
+  portalMeFromAuth,
   portalRegister,
   setPortalToken,
   type PortalMe,
@@ -57,7 +58,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const res = await portalLogin(email, password);
     setPortalToken(res.token);
-    setMe(await portalGetMe());
+    setMe(portalMeFromAuth(res));
   }, []);
 
   const register = useCallback(
@@ -71,7 +72,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
     }) => {
       const res = await portalRegister(payload);
       setPortalToken(res.token);
-      setMe(await portalGetMe());
+      setMe(portalMeFromAuth(res));
     },
     []
   );
