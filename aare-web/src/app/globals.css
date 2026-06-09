@@ -42,6 +42,7 @@
 
 html {
   scroll-behavior: smooth;
+  font-size: clamp(15px, 2.8vw, 16px);
 }
 
 body {
@@ -49,6 +50,36 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Fluid type — scales with viewport on phones */
+.text-display {
+  font-size: clamp(2rem, 9vw, 4.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.text-heading {
+  font-size: clamp(1.625rem, 5.5vw, 2.5rem);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.text-heading-sm {
+  font-size: clamp(1.375rem, 4.5vw, 2rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.text-lead {
+  font-size: clamp(1rem, 3.5vw, 1.125rem);
+  line-height: 1.65;
+}
+
+.text-stat {
+  font-size: clamp(1.25rem, 5vw, 1.5rem);
 }
 
 ::selection {
@@ -92,24 +123,44 @@ body {
 }
 
 .glow-ring {
-  box-shadow: 0 0 0 1px var(--card-border);
+  box-shadow:
+    0 0 0 1px var(--card-border),
+    0 0 40px -8px var(--glow);
 }
 
 .card-hover {
   transition: transform 0.3s ease, border-color 0.3s ease;
 }
 .card-hover:hover {
-  border-color: color-mix(in srgb, var(--foreground) 25%, var(--card-border));
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--foreground) 35%, var(--card-border));
 }
 
 .btn-shine {
-  /* legacy class — no animation */
+  position: relative;
+  overflow: hidden;
+}
+.btn-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.15) 50%, transparent 60%);
+  transform: translateX(-100%);
+}
+.light .btn-shine::after {
+  background: linear-gradient(105deg, transparent 40%, rgba(0,0,0,0.08) 50%, transparent 60%);
+}
+.btn-shine:hover::after {
+  animation: shimmer 0.75s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-float,
   .animate-marquee {
     animation: none !important;
+  }
+  .card-hover:hover {
+    transform: none;
   }
 }
 
@@ -122,7 +173,7 @@ body {
 }
 
 .prose-aare h1 {
-  font-size: 2.25rem;
+  font-size: clamp(1.75rem, 6vw, 2.25rem);
   font-weight: 700;
   letter-spacing: -0.03em;
   margin-bottom: 0.75rem;
@@ -130,7 +181,7 @@ body {
 }
 
 .prose-aare h2 {
-  font-size: 1.35rem;
+  font-size: clamp(1.2rem, 4.5vw, 1.35rem);
   font-weight: 600;
   margin-top: 2rem;
   margin-bottom: 0.75rem;
@@ -138,7 +189,7 @@ body {
 }
 
 .prose-aare h3 {
-  font-size: 1.1rem;
+  font-size: clamp(1rem, 3.5vw, 1.1rem);
   font-weight: 600;
   margin-top: 1.5rem;
   margin-bottom: 0.5rem;

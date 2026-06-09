@@ -50,27 +50,31 @@ export default function DocsHomePage() {
 
       <h2>Income programs</h2>
       <p>Embed these services in your app. Partners earn 5% commission on income from each program.</p>
-      <ul>
+
+      <div className="not-prose my-6 grid gap-3 sm:grid-cols-2">
         {services.map((s) => (
-          <li key={s.slug}>
-            <Link href={`/docs/${s.slug}`}>
-              <strong>{s.title}</strong>
-            </Link>{" "}
-            — {s.summary}
-          </li>
+          <Link
+            key={s.slug}
+            href={`/docs/${s.slug}`}
+            className="card-hover rounded-xl border border-card-border p-4 no-underline transition hover:border-foreground/30"
+          >
+            <p className="font-semibold text-foreground">{s.title}</p>
+            <p className="mt-1 text-sm text-muted">{s.summary}</p>
+          </Link>
         ))}
-        <li>
-          <Link href="/docs/vip">
-            <strong>VIP Farmers</strong>
-          </Link>{" "}
-          — locked-term investment summaries
-        </li>
-      </ul>
+        <Link
+          href="/docs/vip"
+          className="card-hover rounded-xl border border-card-border p-4 no-underline transition hover:border-foreground/30"
+        >
+          <p className="font-semibold text-foreground">VIP Farmers</p>
+          <p className="mt-1 text-sm text-muted">Locked-term investment summaries</p>
+        </Link>
+      </div>
 
       <div className="not-prose mt-8 flex flex-wrap gap-3">
         <Link
           href="/docs/quickstart"
-          className="rounded-full border border-foreground bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90"
+          className="btn-shine rounded-full border border-foreground bg-foreground px-4 py-2 text-sm font-semibold text-background hover:opacity-90"
         >
           Quickstart guide
         </Link>
