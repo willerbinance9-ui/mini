@@ -1,0 +1,58 @@
+{
+  "info": {
+    "name": "Min Partner API (Aare)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Import into Postman or Insomnia. Set {{api_base}} and {{api_key}} variables."
+  },
+  "variable": [
+    { "key": "api_base", "value": "https://api.aare.cc" },
+    { "key": "api_key", "value": "ema_pk_YOUR_KEY" },
+    { "key": "user_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Partner",
+      "item": [
+        {
+          "name": "GET /v1/partner/me",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+            "url": "{{api_base}}/v1/partner/me"
+          }
+        },
+        {
+          "name": "POST /v1/partner/users",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"dev@partner.com\",\"password\":\"secret12\",\"externalRef\":\"usr_1\"}"
+            },
+            "url": "{{api_base}}/v1/partner/users"
+          }
+        },
+        {
+          "name": "GET /v1/partner/stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+            "url": "{{api_base}}/v1/partner/stats"
+          }
+        },
+        {
+          "name": "GET /v1/partner/commission",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+            "url": "{{api_base}}/v1/partner/commission"
+          }
+        }
+      ]
+    }
+  ]
+}
