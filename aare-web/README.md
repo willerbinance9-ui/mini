@@ -40,7 +40,8 @@ Point `aare.cc` at the portal and `api.aare.cc` at your Render backend (CNAME).
 - `/services` — Income programs (live trading, airfarming, ghost, VIP)
 - `/compare` — Service comparison table
 - `/pricing` — Partnership pricing & commission
-- `/dashboard` — Partner dashboard (API key in sessionStorage)
+- `/signup`, `/login` — Partner portal accounts
+- `/dashboard` — Application status, API users, keys, balances (after approval)
 - `/docs` — Documentation with sidebar
 - `/explorer` — Live API playground
 - `/webhooks/playground` — HMAC signature tool

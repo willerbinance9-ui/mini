@@ -32,6 +32,10 @@ const {
 const { getCombinedWithdrawable, getCashWalletUsd } = require('./walletFunding');
 const { createPayoutAwaitingApproval } = require('./nowpaymentsPayoutFlow');
 const { clearWithdrawalTrustScoreCache } = require('./services/withdrawalTrustScore');
+const {
+  notifyPartnerDepositCredited,
+  notifyPartnerWithdrawalFinished,
+} = require('./partnerWebhookService');
 
 const FINISHED_PAYMENT_STATUS = 'finished';
 const FAILED_PAYOUT_STATUSES = ['failed', 'rejected', 'refunded'];
@@ -156,6 +160,12 @@ async function creditPaymentLedger(paymentRow) {
   const updated = await updateNowpaymentsPayment(paymentRow.id, { ledger_credited: true });
   void notifyDepositCredited({
     userId: paymentRow.user_id,
+    amount,
+    asset,
+  });
+  void notifyPartnerDepositCredited({
+    userId: paymentRow.user_id,
+    paymentRow: updated,
     amount,
     asset,
   });
@@ -325,6 +335,10 @@ async function applyPayoutStatusToRow(row, status, rawBody) {
     if (!updated.reserve_released) {
       await updateNowpaymentsPayout(updated.id, { reserve_released: true });
     }
+    void notifyPartnerWithdrawalFinished({
+      userId: updated.user_id,
+      payoutRow: updated,
+    });
   } else if (FAILED_PAYOUT_STATUSES.includes(st) && !updated.reserve_released) {
     await refundCashFundingForPayout(updated);
     await updateNowpaymentsPayout(updated.id, { reserve_released: true, status: st });
@@ -699,4 +713,11 @@ module.exports = {
   handlePaymentWebhook,
   handlePayoutWebhook,
   normalizeCurrency,
+  syncUncreditedPaymentsForUser,
+  syncPaymentFromProvider,
+  creditPaymentLedger,
+  syncPendingPayoutsForUser,
+  publicPayoutStatus,
+  roundPayoutAmount,
+  isPaymentFinished,
 };

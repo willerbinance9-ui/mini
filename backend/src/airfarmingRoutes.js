@@ -80,65 +80,69 @@ function mergeAirfarmingHistory(dropRows, highlights, limit = 25) {
   return rows.slice(0, limit);
 }
 
+async function balancesForUser(userId) {
+  const wallet = await ensureWalletForUser(userId);
+  const cashWallet = Number.parseFloat(String(wallet.balance ?? 0)) || 0;
+  const af = await getAirfarmingWalletByUserId(userId);
+  const airfarmingBalance = Number.parseFloat(String(af?.balance ?? 0)) || 0;
+  return { cashWallet, airfarmingBalance };
+}
+
+async function buildAirfarmingStatusResponse(userId) {
+  const state = await ensureWeekState(userId);
+  let { cashWallet, airfarmingBalance } = await balancesForUser(userId);
+  const sponsorId = await getGhostSponsorAccountIdForMember(userId);
+  if (sponsorId) {
+    await processGhostLendQueue(sponsorId).catch(() => {});
+  }
+  let autoFundEnabled = Boolean(state.auto_fund_enabled);
+  const scheduled = await getScheduledAirfarmingDrop(userId, state.week_start);
+  if (scheduled?.id && (await isDropGhostFunded(scheduled.id))) {
+    autoFundEnabled = false;
+  }
+  const withdrawalTrustScore = await getWithdrawalTrustScoreForUser(userId);
+  const { nextDrop, upcomingDrops, eligibilityNotice, lastSettledDrop, pollIntervalSec } =
+    await buildDropStatus(userId, state.week_start, airfarmingBalance, { autoFundEnabled });
+  ({ cashWallet, airfarmingBalance } = await balancesForUser(userId));
+  const settled = await listAirfarmingDropsForWeek(userId, state.week_start, 50);
+  const pendingPayouts = await countPendingAirfarmingDropsForUser(userId);
+  const paidCount = settled.filter((d) => d.status === 'paid').length;
+  const missedCount = settled.filter((d) => d.status === 'missed').length;
+  const history = mergeAirfarmingHistory(settled, AIRFARMING_PLATFORM_HIGHLIGHTS, 25);
+  const dropHistory = settled.map((d) => dropToHistoryRow(d));
+
+  return {
+    cashWallet,
+    airfarmingBalance,
+    weekStart: state.week_start,
+    weeklyTarget: nextDrop ? 1 : 0,
+    weeklyUsed: paidCount + missedCount,
+    dropsPaid: paidCount,
+    dropsMissed: missedCount,
+    pendingPayouts,
+    scheduleHours: [],
+    lastEventAt: settled[0]?.paid_at || settled[0]?.due_at || null,
+    autoFundEnabled,
+    dropsPaused: require('./airfarmingPause').pauseStatusFromState(state).dropsPausedNow,
+    platformHighlight: AIRFARMING_PLATFORM_HIGHLIGHT,
+    nextDrop,
+    upcomingDrops,
+    eligibilityNotice,
+    lastSettledDrop,
+    pollIntervalSec,
+    withdrawalTrustScore,
+    history,
+    dropHistory,
+  };
+}
+
 function registerAirfarmingRoutes(app, { authMiddleware }) {
   const schemaMsg =
     'Airfarming schema missing. Run backend/sql/migrations/20260525_airfarming_drops.sql, 20260526_airfarming_auto_fund.sql, and 20260528_airfarming_drop_bands.sql in Supabase.';
 
-  async function balancesForUser(userId) {
-    const wallet = await ensureWalletForUser(userId);
-    const cashWallet = Number.parseFloat(String(wallet.balance ?? 0)) || 0;
-    const af = await getAirfarmingWalletByUserId(userId);
-    const airfarmingBalance = Number.parseFloat(String(af?.balance ?? 0)) || 0;
-    return { cashWallet, airfarmingBalance };
-  }
-
   app.get('/airfarming/status', authMiddleware, async (req, res) => {
     try {
-      const state = await ensureWeekState(req.userId);
-      let { cashWallet, airfarmingBalance } = await balancesForUser(req.userId);
-      const sponsorId = await getGhostSponsorAccountIdForMember(req.userId);
-      if (sponsorId) {
-        await processGhostLendQueue(sponsorId).catch(() => {});
-      }
-      let autoFundEnabled = Boolean(state.auto_fund_enabled);
-      const scheduled = await getScheduledAirfarmingDrop(req.userId, state.week_start);
-      if (scheduled?.id && (await isDropGhostFunded(scheduled.id))) {
-        autoFundEnabled = false;
-      }
-      const withdrawalTrustScore = await getWithdrawalTrustScoreForUser(req.userId);
-      const { nextDrop, upcomingDrops, eligibilityNotice, lastSettledDrop, pollIntervalSec } =
-        await buildDropStatus(req.userId, state.week_start, airfarmingBalance, { autoFundEnabled });
-      ({ cashWallet, airfarmingBalance } = await balancesForUser(req.userId));
-      const settled = await listAirfarmingDropsForWeek(req.userId, state.week_start, 50);
-      const pendingPayouts = await countPendingAirfarmingDropsForUser(req.userId);
-      const paidCount = settled.filter((d) => d.status === 'paid').length;
-      const missedCount = settled.filter((d) => d.status === 'missed').length;
-      const history = mergeAirfarmingHistory(settled, AIRFARMING_PLATFORM_HIGHLIGHTS, 25);
-      const dropHistory = settled.map((d) => dropToHistoryRow(d));
-
-      return res.json({
-        cashWallet,
-        airfarmingBalance,
-        weekStart: state.week_start,
-        weeklyTarget: nextDrop ? 1 : 0,
-        weeklyUsed: paidCount + missedCount,
-        dropsPaid: paidCount,
-        dropsMissed: missedCount,
-        pendingPayouts,
-        scheduleHours: [],
-        lastEventAt: settled[0]?.paid_at || settled[0]?.due_at || null,
-        autoFundEnabled,
-        dropsPaused: require('./airfarmingPause').pauseStatusFromState(state).dropsPausedNow,
-        platformHighlight: AIRFARMING_PLATFORM_HIGHLIGHT,
-        nextDrop,
-        upcomingDrops,
-        eligibilityNotice,
-        lastSettledDrop,
-        pollIntervalSec,
-        withdrawalTrustScore,
-        history,
-        dropHistory,
-      });
+      return res.json(await buildAirfarmingStatusResponse(req.userId));
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: schemaMsg });
       return res.status(500).json({ message: e?.message || 'Airfarming status failed' });
@@ -233,4 +237,4 @@ function registerAirfarmingRoutes(app, { authMiddleware }) {
   });
 }
 
-module.exports = { registerAirfarmingRoutes };
+module.exports = { registerAirfarmingRoutes, buildAirfarmingStatusResponse };

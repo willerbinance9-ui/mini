@@ -69,19 +69,39 @@ function maskEmail(email) {
   return `${maskedLocal}@${domain}`;
 }
 
-async function computeTotalUsdtForUser(userId) {
-  const [wallet, cryptoBalances] = await Promise.all([
+async function computeEligibilityBreakdown(userId) {
+  const [wallet, cryptoBalances, af] = await Promise.all([
     ensureWalletForUser(userId),
     getCryptoBalancesByUserId(userId),
+    getAirfarmingWalletByUserId(userId),
   ]);
-  const cash = Number.parseFloat(String(wallet.balance ?? 0)) || 0;
-  const crypto = totalUsdtFamilyAvailable(cryptoBalances);
-  return roundMoney(cash + crypto);
+  const cashUsd = roundMoney(Number.parseFloat(String(wallet.balance ?? 0)) || 0);
+  const cryptoUsd = roundMoney(totalUsdtFamilyAvailable(cryptoBalances));
+  const airfarmingUsd = roundMoney(Number.parseFloat(String(af?.balance ?? 0)) || 0);
+  const totalUsdt = roundMoney(cashUsd + cryptoUsd + airfarmingUsd);
+  const eligible = totalUsdt > GHOST_MIN_ELIGIBILITY_USD;
+  const amountNeeded = eligible
+    ? 0
+    : roundMoney(Math.max(0.01, GHOST_MIN_ELIGIBILITY_USD + 0.01 - totalUsdt));
+
+  return {
+    cashUsd,
+    cryptoUsd,
+    airfarmingUsd,
+    totalUsdt,
+    eligible,
+    amountNeeded,
+  };
+}
+
+async function computeTotalUsdtForUser(userId) {
+  const breakdown = await computeEligibilityBreakdown(userId);
+  return breakdown.totalUsdt;
 }
 
 async function isGhostEnrollmentEligible(userId) {
-  const total = await computeTotalUsdtForUser(userId);
-  return total > GHOST_MIN_ELIGIBILITY_USD;
+  const breakdown = await computeEligibilityBreakdown(userId);
+  return breakdown.eligible;
 }
 
 async function enrollGhostAccount(ownerUserId) {
@@ -560,22 +580,37 @@ async function buildScheduleRow(lend, drop, emailByUserId, poolBalanceRef) {
 
 async function buildGhostAccountStatus(ownerUserId) {
   let account = await getGhostAccountByOwnerUserId(ownerUserId);
-  const totalUsdt = await computeTotalUsdtForUser(ownerUserId);
-  const eligible = totalUsdt > GHOST_MIN_ELIGIBILITY_USD;
+  const breakdown = await computeEligibilityBreakdown(ownerUserId);
+  const { totalUsdt, eligible, cashUsd, cryptoUsd, airfarmingUsd, amountNeeded } = breakdown;
+
+  const eligibilityPayload = {
+    eligible,
+    minEligibilityUsd: GHOST_MIN_ELIGIBILITY_USD,
+    minAllocationUsd: GHOST_MIN_ALLOCATION_USD,
+    totalUsdt,
+    amountNeeded,
+    balanceBreakdown: {
+      cashUsd,
+      cryptoUsd,
+      airfarmingUsd,
+    },
+    pollIntervalSec: 45,
+  };
 
   if (!account) {
     return {
       enrolled: false,
-      eligible,
-      minEligibilityUsd: GHOST_MIN_ELIGIBILITY_USD,
-      minAllocationUsd: GHOST_MIN_ALLOCATION_USD,
-      totalUsdt,
+      ...eligibilityPayload,
     };
   }
 
   if (account.status === 'active') {
-    await processGhostLendQueue(account.id);
-    account = await getGhostAccountById(account.id);
+    try {
+      await processGhostLendQueue(account.id);
+      account = await getGhostAccountById(account.id);
+    } catch (err) {
+      console.error('[ghost-account/status] lend queue', err?.message || err);
+    }
   }
 
   const members = await listGhostAccountMembers(account.id);
@@ -624,10 +659,7 @@ async function buildGhostAccountStatus(ownerUserId) {
 
   return {
     enrolled: true,
-    eligible,
-    minEligibilityUsd: GHOST_MIN_ELIGIBILITY_USD,
-    minAllocationUsd: GHOST_MIN_ALLOCATION_USD,
-    totalUsdt,
+    ...eligibilityPayload,
     account: {
       id: account.id,
       status: account.status,

@@ -238,8 +238,11 @@ async function validateDropPatch(body) {
   return { patch };
 }
 
+const { registerAdminPartnerRoutes } = require('./adminPartnerRoutes');
+
 function registerAdminRoutes(app) {
   registerAdminAiRoutes(app);
+  registerAdminPartnerRoutes(app);
   app.post('/admin/api/login', (req, res) => {
     const { username, password } = req.body || {};
     const name = String(username || '').trim();

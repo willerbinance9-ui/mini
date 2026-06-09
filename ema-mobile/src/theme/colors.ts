@@ -8,6 +8,8 @@ export const palette = {
   primaryContrast: '#FFFFFF',
   textPrimary: '#FFFFFF',
   textSecondary: '#C2C2C2',
+  /** Alias used by some screens — same as textSecondary */
+  textMuted: '#C2C2C2',
   success: '#00B324',
   danger: '#FF444F',
   warning: '#FFAD3A',

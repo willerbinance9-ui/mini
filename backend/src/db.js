@@ -64,7 +64,17 @@ function randomTransferCode() {
 }
 
 async function getUserByEmail(email) {
-  const { data, error } = await supabase.from('users').select('*').eq('email', email).maybeSingle();
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('email', email)
+    .is('partner_id', null)
+    .maybeSingle();
+  if (error && isMissingColumnError(error, 'partner_id')) {
+    const fallback = await supabase.from('users').select('*').eq('email', email).maybeSingle();
+    if (fallback.error) throw fallback.error;
+    return fallback.data;
+  }
   if (error) throw error;
   return data;
 }
@@ -209,6 +219,665 @@ async function createUser({ email, passwordHash }) {
   const { data: fresh, error: freshErr } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
   if (freshErr) throw freshErr;
   return fresh || user;
+}
+
+async function createPartnerUser({ partnerId, email, passwordHash, externalRef }) {
+  const userId = id();
+  const walletId = id();
+
+  const { data: user, error: userError } = await supabase
+    .from('users')
+    .insert({
+      id: userId,
+      email,
+      password_hash: passwordHash,
+      partner_id: partnerId,
+      partner_external_ref: externalRef || null,
+      alpaca_api_key: '',
+      alpaca_secret_key: '',
+    })
+    .select('*')
+    .single();
+  if (userError) throw userError;
+
+  const { error: walletError } = await supabase.from('wallets').insert({ id: walletId, user_id: userId, balance: 0 });
+  if (walletError) throw walletError;
+
+  await ensureUserTransferCode(userId);
+
+  const { data: fresh, error: freshErr } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+  if (freshErr) throw freshErr;
+  return fresh || user;
+}
+
+async function getPartnerUserByEmail(partnerId, email) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('partner_id', partnerId)
+    .eq('email', email)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function getPartnerUserById(partnerId, userId) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('partner_id', partnerId)
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function getPartnerUserByExternalRef(partnerId, externalRef) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('partner_id', partnerId)
+    .eq('partner_external_ref', externalRef)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function getPartnerById(partnerId) {
+  const { data, error } = await supabase.from('partners').select('*').eq('id', partnerId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function getPartnerWebhookConfig(partnerId) {
+  const { data, error } = await supabase
+    .from('partners')
+    .select('id, webhook_url, webhook_secret, webhook_enabled, webhook_events')
+    .eq('id', partnerId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function updatePartnerWebhookConfig(partnerId, patch) {
+  const now = new Date().toISOString();
+  const row = {
+    updated_at: now,
+  };
+  if (patch.webhookUrl !== undefined) row.webhook_url = patch.webhookUrl || null;
+  if (patch.webhookSecret !== undefined) row.webhook_secret = patch.webhookSecret || null;
+  if (patch.webhookEnabled !== undefined) row.webhook_enabled = Boolean(patch.webhookEnabled);
+  if (patch.webhookEvents !== undefined) row.webhook_events = patch.webhookEvents;
+
+  const { data, error } = await supabase
+    .from('partners')
+    .update(row)
+    .eq('id', partnerId)
+    .select('id, webhook_url, webhook_secret, webhook_enabled, webhook_events')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function tryClaimPartnerWebhookDelivery({ id, partnerId, eventType, sourceId, payload }) {
+  const { error } = await supabase.from('partner_webhook_deliveries').insert({
+    id,
+    partner_id: partnerId,
+    event_type: eventType,
+    source_id: sourceId,
+    payload,
+  });
+  if (error?.code === '23505') return false;
+  if (error && isMissingTableError(error)) return false;
+  if (error) throw error;
+  return true;
+}
+
+async function updatePartnerWebhookDeliveryResult({ id, responseStatus, responseBody, deliveredAt }) {
+  const { error } = await supabase
+    .from('partner_webhook_deliveries')
+    .update({
+      response_status: responseStatus,
+      response_body: responseBody,
+      delivered_at: deliveredAt,
+    })
+    .eq('id', id);
+  if (error && isMissingTableError(error)) return;
+  if (error) throw error;
+}
+
+async function getPartnerByApiKeyPrefix(keyPrefix) {
+  const { data, error } = await supabase
+    .from('partner_api_keys')
+    .select('id, partner_id, key_hash, scopes, revoked_at, partners!inner(status)')
+    .eq('key_prefix', keyPrefix)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    id: data.id,
+    partner_id: data.partner_id,
+    key_hash: data.key_hash,
+    scopes: data.scopes,
+    revoked_at: data.revoked_at,
+    partner_status: data.partners?.status || 'active',
+  };
+}
+
+async function touchPartnerApiKeyLastUsed(apiKeyId) {
+  const { error } = await supabase
+    .from('partner_api_keys')
+    .update({ last_used_at: new Date().toISOString() })
+    .eq('id', apiKeyId);
+  if (error) throw error;
+}
+
+async function createPartnerWithApiKey({ name, slug, keyName, keyPrefix, keyHash }) {
+  const partnerId = id();
+  const apiKeyId = id();
+  const now = new Date().toISOString();
+
+  const { data: partner, error: partnerError } = await supabase
+    .from('partners')
+    .insert({
+      id: partnerId,
+      name,
+      slug,
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+    })
+    .select('*')
+    .single();
+  if (partnerError) throw partnerError;
+
+  const defaultScopes = [
+    'users',
+    'compliance',
+    'airfarming',
+    'wallet',
+    'deposits',
+    'withdrawals',
+    'vip',
+    'webhooks',
+  ];
+  const { error: keyError } = await supabase.from('partner_api_keys').insert({
+    id: apiKeyId,
+    partner_id: partnerId,
+    name: keyName,
+    key_prefix: keyPrefix,
+    key_hash: keyHash,
+    scopes: defaultScopes,
+  });
+  if (keyError) throw keyError;
+
+  return { partner, apiKeyId };
+}
+
+async function insertPartnerApplication(row) {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('partner_applications')
+    .insert({
+      id: id(),
+      status: 'pending',
+      full_name: row.full_name,
+      email: row.email,
+      country: row.country,
+      phone: row.phone,
+      occupation: row.occupation,
+      income_per_year: row.income_per_year,
+      intended_investment: row.intended_investment,
+      withdraw_frequency: row.withdraw_frequency,
+      withdraw_amount: row.withdraw_amount ?? null,
+      invested_before: row.invested_before,
+      previous_investment_amount: row.previous_investment_amount ?? null,
+      previous_return_amount: row.previous_return_amount ?? null,
+      previous_duration: row.previous_duration ?? null,
+      investment_history_notes: row.investment_history_notes ?? null,
+      payment_preference: row.payment_preference,
+      bank_details: row.bank_details ?? null,
+      crypto_address: row.crypto_address ?? null,
+      crypto_network: row.crypto_network ?? null,
+      has_api_knowledge: row.has_api_knowledge,
+      api_plan: row.api_plan ?? null,
+      terms_accepted_at: row.terms_accepted_at || now,
+      payload: row.payload || {},
+      created_at: now,
+      updated_at: now,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function listPartnerApplicationsAdmin({ status = null, limit = 50 } = {}) {
+  let q = supabase
+    .from('partner_applications')
+    .select(
+      'id, status, full_name, email, country, phone, occupation, intended_investment, income_per_year, payment_preference, has_api_knowledge, api_plan, partner_id, admin_notes, payload, created_at, updated_at'
+    )
+    .order('created_at', { ascending: false })
+    .limit(Math.min(100, Math.max(1, Number(limit) || 50)));
+  if (status) q = q.eq('status', status);
+  const { data, error } = await q;
+  if (error && isMissingTableError(error)) return [];
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    ...row,
+    source: row.payload?.source || row.payload?.submittedFrom || 'aare',
+  }));
+}
+
+async function getPartnerApplicationByPartnerId(partnerId) {
+  const { data, error } = await supabase
+    .from('partner_applications')
+    .select('id, full_name, email, status, country, intended_investment, created_at, payload')
+    .eq('partner_id', partnerId)
+    .maybeSingle();
+  if (error && isMissingTableError(error)) return null;
+  if (error) throw error;
+  if (!data) return null;
+  return { ...data, source: data.payload?.source || 'aare' };
+}
+
+async function countPartnerWebhookDeliveries(partnerId) {
+  const { count, error } = await supabase
+    .from('partner_webhook_deliveries')
+    .select('*', { count: 'exact', head: true })
+    .eq('partner_id', partnerId);
+  if (error && isMissingTableError(error)) return 0;
+  if (error) throw error;
+  return count || 0;
+}
+
+async function listPartnersAdmin() {
+  const { data: partners, error } = await supabase
+    .from('partners')
+    .select(
+      'id, name, slug, status, webhook_enabled, webhook_url, created_at, updated_at, partner_api_keys(id, name, key_prefix, scopes, revoked_at, last_used_at, created_at)'
+    )
+    .order('created_at', { ascending: false });
+  if (error && isMissingTableError(error)) return [];
+  if (error) throw error;
+
+  const rows = [];
+  for (const partner of partners || []) {
+    const apiKeys = partner.partner_api_keys || [];
+    const activeKeys = apiKeys.filter((k) => !k.revoked_at);
+    const keysInUse = activeKeys.filter((k) => k.last_used_at);
+    const [userCount, commission, webhookDeliveryCount, application] = await Promise.all([
+      countPartnerUsers(partner.id),
+      getPartnerCommissionStats(partner.id, { limit: 500 }),
+      countPartnerWebhookDeliveries(partner.id),
+      getPartnerApplicationByPartnerId(partner.id),
+    ]);
+    rows.push({
+      id: partner.id,
+      name: partner.name,
+      slug: partner.slug,
+      status: partner.status,
+      webhookEnabled: Boolean(partner.webhook_enabled),
+      webhookUrl: partner.webhook_url || null,
+      createdAt: partner.created_at,
+      updatedAt: partner.updated_at,
+      apiKeys: apiKeys.map((k) => ({
+        id: k.id,
+        name: k.name,
+        keyPrefix: k.key_prefix,
+        scopes: k.scopes || [],
+        revokedAt: k.revoked_at,
+        lastUsedAt: k.last_used_at,
+        createdAt: k.created_at,
+        inUse: Boolean(!k.revoked_at && k.last_used_at),
+        active: !k.revoked_at,
+      })),
+      activeKeyCount: activeKeys.length,
+      keysInUseCount: keysInUse.length,
+      userCount,
+      commissionUsd: commission.totals.commissionUsd,
+      grossRevenueUsd: commission.totals.grossUsd,
+      revenueEventCount: commission.totals.count,
+      webhookDeliveryCount,
+      application,
+    });
+  }
+  return rows;
+}
+
+async function getPartnerApplicationById(applicationId) {
+  const { data, error } = await supabase
+    .from('partner_applications')
+    .select('*')
+    .eq('id', applicationId)
+    .maybeSingle();
+  if (error && isMissingTableError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function updatePartnerApplication(applicationId, patch) {
+  const now = new Date().toISOString();
+  const row = { updated_at: now };
+  if (patch.status != null) row.status = patch.status;
+  if (patch.admin_notes !== undefined) row.admin_notes = patch.admin_notes;
+  if (patch.partner_id !== undefined) row.partner_id = patch.partner_id;
+
+  const { data, error } = await supabase
+    .from('partner_applications')
+    .update(row)
+    .eq('id', applicationId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function createPortalAccount({
+  email,
+  passwordHash,
+  fullName,
+  phone = null,
+  phoneCountry = null,
+  countryOfResidency = null,
+}) {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('partner_portal_accounts')
+    .insert({
+      id: id(),
+      email: String(email).trim().toLowerCase(),
+      password_hash: passwordHash,
+      full_name: fullName || null,
+      phone: phone || null,
+      phone_country: phoneCountry || null,
+      country_of_residency: countryOfResidency || null,
+      created_at: now,
+      updated_at: now,
+    })
+    .select(
+      'id, email, full_name, phone, phone_country, country_of_residency, phone_verified_at, partner_id, application_id, created_at'
+    )
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function getPortalAccountByEmail(email) {
+  const { data, error } = await supabase
+    .from('partner_portal_accounts')
+    .select('*')
+    .eq('email', String(email).trim().toLowerCase())
+    .maybeSingle();
+  if (error && isMissingTableError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function getPortalAccountById(accountId) {
+  const { data, error } = await supabase
+    .from('partner_portal_accounts')
+    .select('*')
+    .eq('id', accountId)
+    .maybeSingle();
+  if (error && isMissingTableError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function updatePortalAccount(accountId, patch) {
+  const row = { updated_at: new Date().toISOString() };
+  if (patch.partner_id !== undefined) row.partner_id = patch.partner_id;
+  if (patch.application_id !== undefined) row.application_id = patch.application_id;
+  if (patch.full_name !== undefined) row.full_name = patch.full_name;
+  if (patch.phone_verified_at !== undefined) row.phone_verified_at = patch.phone_verified_at;
+  const { data, error } = await supabase
+    .from('partner_portal_accounts')
+    .update(row)
+    .eq('id', accountId)
+    .select(
+      'id, email, full_name, phone, phone_country, country_of_residency, phone_verified_at, partner_id, application_id, created_at, updated_at'
+    )
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function createPortalLoginChallenge({ portalAccountId, codeHash, expiresAt }) {
+  const { data, error } = await supabase
+    .from('partner_portal_login_challenges')
+    .insert({
+      id: id(),
+      portal_account_id: portalAccountId,
+      code_hash: codeHash,
+      expires_at: expiresAt,
+      attempts: 0,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function getPortalLoginChallenge(challengeId) {
+  const { data, error } = await supabase
+    .from('partner_portal_login_challenges')
+    .select('*')
+    .eq('id', challengeId)
+    .maybeSingle();
+  if (error && isMissingTableError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function incrementPortalLoginChallengeAttempts(challengeId) {
+  const row = await getPortalLoginChallenge(challengeId);
+  if (!row) return null;
+  const { data, error } = await supabase
+    .from('partner_portal_login_challenges')
+    .update({ attempts: (row.attempts || 0) + 1 })
+    .eq('id', challengeId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function consumePortalLoginChallenge(challengeId) {
+  const { data, error } = await supabase
+    .from('partner_portal_login_challenges')
+    .update({ consumed_at: new Date().toISOString() })
+    .eq('id', challengeId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function getOrCreatePortalKyc(portalAccountId) {
+  const existing = await getPortalKycByAccountId(portalAccountId);
+  if (existing) return existing;
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('partner_portal_kyc')
+    .insert({
+      id: id(),
+      portal_account_id: portalAccountId,
+      status: 'draft',
+      created_at: now,
+      updated_at: now,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function getPortalKycByAccountId(portalAccountId) {
+  const { data, error } = await supabase
+    .from('partner_portal_kyc')
+    .select('*')
+    .eq('portal_account_id', portalAccountId)
+    .maybeSingle();
+  if (error && isMissingTableError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function getPortalKycById(kycId) {
+  const { data, error } = await supabase
+    .from('partner_portal_kyc')
+    .select('*')
+    .eq('id', kycId)
+    .maybeSingle();
+  if (error && isMissingTableError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function updatePortalKyc(kycId, patch) {
+  const row = { updated_at: new Date().toISOString() };
+  const fields = [
+    'status',
+    'residence_country',
+    'residence_scope',
+    'document_type',
+    'front_storage_path',
+    'back_storage_path',
+    'ai_result',
+    'ai_confidence',
+    'rejection_reason',
+    'submitted_at',
+    'reviewed_at',
+  ];
+  for (const f of fields) {
+    if (patch[f] !== undefined) row[f] = patch[f];
+  }
+  const { data, error } = await supabase
+    .from('partner_portal_kyc')
+    .update(row)
+    .eq('id', kycId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function listPortalKycAdmin({ status = null, limit = 50 } = {}) {
+  let q = supabase
+    .from('partner_portal_kyc')
+    .select('*, partner_portal_accounts(id, email, full_name, phone, country_of_residency)')
+    .order('updated_at', { ascending: false })
+    .limit(Math.min(100, Math.max(1, Number(limit) || 50)));
+  if (status) q = q.eq('status', status);
+  const { data, error } = await q;
+  if (error && isMissingTableError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function linkPortalAccountByEmail(email, { partnerId, applicationId } = {}) {
+  const account = await getPortalAccountByEmail(email);
+  if (!account) return null;
+  const patch = {};
+  if (partnerId !== undefined) patch.partner_id = partnerId;
+  if (applicationId !== undefined) patch.application_id = applicationId;
+  return updatePortalAccount(account.id, patch);
+}
+
+async function getPartnerApplicationByEmail(email) {
+  const { data, error } = await supabase
+    .from('partner_applications')
+    .select('*')
+    .eq('email', String(email).trim().toLowerCase())
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error && isMissingTableError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function listPartnerApiKeys(partnerId) {
+  const { data, error } = await supabase
+    .from('partner_api_keys')
+    .select('id, name, key_prefix, scopes, revoked_at, last_used_at, created_at')
+    .eq('partner_id', partnerId)
+    .order('created_at', { ascending: false });
+  if (error && isMissingTableError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function listPartnerUsersForPortal(partnerId, { limit = 50 } = {}) {
+  const cap = Math.min(100, Math.max(1, Number(limit) || 50));
+  const { data: users, error } = await supabase
+    .from('users')
+    .select('id, email, partner_external_ref, account_status, created_at')
+    .eq('partner_id', partnerId)
+    .order('created_at', { ascending: false })
+    .limit(cap);
+  if (error && isMissingColumnError(error, 'partner_id')) return [];
+  if (error) throw error;
+  const rows = [];
+  for (const u of users || []) {
+    let cashUsd = 0;
+    try {
+      const wallet = await getWalletByUserId(u.id);
+      cashUsd = Number(wallet?.balance || 0);
+    } catch (_) {
+      cashUsd = 0;
+    }
+    rows.push({
+      id: u.id,
+      email: u.email,
+      externalRef: u.partner_external_ref,
+      accountStatus: u.account_status || 'active',
+      createdAt: u.created_at,
+      cashWalletUsd: Math.round(cashUsd * 100) / 100,
+    });
+  }
+  return rows;
+}
+
+async function countPartnerUsers(partnerId) {
+  const { count, error } = await supabase
+    .from('users')
+    .select('*', { count: 'exact', head: true })
+    .eq('partner_id', partnerId);
+  if (error && isMissingColumnError(error, 'partner_id')) return 0;
+  if (error) throw error;
+  return count || 0;
+}
+
+async function getPartnerCommissionStats(partnerId, { limit = 200 } = {}) {
+  const cap = Math.min(500, Math.max(1, Number(limit) || 200));
+  const { data, error } = await supabase
+    .from('platform_revenue_events')
+    .select('id, event_type, gross_amount, partner_commission_amount, event_at, user_id')
+    .eq('partner_id', partnerId)
+    .order('event_at', { ascending: false })
+    .limit(cap);
+  if (error && (isMissingColumnError(error, 'partner_id') || isMissingTableError(error))) {
+    return { events: [], totals: { commissionUsd: 0, grossUsd: 0, count: 0 } };
+  }
+  if (error) throw error;
+  const events = data || [];
+  let commissionUsd = 0;
+  let grossUsd = 0;
+  for (const row of events) {
+    commissionUsd += Number(row.partner_commission_amount || 0);
+    grossUsd += Number(row.gross_amount || 0);
+  }
+  return {
+    events,
+    totals: {
+      commissionUsd: Math.round(commissionUsd * 100) / 100,
+      grossUsd: Math.round(grossUsd * 100) / 100,
+      count: events.length,
+    },
+  };
 }
 
 async function updateAlpacaKeys(userId, apiKey, secretKey) {
@@ -3741,6 +4410,10 @@ async function insertPlatformRevenueEvent(row) {
     event_at: row.event_at || new Date().toISOString(),
     created_at: new Date().toISOString(),
   };
+  if (row.partner_id != null) payload.partner_id = row.partner_id;
+  if (row.partner_commission_amount != null) {
+    payload.partner_commission_amount = roundWalletUsd(row.partner_commission_amount);
+  }
   const { data, error } = await supabase.from('platform_revenue_events').insert(payload).select('*').single();
   if (error?.code === '23505') {
     return getPlatformRevenueEventBySource(row.event_type, row.source_id);
@@ -4103,6 +4776,44 @@ module.exports = {
   unbanUserAccount,
   findOtherUsersWithWhitelistedAddress,
   createUser,
+  createPartnerUser,
+  getPartnerUserByEmail,
+  getPartnerUserById,
+  getPartnerUserByExternalRef,
+  getPartnerById,
+  getPartnerWebhookConfig,
+  updatePartnerWebhookConfig,
+  tryClaimPartnerWebhookDelivery,
+  updatePartnerWebhookDeliveryResult,
+  getPartnerByApiKeyPrefix,
+  touchPartnerApiKeyLastUsed,
+  createPartnerWithApiKey,
+  insertPartnerApplication,
+  listPartnerApplicationsAdmin,
+  getPartnerApplicationById,
+  getPartnerApplicationByPartnerId,
+  updatePartnerApplication,
+  listPartnersAdmin,
+  countPartnerWebhookDeliveries,
+  createPortalAccount,
+  getPortalAccountByEmail,
+  getPortalAccountById,
+  updatePortalAccount,
+  linkPortalAccountByEmail,
+  createPortalLoginChallenge,
+  getPortalLoginChallenge,
+  incrementPortalLoginChallengeAttempts,
+  consumePortalLoginChallenge,
+  getOrCreatePortalKyc,
+  getPortalKycByAccountId,
+  getPortalKycById,
+  updatePortalKyc,
+  listPortalKycAdmin,
+  getPartnerApplicationByEmail,
+  listPartnerApiKeys,
+  listPartnerUsersForPortal,
+  countPartnerUsers,
+  getPartnerCommissionStats,
   updateAlpacaKeys,
   updateUserTotpSecretEnc,
   setTotpEnabled,
@@ -4142,6 +4853,7 @@ module.exports = {
   listTatumOnchainTxsByUserId,
   getTrackedUsdtBalanceByUserId,
   isMissingTableError,
+  isMissingColumnError,
   isSchemaError,
   getAirfarmingStateByUserId,
   upsertAirfarmingState,

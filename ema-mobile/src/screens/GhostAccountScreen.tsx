@@ -169,7 +169,7 @@ export function GhostAccountScreen() {
   if (!status) {
     return (
       <View style={[styles.container, { padding: 16, justifyContent: 'center' }]}>
-        <Text style={styles.sub}>Loading…</Text>
+        <Text style={styles.intro}>Loading…</Text>
       </View>
     );
   }
@@ -188,17 +188,17 @@ export function GhostAccountScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
       >
-        <Text style={styles.sub}>
+        <Text style={styles.intro}>
           Share one pool across member drops. Requires more than {fmtUsd(status.minEligibilityUsd)} across cash,
           crypto, and airfarming balances.
         </Text>
-        <Card>
+        <Card style={styles.heroCard}>
           <Text style={styles.label}>Eligible balance</Text>
           <Text style={styles.big}>{fmtUsd(status.totalUsdt)}</Text>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
           </View>
-          <Text style={[styles.hint, { marginTop: 8 }]}>
+          <Text style={styles.statusLine}>
             {status.eligible
               ? `You qualify. First pool allocation must be at least ${fmtUsd(status.minAllocationUsd)} from cash.`
               : `Deposit or move ${fmtUsd(needed)} more to enroll.`}
@@ -206,18 +206,19 @@ export function GhostAccountScreen() {
 
           {breakdown ? (
             <View style={styles.breakdownBox}>
-              <Text style={styles.breakdownRow}>
-                <Text style={styles.hint}>Cash wallet </Text>
+              <Text style={styles.breakdownTitle}>Balance breakdown</Text>
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>Cash wallet</Text>
                 <Text style={styles.breakdownVal}>{fmtUsd(breakdown.cashUsd)}</Text>
-              </Text>
-              <Text style={styles.breakdownRow}>
-                <Text style={styles.hint}>Crypto USDT </Text>
+              </View>
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>Crypto USDT</Text>
                 <Text style={styles.breakdownVal}>{fmtUsd(breakdown.cryptoUsd)}</Text>
-              </Text>
-              <Text style={styles.breakdownRow}>
-                <Text style={styles.hint}>Airfarming </Text>
+              </View>
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabel}>Airfarming</Text>
                 <Text style={styles.breakdownVal}>{fmtUsd(breakdown.airfarmingUsd)}</Text>
-              </Text>
+              </View>
             </View>
           ) : null}
 
@@ -237,14 +238,23 @@ export function GhostAccountScreen() {
           )}
         </Card>
 
-        <Card>
+        <Card style={styles.infoCard}>
           <Text style={styles.sectionTitle}>How Ghost Account works</Text>
-          <Text style={styles.hint}>
-            1. Enroll when your combined balance exceeds {fmtUsd(status.minEligibilityUsd)}.{'\n'}
-            2. Allocate at least {fmtUsd(status.minAllocationUsd)} from cash into the pool.{'\n'}
-            3. Add members by email — the pool tops up their airfarming balance before drops.{'\n'}
-            4. Principal and net profit return to your pool after each drop.
-          </Text>
+          <View style={styles.stepsList}>
+            {[
+              `Enroll when your combined balance exceeds ${fmtUsd(status.minEligibilityUsd)}.`,
+              `Allocate at least ${fmtUsd(status.minAllocationUsd)} from cash into the pool.`,
+              'Add members by email — the pool tops up their airfarming balance before drops.',
+              'Principal and net profit return to your pool after each drop.',
+            ].map((step, index) => (
+              <View key={step} style={styles.stepRow}>
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepNum}>{index + 1}</Text>
+                </View>
+                <Text style={styles.stepText}>{step}</Text>
+              </View>
+            ))}
+          </View>
         </Card>
       </ScrollView>
     );
@@ -258,17 +268,17 @@ export function GhostAccountScreen() {
       contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
     >
-      <Text style={styles.sub}>
+      <Text style={styles.intro}>
         Pool funds member airfarming drops at T-24h; principal and net profit return after payout.
       </Text>
 
       {error ? (
-        <Card>
+        <Card style={styles.infoCard}>
           <Text style={styles.err}>{error}</Text>
         </Card>
       ) : null}
 
-      <Card>
+      <Card style={styles.heroCard}>
         <View style={styles.rowBetween}>
           <Text style={styles.label}>Pool balance</Text>
           <View style={styles.row}>
@@ -286,7 +296,7 @@ export function GhostAccountScreen() {
         </Text>
       </Card>
 
-      <Card>
+      <Card style={styles.infoCard}>
         <Text style={styles.sectionTitle}>Allocate to pool</Text>
         <TextInput
           style={styles.input}
@@ -309,7 +319,7 @@ export function GhostAccountScreen() {
         <PrimaryButton label="Return to cash" onPress={onDeallocate} />
       </Card>
 
-      <Card>
+      <Card style={styles.infoCard}>
         <Text style={styles.sectionTitle}>Add member</Text>
         <Text style={styles.hint}>Enter the exact registered email. No results until it matches.</Text>
         <TextInput
@@ -332,7 +342,7 @@ export function GhostAccountScreen() {
       </Card>
 
       {(status.members?.length ?? 0) > 0 ? (
-        <Card>
+        <Card style={styles.infoCard}>
           <Text style={styles.sectionTitle}>Members</Text>
           {status.members!.map((m) => (
             <View key={m.memberUserId} style={styles.memberRow}>
@@ -348,7 +358,7 @@ export function GhostAccountScreen() {
       ) : null}
 
       {(status.warnings?.length ?? 0) > 0 ? (
-        <Card>
+        <Card style={styles.infoCard}>
           <Text style={styles.sectionTitle}>Warnings</Text>
           {status.warnings!.map((w) => (
             <Text key={w.lendId} style={styles.warn}>
@@ -359,7 +369,7 @@ export function GhostAccountScreen() {
       ) : null}
 
       {(status.upcomingLends?.length ?? 0) > 0 ? (
-        <Card>
+        <Card style={styles.infoCard}>
           <Text style={styles.sectionTitle}>Scheduled auto-transfers</Text>
           {status.upcomingLends!.map((l) => (
             <View key={l.lendId} style={styles.lendRow}>
@@ -376,7 +386,7 @@ export function GhostAccountScreen() {
       ) : null}
 
       {(status.recallHistory?.length ?? 0) > 0 ? (
-        <Card>
+        <Card style={styles.infoCard}>
           <Text style={styles.sectionTitle}>Recent recalls</Text>
           {status.recallHistory!.map((l) => (
             <View key={`recall-${l.lendId}`} style={styles.lendRow}>
@@ -395,13 +405,29 @@ export function GhostAccountScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.background },
-  sub: { color: palette.textMuted, marginBottom: 12, lineHeight: 20 },
-  label: { color: palette.textMuted, fontSize: 13 },
-  big: { color: palette.textPrimary, fontSize: 28, fontWeight: '700', marginTop: 4 },
-  hint: { color: palette.textMuted, fontSize: 13, lineHeight: 18 },
-  err: { color: palette.danger, marginTop: 8 },
-  warn: { color: '#e8a838', marginBottom: 6 },
-  sectionTitle: { color: palette.textPrimary, fontWeight: '600', marginBottom: 8 },
+  intro: {
+    color: palette.textSecondary,
+    marginBottom: 14,
+    lineHeight: 21,
+    fontSize: 14,
+  },
+  heroCard: {
+    backgroundColor: palette.surfaceElevated,
+    borderColor: palette.border,
+    borderWidth: 1,
+  },
+  infoCard: {
+    backgroundColor: palette.surfaceElevated,
+    borderColor: palette.border,
+    borderWidth: 1,
+  },
+  label: { color: palette.textSecondary, fontSize: 13, fontWeight: '600' },
+  big: { color: palette.textPrimary, fontSize: 32, fontWeight: '800', marginTop: 6 },
+  statusLine: { color: palette.textPrimary, fontSize: 14, lineHeight: 20, marginTop: 10 },
+  hint: { color: palette.textSecondary, fontSize: 13, lineHeight: 20 },
+  err: { color: palette.danger, marginTop: 8, fontSize: 14 },
+  warn: { color: palette.warning, marginBottom: 6, fontSize: 13, lineHeight: 18 },
+  sectionTitle: { color: palette.textPrimary, fontWeight: '700', fontSize: 16, marginBottom: 12 },
   input: {
     borderWidth: 1,
     borderColor: palette.border,
@@ -409,12 +435,19 @@ const styles = StyleSheet.create({
     padding: 12,
     color: palette.textPrimary,
     marginBottom: 12,
-    backgroundColor: palette.surface,
+    backgroundColor: palette.background,
   },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  small: { color: palette.textMuted, fontSize: 12 },
-  lookupBox: { marginTop: 12, padding: 12, backgroundColor: palette.surface, borderRadius: 12 },
+  small: { color: palette.textSecondary, fontSize: 12 },
+  lookupBox: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: palette.background,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
   lookupEmail: { color: palette.textPrimary, fontWeight: '600' },
   memberRow: {
     flexDirection: 'row',
@@ -427,10 +460,12 @@ const styles = StyleSheet.create({
   lendRow: { marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: palette.border },
   lendTitle: { color: palette.textPrimary, fontWeight: '600' },
   progressTrack: {
-    marginTop: 12,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: palette.surface,
+    marginTop: 14,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: palette.background,
+    borderWidth: 1,
+    borderColor: palette.border,
     overflow: 'hidden',
   },
   progressFill: {
@@ -439,17 +474,45 @@ const styles = StyleSheet.create({
     backgroundColor: palette.primary,
   },
   breakdownBox: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: palette.border,
-    gap: 6,
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: palette.background,
+    borderWidth: 1,
+    borderColor: palette.border,
+    gap: 8,
+  },
+  breakdownTitle: {
+    color: palette.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
   },
   breakdownRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  breakdownVal: { color: palette.textPrimary, fontWeight: '600', fontSize: 13 },
-  secondaryBtn: { backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border },
+  breakdownLabel: { color: palette.textSecondary, fontSize: 14 },
+  breakdownVal: { color: palette.textPrimary, fontWeight: '700', fontSize: 14 },
+  stepsList: { gap: 12 },
+  stepRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  stepBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: palette.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  stepNum: { color: palette.primaryContrast, fontSize: 13, fontWeight: '800' },
+  stepText: { flex: 1, color: palette.textSecondary, fontSize: 14, lineHeight: 21 },
+  secondaryBtn: {
+    backgroundColor: palette.background,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
 });

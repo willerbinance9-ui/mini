@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE } from "@/lib/constants";
+import { usePortalAuth } from "@/context/PortalAuthContext";
+import { PORTAL_TOKEN_KEY } from "@/lib/portal";
 import { PARTNERSHIP_TERMS, PARTNERSHIP_DISCLAIMER } from "@/content/partnership-terms";
 
 const STEP_ICONS: { label: string; icon: React.ReactNode }[] = [
@@ -156,11 +159,21 @@ const inputClass =
   "mt-0 w-full rounded-xl border border-card-border bg-surface/80 px-4 py-2.5 text-sm text-foreground outline-none transition focus:border-accent/50 focus:ring-2 focus:ring-accent/20";
 
 export function PartnerApplicationForm() {
+  const { me, loading: authLoading, refresh } = usePortalAuth();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormState>(initial);
   const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<{ id: string; message: string } | null>(null);
+
+  useEffect(() => {
+    if (!me) return;
+    setForm((f) => ({
+      ...f,
+      fullName: f.fullName || me.account.fullName || "",
+      email: f.email || me.account.email || "",
+    }));
+  }, [me]);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -227,9 +240,13 @@ export function PartnerApplicationForm() {
     setSubmitting(true);
     setErrors([]);
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem(PORTAL_TOKEN_KEY) : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch(`${API_BASE}/v1/public/partner-applications`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           ...form,
           incomePerYear: Number(form.incomePerYear),
@@ -248,11 +265,46 @@ export function PartnerApplicationForm() {
         return;
       }
       setDone({ id: body.id, message: body.message });
+      void refresh();
     } catch {
       setErrors(["Network error. Please try again."]);
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (!authLoading && me && !me.canApplyForApi) {
+    return (
+      <div className="glass-strong glow-ring rounded-3xl p-8 text-center sm:p-12">
+        <h2 className="text-2xl font-bold text-foreground">Identity verification required</h2>
+        <p className="mx-auto mt-4 max-w-lg text-muted">
+          Complete KYC in your dashboard before applying for the Partner API. Upload your permit ID or passport for
+          automatic review.
+        </p>
+        <Link href="/dashboard" className="mt-6 inline-block text-sm font-semibold hover:underline">
+          Go to dashboard →
+        </Link>
+      </div>
+    );
+  }
+
+  if (!authLoading && !me) {
+    return (
+      <div className="glass-strong glow-ring rounded-3xl p-8 text-center sm:p-12">
+        <h2 className="text-2xl font-bold text-foreground">Account required</h2>
+        <p className="mx-auto mt-4 max-w-lg text-muted">
+          Create an Aare account, verify your phone on login, and complete identity verification before applying.
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <Link href="/signup" className="rounded-full border border-foreground bg-foreground px-5 py-2 text-sm font-semibold text-background">
+            Sign up
+          </Link>
+          <Link href="/login" className="rounded-full border border-card-border px-5 py-2 text-sm">
+            Log in
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   if (done) {
@@ -268,12 +320,27 @@ export function PartnerApplicationForm() {
         <h2 className="text-2xl font-bold text-foreground">Application submitted</h2>
         <p className="mx-auto mt-4 max-w-lg text-muted">{done.message}</p>
         <p className="mt-2 font-mono text-xs text-muted">Reference: {done.id}</p>
+        <Link href="/dashboard" className="mt-6 inline-block text-sm font-semibold hover:underline">
+          View status in dashboard →
+        </Link>
       </motion.div>
     );
   }
 
   return (
     <div className="glass-strong glow-ring rounded-3xl p-6 sm:p-10">
+      {!authLoading && !me ? (
+        <div className="mb-6 rounded-xl border border-card-border bg-surface px-4 py-3 text-sm text-muted">
+          <Link href="/signup" className="font-semibold text-foreground hover:underline">
+            Create an Aare account
+          </Link>{" "}
+          or{" "}
+          <Link href="/login" className="font-semibold text-foreground hover:underline">
+            log in
+          </Link>{" "}
+          to track your application from the dashboard.
+        </div>
+      ) : null}
       <div className="mb-8 rounded-xl border border-card-border bg-surface px-4 py-3 text-sm text-muted">
         {PARTNERSHIP_DISCLAIMER}
       </div>

@@ -2,12 +2,14 @@ const {
   insertPlatformRevenueEvent,
   getPlatformRevenueEventBySource,
   listPlatformRevenueEventsAdmin,
+  getUserById,
   utcTodayYmd,
 } = require('./db');
 
 const PLATFORM_FEE_DROP_RATE = 0.1;
 const PLATFORM_FEE_WITHDRAW_RATE = 0.05;
 const PLATFORM_FEE_VIP_RATE = 0.03;
+const PARTNER_COMMISSION_RATE = 0.05;
 
 function roundUsd(n) {
   return Math.round(Number(n || 0) * 100) / 100;
@@ -41,9 +43,21 @@ async function recordPlatformRevenueIfNew({
   const { gross, fee, net } = splitPlatformFee(grossAmount, feeRate);
   if (fee <= 0 && gross <= 0) return null;
 
+  let partnerId = null;
+  let partnerCommissionAmount = null;
+  if (userId) {
+    const user = await getUserById(userId).catch(() => null);
+    if (user?.partner_id) {
+      partnerId = user.partner_id;
+      partnerCommissionAmount = roundUsd(gross * PARTNER_COMMISSION_RATE);
+    }
+  }
+
   return insertPlatformRevenueEvent({
     event_type: eventType,
     user_id: userId || null,
+    partner_id: partnerId,
+    partner_commission_amount: partnerCommissionAmount,
     source_id: sid,
     gross_amount: gross,
     fee_rate: feeRate,
@@ -127,6 +141,7 @@ module.exports = {
   PLATFORM_FEE_DROP_RATE,
   PLATFORM_FEE_WITHDRAW_RATE,
   PLATFORM_FEE_VIP_RATE,
+  PARTNER_COMMISSION_RATE,
   splitPlatformFee,
   recordPlatformRevenueIfNew,
   getPlatformRevenueAdminStats,

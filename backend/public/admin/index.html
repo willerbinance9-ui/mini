@@ -725,6 +725,9 @@
         <button type="button" class="nav-item" data-tab="account">
           <span class="nav-icon">💰</span> Account
         </button>
+        <button type="button" class="nav-item superadmin-only" data-tab="partners">
+          <span class="nav-icon">🤝</span> Partners
+        </button>
         <button type="button" class="nav-item" data-tab="announce">
           <span class="nav-icon">📢</span> Notify
         </button>
@@ -1385,6 +1388,128 @@
           </div>
         </div>
 
+        <div id="panelPartners" class="hidden superadmin-only">
+          <div class="card" style="margin-bottom:16px;">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Active partners — API keys &amp; usage</h3>
+            <p class="hint">Approved partners with keys in use, user counts, commission, and webhook activity.</p>
+            <div class="row" style="align-items:flex-end;margin-bottom:12px;">
+              <button type="button" class="btn-primary" id="refreshPartnersBtn" style="width:auto;">Refresh partners</button>
+            </div>
+            <div id="partnersLoading" class="loading hidden">Loading partners…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Partner</th>
+                    <th>Status</th>
+                    <th>Keys</th>
+                    <th>Last used</th>
+                    <th>Users</th>
+                    <th>Commission</th>
+                    <th>Webhooks</th>
+                    <th>Aare applicant</th>
+                  </tr>
+                </thead>
+                <tbody id="partnerRows"></tbody>
+              </table>
+            </div>
+            <p id="partnersErr" class="err hidden"></p>
+          </div>
+
+          <div class="card" style="margin-bottom:16px;">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Portal identity verification (KYC)</h3>
+            <p class="hint">Partner portal accounts must pass KYC before applying for API access. Review AI verdicts and approve or reject manually.</p>
+            <div class="row" style="align-items:flex-end;margin-bottom:12px;">
+              <div>
+                <label>Status filter</label>
+                <select id="portalKycStatus">
+                  <option value="">All</option>
+                  <option value="manual_review" selected>Manual review</option>
+                  <option value="submitted">Submitted</option>
+                  <option value="ai_reviewing">AI reviewing</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="draft">Draft</option>
+                </select>
+              </div>
+              <button type="button" class="btn-primary" id="refreshPortalKycBtn" style="width:auto;">Refresh KYC</button>
+            </div>
+            <div id="portalKycLoading" class="loading hidden">Loading KYC records…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Account</th>
+                    <th>Email</th>
+                    <th>Residence</th>
+                    <th>Document</th>
+                    <th>Status</th>
+                    <th>AI confidence</th>
+                    <th>Submitted</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="portalKycRows"></tbody>
+              </table>
+            </div>
+            <p id="portalKycErr" class="err hidden"></p>
+          </div>
+
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Aare partnership applications</h3>
+            <p class="hint">Submissions from the partnership form at aare.cc. Approve to create a partner tenant and API key.</p>
+            <div class="row" style="align-items:flex-end;margin-bottom:12px;">
+              <div>
+                <label>Status filter</label>
+                <select id="partnerAppStatus">
+                  <option value="">All</option>
+                  <option value="pending" selected>Pending</option>
+                  <option value="reviewing">Reviewing</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+              <button type="button" class="btn-primary" id="refreshPartnerAppsBtn" style="width:auto;">Refresh applications</button>
+            </div>
+            <div id="partnerAppsLoading" class="loading hidden">Loading applications…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Source</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Country</th>
+                    <th>Investment</th>
+                    <th>Status</th>
+                    <th>Submitted</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="partnerAppRows"></tbody>
+              </table>
+            </div>
+            <p id="partnerAppsErr" class="err hidden"></p>
+          </div>
+          <div id="partnerAppDetail" class="card hidden" style="margin-top:16px;">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Application detail</h3>
+            <div id="partnerAppDetailBody" class="admin-section-desc" style="line-height:1.6;"></div>
+            <details style="margin-top:12px;">
+              <summary style="cursor:pointer;color:var(--muted);font-size:0.85rem;">Raw JSON</summary>
+              <pre id="partnerAppDetailJson" style="white-space:pre-wrap;font-size:0.8rem;max-height:240px;overflow:auto;margin-top:8px;"></pre>
+            </details>
+            <label>Admin notes</label>
+            <textarea id="partnerAppNotes" rows="2" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--text);"></textarea>
+            <div class="row" style="margin-top:12px;">
+              <button type="button" class="btn-primary" id="partnerAppApproveBtn" style="width:auto;">Approve &amp; create partner</button>
+              <button type="button" class="btn-ghost" id="partnerAppRejectBtn" style="width:auto;">Reject</button>
+              <button type="button" class="btn-ghost" id="partnerAppReviewBtn" style="width:auto;">Mark reviewing</button>
+            </div>
+            <p id="partnerAppActionOk" class="hint hidden" style="color:var(--ok);"></p>
+            <p id="partnerAppActionErr" class="err hidden"></p>
+          </div>
+        </div>
+
         <div id="panelAnnounce" class="hidden">
           <div class="card">
             <h3 style="margin:0 0 8px;font-size:1rem;">In-app announcement</h3>
@@ -1703,6 +1828,7 @@
       levels: 'Levels',
       account: 'Account',
       announce: 'Announce & notify',
+      partners: 'Aare partners',
     };
     let drops = [];
     let users = [];
@@ -1890,6 +2016,7 @@
       if (tab !== 'ghost') stopGhostNetworkPoll();
       document.getElementById('panelLevels').classList.toggle('hidden', tab !== 'levels');
       document.getElementById('panelAccount').classList.toggle('hidden', tab !== 'account');
+      document.getElementById('panelPartners').classList.toggle('hidden', tab !== 'partners');
       document.getElementById('panelAnnounce').classList.toggle('hidden', tab !== 'announce');
       document.getElementById('pageTitle').textContent = PAGE_TITLES[tab] || 'Admin';
       closeSidebar();
@@ -1905,6 +2032,7 @@
         else if (tab === 'ghost') showGhostErr(e);
         else if (tab === 'levels') showLevelsErr(e);
         else if (tab === 'account') showAccountRevenueErr(e);
+        else if (tab === 'partners') { showPartnersErr(e); showPartnerAppsErr(e); showPortalKycErr(e); }
         else if (tab === 'announce') {
           document.getElementById('announceErr').textContent = e.message;
           document.getElementById('announceErr').classList.remove('hidden');
@@ -3611,8 +3739,296 @@
       else if (activeTab === 'ghost') await loadGhostAccounts();
       else if (activeTab === 'levels') await loadLevels();
       else if (activeTab === 'account') await loadAccountRevenue();
+      else if (activeTab === 'partners') await loadPartnersPanel();
       else if (activeTab === 'announce') await loadAnnouncements();
     }
+
+    let partnerApplications = [];
+    let partnersList = [];
+    let portalKycRecords = [];
+    let selectedPartnerAppId = null;
+
+    function fmtUsd(n) {
+      return '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function fmtDt(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function showPartnerAppsErr(e) {
+      document.getElementById('partnerAppsErr').textContent = e.message;
+      document.getElementById('partnerAppsErr').classList.remove('hidden');
+    }
+
+    function showPartnersErr(e) {
+      document.getElementById('partnersErr').textContent = e.message;
+      document.getElementById('partnersErr').classList.remove('hidden');
+    }
+
+    function showPortalKycErr(e) {
+      document.getElementById('portalKycErr').textContent = e.message;
+      document.getElementById('portalKycErr').classList.remove('hidden');
+    }
+
+    function renderPartnersTable() {
+      const tbody = document.getElementById('partnerRows');
+      tbody.innerHTML = '';
+      if (!partnersList.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);">No active partners yet</td></tr>';
+        return;
+      }
+      partnersList.forEach((p) => {
+        const activeKeys = (p.apiKeys || []).filter((k) => k.active);
+        const keyLines = activeKeys.length
+          ? activeKeys.map((k) => `${escapeHtml(k.keyPrefix)}… (${k.inUse ? 'in use' : 'unused'})`).join('<br>')
+          : '<span style="color:var(--muted);">No active keys</span>';
+        const lastUsed = activeKeys
+          .map((k) => k.lastUsedAt)
+          .filter(Boolean)
+          .sort()
+          .pop();
+        const applicant = p.application
+          ? `${escapeHtml(p.application.full_name || '')}<br><span style="color:var(--muted);font-size:0.8rem;">${escapeHtml(p.application.email || '')}</span>`
+          : '<span style="color:var(--muted);">—</span>';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${escapeHtml(p.name || '')}</strong><br><span style="color:var(--muted);font-size:0.8rem;">${escapeHtml(p.slug || '')}</span></td>
+          <td><span class="pill">${escapeHtml(p.status || '')}</span></td>
+          <td style="font-size:0.85rem;">${keyLines}</td>
+          <td>${fmtDt(lastUsed)}</td>
+          <td>${Number(p.userCount || 0)}</td>
+          <td>${fmtUsd(p.commissionUsd)}<br><span style="color:var(--muted);font-size:0.75rem;">${Number(p.revenueEventCount || 0)} events</span></td>
+          <td>${p.webhookEnabled ? 'On' : 'Off'}<br><span style="color:var(--muted);font-size:0.75rem;">${Number(p.webhookDeliveryCount || 0)} sent</span></td>
+          <td>${applicant}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadPartnersOverview() {
+      document.getElementById('partnersErr').classList.add('hidden');
+      document.getElementById('partnersLoading').classList.remove('hidden');
+      const data = await api('/admin/api/partners');
+      partnersList = data.partners || [];
+      document.getElementById('partnersLoading').classList.add('hidden');
+      renderPartnersTable();
+    }
+
+    function renderPartnerApplicationDetail(app) {
+      const source = app.payload?.source || app.payload?.submittedFrom || app.source || 'aare';
+      const lines = [
+        ['Source', source === 'aare' ? 'Aare (aare.cc)' : source],
+        ['Name', app.full_name],
+        ['Email', app.email],
+        ['Phone', app.phone],
+        ['Country', app.country],
+        ['Occupation', app.occupation],
+        ['Income / year', fmtUsd(app.income_per_year)],
+        ['Intended investment', fmtUsd(app.intended_investment)],
+        ['Withdraw frequency', app.withdraw_frequency],
+        ['Withdraw amount', app.withdraw_amount != null ? fmtUsd(app.withdraw_amount) : '—'],
+        ['Payment', app.payment_preference],
+        ['API knowledge', app.has_api_knowledge ? 'Yes' : 'No'],
+        ['API plan', app.api_plan || '—'],
+        ['Invested before', app.invested_before ? 'Yes' : 'No'],
+        ['Partner linked', app.partner_id || 'Not yet'],
+        ['Submitted', fmtDt(app.created_at)],
+        ['Status', app.status],
+      ];
+      return lines
+        .map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(String(value ?? '—'))}</div>`)
+        .join('');
+    }
+
+    function renderPartnerApplicationsTable() {
+      const tbody = document.getElementById('partnerAppRows');
+      tbody.innerHTML = '';
+      if (!partnerApplications.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);">No applications</td></tr>';
+        return;
+      }
+      partnerApplications.forEach((a) => {
+        const tr = document.createElement('tr');
+        const submitted = (a.created_at || '').slice(0, 10);
+        const source = a.source || a.payload?.source || 'aare';
+        tr.innerHTML = `
+          <td><span class="pill">${escapeHtml(source === 'aare' ? 'Aare' : source)}</span></td>
+          <td>${escapeHtml(a.full_name || '')}</td>
+          <td>${escapeHtml(a.email || '')}</td>
+          <td>${escapeHtml(a.country || '')}</td>
+          <td>${fmtUsd(a.intended_investment)}</td>
+          <td><span class="pill">${escapeHtml(a.status || '')}</span></td>
+          <td>${submitted}</td>
+          <td><button type="button" class="btn-ghost btn-sm" data-partner-app="${a.id}">View</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('[data-partner-app]').forEach((btn) => {
+        btn.onclick = () => openPartnerApplication(btn.getAttribute('data-partner-app'));
+      });
+    }
+
+    async function loadPartnerApplications() {
+      document.getElementById('partnerAppsErr').classList.add('hidden');
+      document.getElementById('partnerAppsLoading').classList.remove('hidden');
+      const status = document.getElementById('partnerAppStatus').value;
+      const q = status ? `?status=${encodeURIComponent(status)}` : '';
+      const data = await api(`/admin/api/partner-applications${q}`);
+      partnerApplications = data.applications || [];
+      document.getElementById('partnerAppsLoading').classList.add('hidden');
+      renderPartnerApplicationsTable();
+    }
+
+    function renderPortalKycTable() {
+      const tbody = document.getElementById('portalKycRows');
+      tbody.innerHTML = '';
+      if (!portalKycRecords.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);">No KYC records</td></tr>';
+        return;
+      }
+      portalKycRecords.forEach((row) => {
+        const acct = row.partner_portal_accounts || {};
+        const tr = document.createElement('tr');
+        const conf = row.ai_confidence != null ? (Number(row.ai_confidence) * 100).toFixed(0) + '%' : '—';
+        const submitted = (row.submitted_at || '').slice(0, 10);
+        const canReview = ['manual_review', 'rejected', 'submitted', 'ai_reviewing'].includes(row.status);
+        tr.innerHTML = `
+          <td>${escapeHtml(acct.full_name || '—')}</td>
+          <td>${escapeHtml(acct.email || '')}</td>
+          <td>${escapeHtml(row.residence_country || acct.country_of_residency || '—')}</td>
+          <td>${escapeHtml(row.document_type || '—')}</td>
+          <td><span class="pill">${escapeHtml(row.status || '')}</span></td>
+          <td>${conf}</td>
+          <td>${submitted || '—'}</td>
+          <td>
+            ${canReview ? `<button type="button" class="btn-ghost btn-sm" data-kyc-approve="${row.id}">Approve</button>
+            <button type="button" class="btn-ghost btn-sm" data-kyc-reject="${row.id}">Reject</button>` : '—'}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('[data-kyc-approve]').forEach((btn) => {
+        btn.onclick = async () => {
+          const id = btn.getAttribute('data-kyc-approve');
+          if (!confirm('Approve this KYC record? User can then apply for API access.')) return;
+          try {
+            await api(`/admin/api/portal-kyc/${id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ status: 'approved' }),
+            });
+            await loadPortalKyc();
+          } catch (e) {
+            showPortalKycErr(e);
+          }
+        };
+      });
+      tbody.querySelectorAll('[data-kyc-reject]').forEach((btn) => {
+        btn.onclick = async () => {
+          const id = btn.getAttribute('data-kyc-reject');
+          const reason = prompt('Rejection reason (shown to user):', '') || '';
+          try {
+            await api(`/admin/api/portal-kyc/${id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ status: 'rejected', rejectionReason: reason }),
+            });
+            await loadPortalKyc();
+          } catch (e) {
+            showPortalKycErr(e);
+          }
+        };
+      });
+    }
+
+    async function loadPortalKyc() {
+      document.getElementById('portalKycErr').classList.add('hidden');
+      document.getElementById('portalKycLoading').classList.remove('hidden');
+      const status = document.getElementById('portalKycStatus').value;
+      const q = status ? `?status=${encodeURIComponent(status)}` : '';
+      const data = await api(`/admin/api/portal-kyc${q}`);
+      portalKycRecords = data.kycRecords || [];
+      document.getElementById('portalKycLoading').classList.add('hidden');
+      renderPortalKycTable();
+    }
+
+    async function loadPartnersPanel() {
+      await Promise.all([loadPartnersOverview(), loadPortalKyc(), loadPartnerApplications()]);
+    }
+
+    async function openPartnerApplication(id) {
+      selectedPartnerAppId = id;
+      const data = await api(`/admin/api/partner-applications/${id}`);
+      const app = data.application;
+      document.getElementById('partnerAppDetail').classList.remove('hidden');
+      document.getElementById('partnerAppDetailBody').innerHTML = renderPartnerApplicationDetail(app);
+      document.getElementById('partnerAppDetailJson').textContent = JSON.stringify(app, null, 2);
+      document.getElementById('partnerAppNotes').value = app.admin_notes || '';
+      document.getElementById('partnerAppActionOk').classList.add('hidden');
+      document.getElementById('partnerAppActionErr').classList.add('hidden');
+    }
+
+    document.getElementById('refreshPartnersBtn').onclick = () => loadPartnersOverview().catch(showPartnersErr);
+    document.getElementById('refreshPartnerAppsBtn').onclick = () => loadPartnersPanel().catch((e) => {
+      showPartnersErr(e);
+      showPartnerAppsErr(e);
+      showPortalKycErr(e);
+    });
+    document.getElementById('refreshPortalKycBtn').onclick = () => loadPortalKyc().catch(showPortalKycErr);
+    document.getElementById('portalKycStatus').onchange = () => loadPortalKyc().catch(showPortalKycErr);
+    document.getElementById('partnerAppStatus').onchange = () => loadPartnerApplications().catch(showPartnerAppsErr);
+
+    document.getElementById('partnerAppReviewBtn').onclick = async () => {
+      if (!selectedPartnerAppId) return;
+      try {
+        await api(`/admin/api/partner-applications/${selectedPartnerAppId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'reviewing', adminNotes: document.getElementById('partnerAppNotes').value }),
+        });
+        await loadPartnersPanel();
+        await openPartnerApplication(selectedPartnerAppId);
+      } catch (e) {
+        document.getElementById('partnerAppActionErr').textContent = e.message;
+        document.getElementById('partnerAppActionErr').classList.remove('hidden');
+      }
+    };
+
+    document.getElementById('partnerAppApproveBtn').onclick = async () => {
+      if (!selectedPartnerAppId) return;
+      const app = partnerApplications.find((a) => a.id === selectedPartnerAppId);
+      const slug = prompt('Partner slug (lowercase, e.g. acme-finance):', (app?.full_name || 'partner').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 48));
+      if (!slug) return;
+      try {
+        const data = await api(`/admin/api/partner-applications/${selectedPartnerAppId}/approve`, {
+          method: 'POST',
+          body: JSON.stringify({ slug, partnerName: app?.full_name }),
+        });
+        document.getElementById('partnerAppActionOk').textContent = 'Approved. API key: ' + (data.apiKey || '(see response)');
+        document.getElementById('partnerAppActionOk').classList.remove('hidden');
+        alert('Partner created. API key (copy now):\n\n' + data.apiKey);
+        await loadPartnersPanel();
+      } catch (e) {
+        document.getElementById('partnerAppActionErr').textContent = e.message;
+        document.getElementById('partnerAppActionErr').classList.remove('hidden');
+      }
+    };
+
+    document.getElementById('partnerAppRejectBtn').onclick = async () => {
+      if (!selectedPartnerAppId) return;
+      const reason = prompt('Rejection reason (optional):', '') || '';
+      try {
+        await api(`/admin/api/partner-applications/${selectedPartnerAppId}/reject`, {
+          method: 'POST',
+          body: JSON.stringify({ reason }),
+        });
+        document.getElementById('partnerAppActionOk').textContent = 'Application rejected.';
+        document.getElementById('partnerAppActionOk').classList.remove('hidden');
+        await loadPartnersPanel();
+      } catch (e) {
+        document.getElementById('partnerAppActionErr').textContent = e.message;
+        document.getElementById('partnerAppActionErr').classList.remove('hidden');
+      }
+    };
 
     let levelsList = [];
 

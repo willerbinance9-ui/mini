@@ -59,7 +59,7 @@ export function SiteFooter() {
           ))}
         </div>
         <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-card-border pt-8 text-xs text-muted sm:flex-row">
-          <span>Aare · Powered by Min Platform</span>
+          <span>Powered by Aare</span>
           <span>Partner API infrastructure for investment-oriented builders</span>
         </div>
       </div>

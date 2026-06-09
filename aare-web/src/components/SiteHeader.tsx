@@ -5,9 +5,11 @@ import { motion } from "framer-motion";
 import { Logo } from "./Logo";
 import { ServicesMenu } from "./ServicesMenu";
 import { useTheme } from "./ThemeProvider";
+import { usePortalAuth } from "@/context/PortalAuthContext";
 
 export function SiteHeader({ showSearch = false }: { showSearch?: boolean }) {
   const { theme, toggle } = useTheme();
+  const { me, loading } = usePortalAuth();
 
   return (
     <motion.header
@@ -52,17 +54,34 @@ export function SiteHeader({ showSearch = false }: { showSearch?: boolean }) {
           >
             {theme === "dark" ? "Light" : "Dark"}
           </button>
-          <Link
-            href="/dashboard"
-            className="hidden rounded-lg border border-card-border px-3 py-2 text-xs text-muted transition hover:text-foreground sm:inline-block"
-          >
-            Dashboard
-          </Link>
+          {!loading && me ? (
+            <Link
+              href="/dashboard"
+              className="hidden rounded-lg border border-card-border px-3 py-2 text-xs text-muted transition hover:text-foreground sm:inline-block"
+            >
+              Dashboard
+            </Link>
+          ) : !loading ? (
+            <>
+              <Link
+                href="/login"
+                className="hidden rounded-lg border border-card-border px-3 py-2 text-xs text-muted transition hover:text-foreground sm:inline-block"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/signup"
+                className="hidden rounded-lg border border-card-border px-3 py-2 text-xs text-muted transition hover:text-foreground md:inline-block"
+              >
+                Sign up
+              </Link>
+            </>
+          ) : null}
           <Link
             href="/partnership"
             className="hidden rounded-lg border border-card-border px-3 py-2 text-xs text-muted transition hover:text-foreground md:inline-block"
           >
-            Partnership
+            Apply for API
           </Link>
           <Link
             href="/explorer"
