@@ -114,7 +114,14 @@ async function portalFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  } catch {
+    throw new Error(
+      `Cannot reach API at ${API_BASE}. Check NEXT_PUBLIC_API_BASE or try again later.`
+    );
+  }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.message || `HTTP ${res.status}`);
   return body as T;
