@@ -100,7 +100,7 @@ export function SiteHeader({ showSearch = false }: { showSearch?: boolean }) {
             </>
           ) : null}
           <Link
-            href="/partnership"
+            href={!loading && me?.canApplyForApi && !me.application ? "/dashboard#apply" : "/partnership"}
             className="hidden rounded-lg border border-card-border px-3 py-2 text-xs text-muted transition hover:text-foreground lg:inline-block"
           >
             Apply for API
@@ -186,7 +186,7 @@ export function SiteHeader({ showSearch = false }: { showSearch?: boolean }) {
                   </Link>
                 ))}
                 <Link
-                  href="/partnership"
+                  href={!loading && me?.canApplyForApi && !me.application ? "/dashboard#apply" : "/partnership"}
                   onClick={() => setMenuOpen(false)}
                   className="block rounded-lg px-3 py-2.5 text-sm text-muted hover:bg-surface hover:text-foreground"
                 >

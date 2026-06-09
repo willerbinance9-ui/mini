@@ -158,7 +158,12 @@ function Field({
 const inputClass =
   "mt-0 w-full rounded-xl border border-card-border bg-surface/80 px-4 py-2.5 text-sm text-foreground outline-none transition focus:border-accent/50 focus:ring-2 focus:ring-accent/20";
 
-export function PartnerApplicationForm() {
+type Props = {
+  /** Render inside partner dashboard after signup + KYC */
+  embedded?: boolean;
+};
+
+export function PartnerApplicationForm({ embedded = false }: Props) {
   const { me, loading: authLoading, refresh } = usePortalAuth();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormState>(initial);
@@ -172,6 +177,8 @@ export function PartnerApplicationForm() {
       ...f,
       fullName: f.fullName || me.account.fullName || "",
       email: f.email || me.account.email || "",
+      country: f.country || me.account.countryOfResidency || "",
+      phone: f.phone || me.account.phone || "",
     }));
   }, [me]);
 
@@ -273,7 +280,12 @@ export function PartnerApplicationForm() {
     }
   }
 
-  if (!authLoading && me && !me.canApplyForApi) {
+  if (embedded) {
+    if (authLoading) return <p className="text-sm text-muted">Loading…</p>;
+    if (!me?.canApplyForApi || me.application) return null;
+  }
+
+  if (!embedded && !authLoading && me && !me.canApplyForApi) {
     return (
       <div className="glass-strong glow-ring rounded-3xl p-8 text-center sm:p-12">
         <h2 className="text-2xl font-bold text-foreground">Identity verification required</h2>
@@ -288,7 +300,7 @@ export function PartnerApplicationForm() {
     );
   }
 
-  if (!authLoading && !me) {
+  if (!embedded && !authLoading && !me) {
     return (
       <div className="glass-strong glow-ring rounded-3xl p-8 text-center sm:p-12">
         <h2 className="text-2xl font-bold text-foreground">Account required</h2>
@@ -308,6 +320,19 @@ export function PartnerApplicationForm() {
   }
 
   if (done) {
+    if (embedded) {
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center"
+        >
+          <p className="text-lg font-semibold text-emerald-300">Application submitted</p>
+          <p className="mt-2 text-sm text-muted">{done.message}</p>
+          <p className="mt-2 font-mono text-xs text-muted">Reference: {done.id}</p>
+        </motion.div>
+      );
+    }
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
@@ -327,9 +352,13 @@ export function PartnerApplicationForm() {
     );
   }
 
+  const shellClass = embedded
+    ? "rounded-xl border border-card-border bg-surface/40 p-4 sm:p-6"
+    : "glass-strong glow-ring rounded-3xl p-6 sm:p-10";
+
   return (
-    <div className="glass-strong glow-ring rounded-3xl p-6 sm:p-10">
-      {!authLoading && !me ? (
+    <div className={shellClass}>
+      {!embedded && !authLoading && !me ? (
         <div className="mb-6 rounded-xl border border-card-border bg-surface px-4 py-3 text-sm text-muted">
           <Link href="/signup" className="font-semibold text-foreground hover:underline">
             Create an Aare account
@@ -341,9 +370,13 @@ export function PartnerApplicationForm() {
           to track your application from the dashboard.
         </div>
       ) : null}
-      <div className="mb-8 rounded-xl border border-card-border bg-surface px-4 py-3 text-sm text-muted">
-        {PARTNERSHIP_DISCLAIMER}
-      </div>
+      {!embedded ? (
+        <div className="mb-8 rounded-xl border border-card-border bg-surface px-4 py-3 text-sm text-muted">
+          {PARTNERSHIP_DISCLAIMER}
+        </div>
+      ) : (
+        <p className="mb-6 text-sm text-muted">{PARTNERSHIP_DISCLAIMER}</p>
+      )}
 
       <div className="mb-3">
         <div className="h-1 overflow-hidden rounded-full bg-card-border">

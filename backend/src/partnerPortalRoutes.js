@@ -54,6 +54,7 @@ function toPortalPublic(account) {
     fullName: account.full_name,
     phoneCountry: account.phone_country,
     countryOfResidency: account.country_of_residency,
+    phone: account.phone || null,
     phoneVerified: Boolean(account.phone_verified_at),
     partnerId: account.partner_id,
     applicationId: account.application_id,

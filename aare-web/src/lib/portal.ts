@@ -22,6 +22,7 @@ export type PortalAccount = {
   id: string;
   email: string;
   fullName: string | null;
+  phone: string | null;
   phoneCountry: string | null;
   countryOfResidency: string | null;
   phoneVerified: boolean;

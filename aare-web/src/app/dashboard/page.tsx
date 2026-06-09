@@ -15,8 +15,8 @@ export default function DashboardPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">Partner portal</p>
         <h1 className="mt-2 text-3xl font-bold">Dashboard</h1>
         <p className="mt-4 max-w-2xl text-muted">
-          Create an account, apply for API access, and once approved view your tenant users, cash balances, API keys,
-          and commission — all from aare.cc.
+          Sign up, complete identity verification, and apply for API access from your account. Once approved, choose a
+          package and manage users, balances, keys, and commission here.
         </p>
         <div className="mt-10">
           <PortalDashboard />

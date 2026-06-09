@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePortalAuth } from "@/context/PortalAuthContext";
 import { PortalKycWizard } from "@/components/PortalKycWizard";
+import { PartnerApplicationForm } from "@/components/PartnerApplicationForm";
 import { portalGetOverview, type PortalOverview } from "@/lib/portal";
 import { packageById } from "@/content/api-packages";
 
@@ -82,22 +83,20 @@ export function PortalDashboard() {
 
       <PortalKycWizard kyc={me.kyc} onUpdated={() => void refresh()} />
 
-      <div className="rounded-2xl border border-card-border p-6">
+      <div id="apply" className="rounded-2xl border border-card-border p-6 scroll-mt-24">
         <h2 className="text-lg font-semibold">Partnership application</h2>
         {!me.canApplyForApi ? (
           <div className="mt-4">
             <p className="text-sm text-muted">
-              Complete identity verification above before applying for API access.
+              Complete identity verification above, then apply for API access here in your account.
             </p>
           </div>
         ) : !app ? (
           <div className="mt-4">
-            <p className="text-sm text-muted">
-              You have not applied for API access yet. Complete the partnership questionnaire on Aare.
+            <p className="mb-4 text-sm text-muted">
+              Your identity is verified. Complete the partnership questionnaire below to request API access.
             </p>
-            <Link href="/partnership" className="mt-4 inline-block text-sm font-semibold hover:underline">
-              Apply for API access →
-            </Link>
+            <PartnerApplicationForm embedded />
           </div>
         ) : (
           <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
