@@ -128,6 +128,11 @@ function getPayment(paymentId) {
   return npFetch(`/payment/${paymentId}`);
 }
 
+/** Hosted checkout page where the payer picks their crypto. */
+function createInvoice(params) {
+  return npFetch('/invoice', { method: 'POST', body: params });
+}
+
 /** NOWPayments allows max 6 decimal places on payout amounts. */
 function roundPayoutAmount(amount) {
   const n = Number(amount);
@@ -294,6 +299,7 @@ module.exports = {
   getCurrencies,
   createPayment,
   getPayment,
+  createInvoice,
   createPayout,
   buildCreatePayoutBody,
   getPayout,

@@ -635,6 +635,7 @@ async function updatePortalAccount(accountId, patch) {
   if (patch.api_package !== undefined) row.api_package = patch.api_package;
   if (patch.api_package_selected_at !== undefined) row.api_package_selected_at = patch.api_package_selected_at;
   if (patch.chat_human_requested_at !== undefined) row.chat_human_requested_at = patch.chat_human_requested_at;
+  if (patch.app_preference !== undefined) row.app_preference = patch.app_preference;
   const { data, error } = await supabase
     .from('partner_portal_accounts')
     .update(row)
@@ -906,6 +907,66 @@ async function listPortalAccountsAdmin({ limit = 200 } = {}) {
   if (error && isMissingTableError(error)) return [];
   if (error) throw error;
   return data || [];
+}
+
+async function createPortalPackagePayment({ portalAccountId, pkg, amountUsd, appPreference = null }) {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('partner_portal_package_payments')
+    .insert({
+      id: id(),
+      portal_account_id: portalAccountId,
+      package: pkg,
+      app_preference: appPreference,
+      amount_usd: amountUsd,
+      payment_status: 'waiting',
+      created_at: now,
+      updated_at: now,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function getPortalPackagePaymentById(paymentRowId) {
+  const { data, error } = await supabase
+    .from('partner_portal_package_payments')
+    .select('*')
+    .eq('id', paymentRowId)
+    .maybeSingle();
+  if (error && isMissingTableError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function getLatestPortalPackagePayment(portalAccountId) {
+  const { data, error } = await supabase
+    .from('partner_portal_package_payments')
+    .select('*')
+    .eq('portal_account_id', portalAccountId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error && isMissingTableError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function updatePortalPackagePayment(paymentRowId, patch) {
+  const row = { updated_at: new Date().toISOString() };
+  const fields = ['invoice_id', 'invoice_url', 'payment_id', 'payment_status', 'raw_last_ipn', 'paid_at'];
+  for (const f of fields) {
+    if (patch[f] !== undefined) row[f] = patch[f];
+  }
+  const { data, error } = await supabase
+    .from('partner_portal_package_payments')
+    .update(row)
+    .eq('id', paymentRowId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 async function listPortalKycAdmin({ status = null, limit = 50 } = {}) {
@@ -4961,6 +5022,10 @@ module.exports = {
   countUnreadPortalMessages,
   listPortalChatConversationsAdmin,
   listPortalAccountsAdmin,
+  createPortalPackagePayment,
+  getPortalPackagePaymentById,
+  getLatestPortalPackagePayment,
+  updatePortalPackagePayment,
   getPartnerApplicationByEmail,
   listPartnerApiKeys,
   listPartnerUsersForPortal,

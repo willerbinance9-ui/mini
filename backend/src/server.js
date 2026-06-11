@@ -67,6 +67,10 @@ const { registerGhostAccountRoutes } = require('./ghostAccountRoutes');
 const { registerPartnerRoutes, registerPartnerInternalRoutes } = require('./partnerRoutes');
 const { registerPartnerApplicationRoutes } = require('./partnerApplicationRoutes');
 const { registerPartnerPortalRoutes } = require('./partnerPortalRoutes');
+const {
+  registerPortalPackagePaymentRoutes,
+  handlePackagePaymentWebhook,
+} = require('./portalPackagePayments');
 const { registerPublicStatusRoutes } = require('./publicStatusRoutes');
 const { registerMt5EaWebhookRoutes } = require('./mt5EaWebhookRoutes');
 const { registerComplianceRoutes } = require('./complianceRoutes');
@@ -122,6 +126,18 @@ app.post(
   }),
   (req, res, next) => {
     handlePayoutWebhook(req, res).catch(next);
+  }
+);
+app.post(
+  '/webhooks/nowpayments/package',
+  express.json({
+    limit: '2mb',
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  }),
+  (req, res, next) => {
+    handlePackagePaymentWebhook(req, res).catch(next);
   }
 );
 app.post('/webhooks/flutterwave', express.json({ limit: '2mb' }), (req, res, next) => {
@@ -481,6 +497,7 @@ registerPartnerRoutes(app);
 registerPartnerInternalRoutes(app);
 registerPartnerApplicationRoutes(app);
 registerPartnerPortalRoutes(app);
+registerPortalPackagePaymentRoutes(app);
 registerPublicStatusRoutes(app);
 registerAdminRoutes(app);
 registerAdminLiveTradingRoutes(app);

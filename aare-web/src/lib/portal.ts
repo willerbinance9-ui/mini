@@ -165,15 +165,31 @@ export function portalMeFromAuth(res: PortalAuthPayload): PortalMe {
   };
 }
 
-export async function portalSelectApiPackage(packageId: ApiPackageId) {
-  return portalFetch<{
-    account: PortalAccount;
-    apiPackage: ApiPackageId;
-    needsPackageSelection: boolean;
-  }>("/v1/portal/api-package", {
-    method: "PUT",
-    body: JSON.stringify({ package: packageId }),
+export type AppPreference = "use_ours" | "own_build_for_me" | "own_independent_dev";
+
+export type PackagePayment = {
+  id: string;
+  package: ApiPackageId;
+  appPreference: AppPreference | null;
+  amountUsd: number;
+  status: string;
+  invoiceUrl: string | null;
+  paidAt: string | null;
+  createdAt: string;
+};
+
+/** Starts a one-time NOWPayments checkout for the package. The choice is final after payment. */
+export async function portalCheckoutApiPackage(packageId: ApiPackageId, appPreference: AppPreference) {
+  return portalFetch<{ payment: PackagePayment }>("/v1/portal/api-package/checkout", {
+    method: "POST",
+    body: JSON.stringify({ package: packageId, appPreference }),
   });
+}
+
+export async function portalGetPackagePayment() {
+  return portalFetch<{ payment: PackagePayment | null; apiPackage: ApiPackageId | null }>(
+    "/v1/portal/api-package/payment"
+  );
 }
 
 export async function portalRegister(payload: {

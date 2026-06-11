@@ -405,34 +405,17 @@ function registerPartnerPortalRoutes(app) {
     }
   });
 
+  // Packages are purchased once via NOWPayments checkout (POST /v1/portal/api-package/checkout)
+  // and locked permanently. Direct selection is no longer allowed.
   app.put('/v1/portal/api-package', portalAuthMiddleware, async (req, res) => {
-    try {
-      const { application } = await resolvePortalContext(req.portalAccount);
-      if (application?.status !== 'approved') {
-        return res.status(403).json({
-          message: 'Choose a package after your partnership application is approved.',
-        });
-      }
-
-      const pkg = String(req.body?.package || req.body?.apiPackage || '').trim();
-      if (!API_PACKAGES.has(pkg)) {
-        return res.status(400).json({ message: 'Invalid package. Choose airfarming_only, airfarming_vip, or full.' });
-      }
-
-      const account = await updatePortalAccount(req.portalAccountId, {
-        api_package: pkg,
-        api_package_selected_at: new Date().toISOString(),
+    if (req.portalAccount.api_package) {
+      return res.status(400).json({
+        message: 'You already purchased a package. Package choices are final and cannot be changed.',
       });
-
-      return res.json({
-        account: toPortalPublic(account),
-        apiPackage: account.api_package,
-        needsPackageSelection: false,
-      });
-    } catch (e) {
-      if (isMissingTableError(e)) return res.status(503).json({ message: SCHEMA_MSG });
-      return res.status(500).json({ message: e?.message || 'Failed to save package' });
     }
+    return res.status(400).json({
+      message: 'API packages are purchased through crypto checkout. Use the buy flow on the package page.',
+    });
   });
 
   app.get('/v1/portal/kyc', portalAuthMiddleware, async (req, res) => {
