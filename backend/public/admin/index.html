@@ -1417,6 +1417,42 @@
           </div>
 
           <div class="card" style="margin-bottom:16px;">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Partner chat</h3>
+            <p class="hint">Direct messages with partner portal accounts. Partners see replies in their aare.cc dashboard chat.</p>
+            <div class="row" style="align-items:flex-end;margin-bottom:12px;">
+              <div style="flex:1;min-width:220px;">
+                <label>Start or open a chat</label>
+                <select id="chatAccountSelect"><option value="">Select portal account…</option></select>
+              </div>
+              <button type="button" class="btn-primary" id="chatOpenBtn" style="width:auto;">Open chat</button>
+              <button type="button" class="btn-ghost" id="refreshChatsBtn" style="width:auto;">Refresh</button>
+            </div>
+            <div id="chatConvListWrap" style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Partner</th>
+                    <th>Last message</th>
+                    <th>When</th>
+                    <th>Unread</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="chatConvRows"></tbody>
+              </table>
+            </div>
+            <div id="chatThread" class="hidden" style="margin-top:16px;border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+              <div id="chatThreadHeader" style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;"></div>
+              <div id="chatMessages" style="max-height:340px;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;background:var(--bg);"></div>
+              <div style="display:flex;gap:8px;padding:10px;border-top:1px solid var(--border);">
+                <textarea id="chatDraft" rows="1" placeholder="Reply as Aare team…" style="flex:1;resize:none;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);"></textarea>
+                <button type="button" class="btn-primary" id="chatSendBtn" style="width:auto;">Send</button>
+              </div>
+            </div>
+            <p id="chatErr" class="err hidden"></p>
+          </div>
+
+          <div class="card" style="margin-bottom:16px;">
             <h3 style="margin:0 0 8px;font-size:1rem;">Portal identity verification (KYC)</h3>
             <p class="hint">Partner portal accounts must pass KYC before applying for API access. Review AI verdicts and approve or reject manually.</p>
             <div class="row" style="align-items:flex-end;margin-bottom:12px;">
@@ -3953,8 +3989,153 @@
     }
 
     async function loadPartnersPanel() {
-      await Promise.all([loadPartnersOverview(), loadPortalKyc(), loadPartnerApplications()]);
+      await Promise.all([
+        loadPartnersOverview(),
+        loadPortalKyc(),
+        loadPartnerApplications(),
+        loadChatConversations().catch(showChatErr),
+      ]);
     }
+
+    // ---- Partner chat (superadmin <-> portal accounts) ----
+    let chatActiveAccountId = null;
+    let chatPollTimer = null;
+
+    function showChatErr(e) {
+      const el = document.getElementById('chatErr');
+      el.textContent = e.message || 'Chat error';
+      el.classList.remove('hidden');
+    }
+
+    function clearChatErr() {
+      document.getElementById('chatErr').classList.add('hidden');
+    }
+
+    function fmtChatTime(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      });
+    }
+
+    async function loadChatConversations() {
+      clearChatErr();
+      const [convData, acctData] = await Promise.all([
+        api('/admin/api/portal-chats'),
+        api('/admin/api/portal-accounts'),
+      ]);
+
+      const select = document.getElementById('chatAccountSelect');
+      const current = select.value;
+      select.innerHTML = '<option value="">Select portal account…</option>';
+      (acctData.accounts || []).forEach((a) => {
+        const opt = document.createElement('option');
+        opt.value = a.id;
+        opt.textContent = `${a.full_name || a.email} <${a.email}>`;
+        select.appendChild(opt);
+      });
+      select.value = current;
+
+      const tbody = document.getElementById('chatConvRows');
+      tbody.innerHTML = '';
+      const conversations = convData.conversations || [];
+      if (!conversations.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);">No conversations yet — pick an account above to start one.</td></tr>';
+        return;
+      }
+      conversations.forEach((c) => {
+        const acct = c.account || {};
+        const tr = document.createElement('tr');
+        const preview = (c.lastMessage?.body || '').slice(0, 64);
+        const who = c.lastMessage?.sender === 'admin' ? 'You: ' : '';
+        tr.innerHTML = `
+          <td>${escapeHtml(acct.full_name || acct.email || c.portalAccountId)}</td>
+          <td style="color:var(--muted);">${escapeHtml(who + preview)}</td>
+          <td>${fmtChatTime(c.lastMessage?.createdAt)}</td>
+          <td>${c.unreadFromPartner > 0 ? `<span class="pill" style="background:var(--danger,#e5484d);color:#fff;">${c.unreadFromPartner} new</span>` : '—'}</td>
+          <td><button type="button" class="btn-ghost btn-sm" data-chat-open="${c.portalAccountId}">Open</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('[data-chat-open]').forEach((btn) => {
+        btn.onclick = () => openChatThread(btn.getAttribute('data-chat-open')).catch(showChatErr);
+      });
+    }
+
+    function renderChatMessages(messages) {
+      const wrap = document.getElementById('chatMessages');
+      wrap.innerHTML = '';
+      if (!messages.length) {
+        wrap.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;text-align:center;margin:12px 0;">No messages yet — say hello.</p>';
+        return;
+      }
+      messages.forEach((m) => {
+        const isAdmin = m.sender === 'admin';
+        const div = document.createElement('div');
+        div.style.cssText = `max-width:78%;padding:8px 12px;border-radius:14px;font-size:0.88rem;line-height:1.5;white-space:pre-wrap;word-break:break-word;align-self:${isAdmin ? 'flex-end' : 'flex-start'};`
+          + (isAdmin
+            ? 'background:var(--accent,#3b82f6);color:#fff;border-bottom-right-radius:4px;'
+            : 'background:var(--card);border:1px solid var(--border);border-bottom-left-radius:4px;');
+        div.innerHTML = `${escapeHtml(m.body)}<div style="font-size:0.65rem;opacity:0.7;margin-top:4px;">${isAdmin ? escapeHtml(m.admin_username || 'admin') + ' · ' : ''}${fmtChatTime(m.created_at)}</div>`;
+        wrap.appendChild(div);
+      });
+      wrap.scrollTop = wrap.scrollHeight;
+    }
+
+    async function openChatThread(accountId) {
+      clearChatErr();
+      chatActiveAccountId = accountId;
+      const data = await api(`/admin/api/portal-chats/${accountId}/messages`);
+      document.getElementById('chatThread').classList.remove('hidden');
+      document.getElementById('chatThreadHeader').textContent =
+        `${data.account.fullName || data.account.email} — ${data.account.email}`;
+      renderChatMessages(data.messages || []);
+
+      if (chatPollTimer) clearInterval(chatPollTimer);
+      chatPollTimer = setInterval(async () => {
+        const panelHidden = document.getElementById('panelPartners').classList.contains('hidden');
+        if (panelHidden || !chatActiveAccountId) {
+          clearInterval(chatPollTimer);
+          chatPollTimer = null;
+          return;
+        }
+        try {
+          const d = await api(`/admin/api/portal-chats/${chatActiveAccountId}/messages`);
+          renderChatMessages(d.messages || []);
+        } catch { /* keep polling */ }
+      }, 10000);
+    }
+
+    document.getElementById('chatOpenBtn').onclick = () => {
+      const id = document.getElementById('chatAccountSelect').value;
+      if (!id) return;
+      openChatThread(id).catch(showChatErr);
+    };
+    document.getElementById('refreshChatsBtn').onclick = () => loadChatConversations().catch(showChatErr);
+    document.getElementById('chatSendBtn').onclick = async () => {
+      const draft = document.getElementById('chatDraft');
+      const body = draft.value.trim();
+      if (!body || !chatActiveAccountId) return;
+      clearChatErr();
+      try {
+        await api(`/admin/api/portal-chats/${chatActiveAccountId}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({ body }),
+        });
+        draft.value = '';
+        const d = await api(`/admin/api/portal-chats/${chatActiveAccountId}/messages`);
+        renderChatMessages(d.messages || []);
+        loadChatConversations().catch(() => {});
+      } catch (e) {
+        showChatErr(e);
+      }
+    };
+    document.getElementById('chatDraft').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        document.getElementById('chatSendBtn').click();
+      }
+    });
 
     async function openPartnerApplication(id) {
       selectedPartnerAppId = id;

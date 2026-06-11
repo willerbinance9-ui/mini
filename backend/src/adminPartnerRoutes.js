@@ -9,6 +9,12 @@ const {
   listPortalKycAdmin,
   getPortalKycById,
   updatePortalKyc,
+  getPortalAccountById,
+  listPortalMessages,
+  createPortalMessage,
+  markPortalMessagesRead,
+  listPortalChatConversationsAdmin,
+  listPortalAccountsAdmin,
   isMissingTableError,
 } = require('./db');
 const { adminAuthMiddleware, requireSuperAdmin } = require('./middleware/adminAuth');
@@ -198,6 +204,77 @@ function registerAdminPartnerRoutes(app) {
       return res.status(500).json({ message: e?.message || 'Failed to list KYC' });
     }
   });
+
+  const CHAT_SCHEMA_MSG = 'Chat schema missing. Run backend/sql/migrations/20260628_portal_messages.sql in Supabase.';
+
+  app.get('/admin/api/portal-chats', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const conversations = await listPortalChatConversationsAdmin();
+      return res.json({ conversations });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
+      return res.status(500).json({ message: e?.message || 'Failed to list conversations' });
+    }
+  });
+
+  app.get('/admin/api/portal-accounts', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const accounts = await listPortalAccountsAdmin({ limit: req.query.limit });
+      return res.json({ accounts });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: SCHEMA_MSG });
+      return res.status(500).json({ message: e?.message || 'Failed to list portal accounts' });
+    }
+  });
+
+  app.get(
+    '/admin/api/portal-chats/:accountId/messages',
+    adminAuthMiddleware,
+    requireSuperAdmin,
+    async (req, res) => {
+      try {
+        const account = await getPortalAccountById(req.params.accountId);
+        if (!account) return res.status(404).json({ message: 'Portal account not found' });
+
+        const messages = await listPortalMessages(account.id, { limit: req.query.limit });
+        await markPortalMessagesRead(account.id, 'partner');
+        return res.json({
+          account: { id: account.id, email: account.email, fullName: account.full_name },
+          messages,
+        });
+      } catch (e) {
+        if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
+        return res.status(500).json({ message: e?.message || 'Failed to load messages' });
+      }
+    }
+  );
+
+  app.post(
+    '/admin/api/portal-chats/:accountId/messages',
+    adminAuthMiddleware,
+    requireSuperAdmin,
+    async (req, res) => {
+      try {
+        const account = await getPortalAccountById(req.params.accountId);
+        if (!account) return res.status(404).json({ message: 'Portal account not found' });
+
+        const body = String(req.body?.body || '').trim();
+        if (!body) return res.status(400).json({ message: 'Message cannot be empty' });
+        if (body.length > 4000) return res.status(400).json({ message: 'Message too long (max 4000 characters)' });
+
+        const msg = await createPortalMessage({
+          portalAccountId: account.id,
+          sender: 'admin',
+          body,
+          adminUsername: req.adminUser || 'admin',
+        });
+        return res.status(201).json({ message: msg });
+      } catch (e) {
+        if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
+        return res.status(500).json({ message: e?.message || 'Failed to send message' });
+      }
+    }
+  );
 
   app.patch('/admin/api/portal-kyc/:id', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {

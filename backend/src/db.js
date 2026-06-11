@@ -766,6 +766,147 @@ async function updatePortalKyc(kycId, patch) {
   return data;
 }
 
+async function getPortalInvestorProfile(portalAccountId) {
+  const { data, error } = await supabase
+    .from('partner_portal_investor_profiles')
+    .select('*')
+    .eq('portal_account_id', portalAccountId)
+    .maybeSingle();
+  if (error && isMissingTableError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function upsertPortalInvestorProfile(portalAccountId, patch) {
+  const now = new Date().toISOString();
+  const row = { updated_at: now };
+  const fields = [
+    'motivation',
+    'investment_amount',
+    'withdrawal_method',
+    'withdrawal_percent',
+    'withdrawal_frequency',
+    'photo_storage_path',
+    'completed_at',
+  ];
+  for (const f of fields) {
+    if (patch[f] !== undefined) row[f] = patch[f];
+  }
+
+  const existing = await getPortalInvestorProfile(portalAccountId);
+  if (existing) {
+    const { data, error } = await supabase
+      .from('partner_portal_investor_profiles')
+      .update(row)
+      .eq('id', existing.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  const { data, error } = await supabase
+    .from('partner_portal_investor_profiles')
+    .insert({ id: id(), portal_account_id: portalAccountId, created_at: now, ...row })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function listPortalMessages(portalAccountId, { limit = 100 } = {}) {
+  const { data, error } = await supabase
+    .from('partner_portal_messages')
+    .select('*')
+    .eq('portal_account_id', portalAccountId)
+    .order('created_at', { ascending: false })
+    .limit(Math.min(200, Math.max(1, Number(limit) || 100)));
+  if (error && isMissingTableError(error)) return [];
+  if (error) throw error;
+  return (data || []).reverse();
+}
+
+async function createPortalMessage({ portalAccountId, sender, body, adminUsername = null }) {
+  const { data, error } = await supabase
+    .from('partner_portal_messages')
+    .insert({
+      id: id(),
+      portal_account_id: portalAccountId,
+      sender,
+      body,
+      admin_username: adminUsername,
+      created_at: new Date().toISOString(),
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/** Marks messages sent by `fromSender` in this thread as read (called by the other side). */
+async function markPortalMessagesRead(portalAccountId, fromSender) {
+  const { error } = await supabase
+    .from('partner_portal_messages')
+    .update({ read_at: new Date().toISOString() })
+    .eq('portal_account_id', portalAccountId)
+    .eq('sender', fromSender)
+    .is('read_at', null);
+  if (error && !isMissingTableError(error)) throw error;
+}
+
+async function countUnreadPortalMessages(portalAccountId, fromSender) {
+  const { count, error } = await supabase
+    .from('partner_portal_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('portal_account_id', portalAccountId)
+    .eq('sender', fromSender)
+    .is('read_at', null);
+  if (error && isMissingTableError(error)) return 0;
+  if (error) throw error;
+  return count || 0;
+}
+
+/** Conversations for the admin chat panel: latest message + unread per portal account. */
+async function listPortalChatConversationsAdmin({ limit = 500 } = {}) {
+  const { data, error } = await supabase
+    .from('partner_portal_messages')
+    .select('*, partner_portal_accounts(id, email, full_name, partner_id)')
+    .order('created_at', { ascending: false })
+    .limit(Math.min(1000, Math.max(1, Number(limit) || 500)));
+  if (error && isMissingTableError(error)) return [];
+  if (error) throw error;
+
+  const byAccount = new Map();
+  for (const msg of data || []) {
+    const acctId = msg.portal_account_id;
+    let conv = byAccount.get(acctId);
+    if (!conv) {
+      conv = {
+        portalAccountId: acctId,
+        account: msg.partner_portal_accounts || null,
+        lastMessage: { sender: msg.sender, body: msg.body, createdAt: msg.created_at },
+        unreadFromPartner: 0,
+        messageCount: 0,
+      };
+      byAccount.set(acctId, conv);
+    }
+    conv.messageCount += 1;
+    if (msg.sender === 'partner' && !msg.read_at) conv.unreadFromPartner += 1;
+  }
+  return Array.from(byAccount.values());
+}
+
+async function listPortalAccountsAdmin({ limit = 200 } = {}) {
+  const { data, error } = await supabase
+    .from('partner_portal_accounts')
+    .select('id, email, full_name, partner_id, created_at')
+    .order('created_at', { ascending: false })
+    .limit(Math.min(500, Math.max(1, Number(limit) || 200)));
+  if (error && isMissingTableError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
 async function listPortalKycAdmin({ status = null, limit = 50 } = {}) {
   let q = supabase
     .from('partner_portal_kyc')
@@ -4811,6 +4952,14 @@ module.exports = {
   getPortalKycById,
   updatePortalKyc,
   listPortalKycAdmin,
+  getPortalInvestorProfile,
+  upsertPortalInvestorProfile,
+  listPortalMessages,
+  createPortalMessage,
+  markPortalMessagesRead,
+  countUnreadPortalMessages,
+  listPortalChatConversationsAdmin,
+  listPortalAccountsAdmin,
   getPartnerApplicationByEmail,
   listPartnerApiKeys,
   listPartnerUsersForPortal,

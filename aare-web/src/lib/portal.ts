@@ -233,6 +233,69 @@ export async function portalGetMe() {
   return portalFetch<PortalMe>("/v1/portal/me");
 }
 
+export type WithdrawalMethod = "bank" | "crypto";
+export type WithdrawalFrequency = "weekly" | "biweekly" | "monthly" | "trimester";
+
+export type InvestorProfile = {
+  id?: string;
+  motivation: string | null;
+  investmentAmount: number | null;
+  withdrawalMethod: WithdrawalMethod | null;
+  withdrawalPercent: number | null;
+  withdrawalFrequency: WithdrawalFrequency | null;
+  hasPhoto: boolean;
+  completedAt: string | null;
+  updatedAt: string | null;
+};
+
+export type InvestorProfileResponse = {
+  profile: InvestorProfile;
+  complete: boolean;
+};
+
+export async function portalGetInvestorProfile() {
+  return portalFetch<InvestorProfileResponse>("/v1/portal/profile");
+}
+
+export async function portalSaveInvestorProfile(payload: {
+  motivation: string;
+  investmentAmount: number;
+  withdrawalMethod: WithdrawalMethod;
+  withdrawalPercent: number;
+  withdrawalFrequency: WithdrawalFrequency;
+}) {
+  return portalFetch<InvestorProfileResponse>("/v1/portal/profile", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function portalUploadProfilePhoto(file: File) {
+  const form = new FormData();
+  form.append("photo", file);
+  return portalFetch<InvestorProfileResponse>("/v1/portal/profile/photo", {
+    method: "POST",
+    body: form,
+  });
+}
+
+/** Fetches the profile photo as an object URL (endpoint requires auth header, so <img src> can't load it directly). */
+export async function portalFetchProfilePhotoUrl(): Promise<string | null> {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const res = await fetch(`${getFetchApiBase()}/v1/portal/profile/photo`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  } catch {
+    return null;
+  }
+}
+
 export async function portalGetOverview() {
   return portalFetch<PortalOverview>("/v1/portal/overview");
 }
@@ -264,6 +327,29 @@ export async function portalSubmitKyc() {
     "/v1/portal/kyc/submit",
     { method: "POST", body: JSON.stringify({}) }
   );
+}
+
+export type PortalChatMessage = {
+  id: string;
+  sender: "partner" | "admin";
+  body: string;
+  readAt: string | null;
+  createdAt: string;
+};
+
+export async function portalGetMessages() {
+  return portalFetch<{ messages: PortalChatMessage[] }>("/v1/portal/messages");
+}
+
+export async function portalGetUnreadCount() {
+  return portalFetch<{ unread: number }>("/v1/portal/messages/unread");
+}
+
+export async function portalSendMessage(body: string) {
+  return portalFetch<{ message: PortalChatMessage }>("/v1/portal/messages", {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
 }
 
 export const COUNTRY_OPTIONS = [

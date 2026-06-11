@@ -4,8 +4,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePortalAuth } from "@/context/PortalAuthContext";
 import { PortalKycWizard } from "@/components/PortalKycWizard";
+import { PortalChat } from "@/components/PortalChat";
 import { PartnerApplicationForm } from "@/components/PartnerApplicationForm";
-import { portalGetOverview, type PortalOverview } from "@/lib/portal";
+import {
+  portalGetOverview,
+  portalGetInvestorProfile,
+  type PortalOverview,
+  type InvestorProfile,
+} from "@/lib/portal";
 import { packageById } from "@/content/api-packages";
 
 function fmtUsd(n: number) {
@@ -29,6 +35,14 @@ export function PortalDashboard() {
   const [overview, setOverview] = useState<PortalOverview | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [error, setError] = useState("");
+  const [investorProfile, setInvestorProfile] = useState<{ profile: InvestorProfile; complete: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!me) return;
+    portalGetInvestorProfile()
+      .then(setInvestorProfile)
+      .catch(() => setInvestorProfile(null));
+  }, [me?.account.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!me?.hasPartnerAccess) return;
@@ -82,6 +96,34 @@ export function PortalDashboard() {
       </div>
 
       <PortalKycWizard kyc={me.kyc} onUpdated={() => void refresh()} />
+
+      <div className="rounded-2xl border border-card-border p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">Investor profile</h2>
+            <p className="mt-2 max-w-lg text-sm text-muted">
+              {investorProfile?.complete
+                ? "Profile complete — the drops algorithm is matching opportunities to your answers."
+                : "Tell us how you plan to invest and withdraw. The drops algorithm uses this to send you matching opportunities — the less you withdraw, the better the drops."}
+            </p>
+          </div>
+          {investorProfile?.complete ? (
+            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+              Complete
+            </span>
+          ) : (
+            <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
+              Incomplete
+            </span>
+          )}
+        </div>
+        <Link
+          href="/dashboard/profile"
+          className="mt-4 inline-block rounded-full border border-foreground px-5 py-2 text-sm font-medium transition hover:bg-foreground hover:text-background"
+        >
+          {investorProfile?.complete ? "View / update profile →" : "Build your profile →"}
+        </Link>
+      </div>
 
       <div id="apply" className="rounded-2xl border border-card-border p-6 scroll-mt-24">
         <h2 className="text-lg font-semibold">Partnership application</h2>
@@ -277,6 +319,8 @@ export function PortalDashboard() {
       ) : app?.status === "approved" && !me.hasPartnerAccess ? (
         <p className="text-sm text-muted">Your application is approved — partner access is syncing. Refresh shortly.</p>
       ) : null}
+
+      <PortalChat />
 
       <div className="rounded-2xl border border-dashed border-card-border p-6">
         <h2 className="text-lg font-semibold">Developer tools</h2>

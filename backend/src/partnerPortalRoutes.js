@@ -20,18 +20,28 @@ const {
   getOrCreatePortalKyc,
   getPortalKycByAccountId,
   updatePortalKyc,
+  getPortalInvestorProfile,
+  upsertPortalInvestorProfile,
+  listPortalMessages,
+  createPortalMessage,
+  markPortalMessagesRead,
+  countUnreadPortalMessages,
   isMissingTableError,
 } = require('./db');
 const { portalAuthMiddleware, signPortalToken } = require('./middleware/portalAuth');
 const { PARTNER_COMMISSION_RATE } = require('./platformRevenueService');
 const { normalizePhoneDigits, sendLoginOtp, verifyOtpCode } = require('./services/portalOtp');
-const { uploadKycImage } = require('./services/partnerKycStorage');
+const { uploadKycImage, downloadKycImage } = require('./services/partnerKycStorage');
 const { reviewPartnerKyc } = require('./services/partnerKycAiReview');
 
 const SCHEMA_MSG =
   'Partner portal schema missing. Run backend/sql/migrations/20260624_partner_portal.sql and 20260625_partner_portal_kyc.sql in Supabase.';
 const KYC_SCHEMA_MSG =
   'Partner KYC schema missing. Run backend/sql/migrations/20260625_partner_portal_kyc.sql in Supabase.';
+const PROFILE_SCHEMA_MSG =
+  'Investor profile schema missing. Run backend/sql/migrations/20260627_portal_investor_profile.sql in Supabase.';
+const CHAT_SCHEMA_MSG =
+  'Chat schema missing. Run backend/sql/migrations/20260628_portal_messages.sql in Supabase.';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -121,6 +131,56 @@ function toKycPublic(kyc) {
 }
 
 const { canApplyForApi } = require('./portalKycUtil');
+
+const WITHDRAWAL_METHODS = new Set(['bank', 'crypto']);
+const WITHDRAWAL_FREQUENCIES = new Set(['weekly', 'biweekly', 'monthly', 'trimester']);
+
+function toInvestorProfilePublic(profile) {
+  if (!profile) {
+    return {
+      motivation: null,
+      investmentAmount: null,
+      withdrawalMethod: null,
+      withdrawalPercent: null,
+      withdrawalFrequency: null,
+      hasPhoto: false,
+      completedAt: null,
+      updatedAt: null,
+    };
+  }
+  return {
+    id: profile.id,
+    motivation: profile.motivation,
+    investmentAmount: profile.investment_amount != null ? Number(profile.investment_amount) : null,
+    withdrawalMethod: profile.withdrawal_method,
+    withdrawalPercent: profile.withdrawal_percent != null ? Number(profile.withdrawal_percent) : null,
+    withdrawalFrequency: profile.withdrawal_frequency,
+    hasPhoto: Boolean(profile.photo_storage_path),
+    completedAt: profile.completed_at,
+    updatedAt: profile.updated_at,
+  };
+}
+
+function toMessagePublic(msg) {
+  return {
+    id: msg.id,
+    sender: msg.sender,
+    body: msg.body,
+    readAt: msg.read_at,
+    createdAt: msg.created_at,
+  };
+}
+
+function isInvestorProfileComplete(profile) {
+  return Boolean(
+    profile &&
+      profile.motivation &&
+      profile.investment_amount != null &&
+      profile.withdrawal_method &&
+      profile.withdrawal_percent != null &&
+      profile.withdrawal_frequency
+  );
+}
 
 async function resolvePortalContext(account) {
   let application = null;
@@ -506,6 +566,146 @@ function registerPartnerPortalRoutes(app) {
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: KYC_SCHEMA_MSG });
       return res.status(500).json({ message: e?.message || 'KYC submit failed' });
+    }
+  });
+
+  app.get('/v1/portal/profile', portalAuthMiddleware, async (req, res) => {
+    try {
+      const profile = await getPortalInvestorProfile(req.portalAccountId);
+      return res.json({
+        profile: toInvestorProfilePublic(profile),
+        complete: isInvestorProfileComplete(profile),
+      });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: PROFILE_SCHEMA_MSG });
+      return res.status(500).json({ message: e?.message || 'Failed to load investor profile' });
+    }
+  });
+
+  app.put('/v1/portal/profile', portalAuthMiddleware, async (req, res) => {
+    try {
+      const motivation = String(req.body?.motivation || '').trim();
+      const investmentAmount = Number(req.body?.investmentAmount);
+      const withdrawalMethod = String(req.body?.withdrawalMethod || '').trim();
+      const withdrawalPercent = Number(req.body?.withdrawalPercent);
+      const withdrawalFrequency = String(req.body?.withdrawalFrequency || '').trim();
+
+      if (!motivation || motivation.length < 10) {
+        return res.status(400).json({ message: 'Tell us what made you want to invest (at least 10 characters).' });
+      }
+      if (!Number.isFinite(investmentAmount) || investmentAmount <= 0) {
+        return res.status(400).json({ message: 'Enter a valid investment amount.' });
+      }
+      if (!WITHDRAWAL_METHODS.has(withdrawalMethod)) {
+        return res.status(400).json({ message: 'Choose where you will withdraw to: bank or crypto.' });
+      }
+      if (!Number.isFinite(withdrawalPercent) || withdrawalPercent < 0 || withdrawalPercent > 100) {
+        return res.status(400).json({ message: 'Withdrawal percentage must be between 0 and 100.' });
+      }
+      if (!WITHDRAWAL_FREQUENCIES.has(withdrawalFrequency)) {
+        return res.status(400).json({ message: 'Choose a withdrawal frequency: weekly, biweekly, monthly, or trimester.' });
+      }
+
+      const profile = await upsertPortalInvestorProfile(req.portalAccountId, {
+        motivation: motivation.slice(0, 2000),
+        investment_amount: Math.round(investmentAmount * 100) / 100,
+        withdrawal_method: withdrawalMethod,
+        withdrawal_percent: Math.round(withdrawalPercent * 100) / 100,
+        withdrawal_frequency: withdrawalFrequency,
+        completed_at: new Date().toISOString(),
+      });
+
+      return res.json({
+        profile: toInvestorProfilePublic(profile),
+        complete: isInvestorProfileComplete(profile),
+      });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: PROFILE_SCHEMA_MSG });
+      return res.status(500).json({ message: e?.message || 'Failed to save investor profile' });
+    }
+  });
+
+  app.post('/v1/portal/profile/photo', portalAuthMiddleware, upload.single('photo'), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: 'Profile picture is required' });
+
+      const path = await uploadKycImage({
+        portalAccountId: req.portalAccountId,
+        side: 'profile',
+        buffer: req.file.buffer,
+        mimeType: req.file.mimetype,
+      });
+
+      const profile = await upsertPortalInvestorProfile(req.portalAccountId, {
+        photo_storage_path: path,
+      });
+
+      return res.json({
+        profile: toInvestorProfilePublic(profile),
+        complete: isInvestorProfileComplete(profile),
+      });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: PROFILE_SCHEMA_MSG });
+      if (e?.statusCode) return res.status(e.statusCode).json({ message: e.message });
+      return res.status(500).json({ message: e?.message || 'Photo upload failed' });
+    }
+  });
+
+  app.get('/v1/portal/profile/photo', portalAuthMiddleware, async (req, res) => {
+    try {
+      const profile = await getPortalInvestorProfile(req.portalAccountId);
+      if (!profile?.photo_storage_path) return res.status(404).json({ message: 'No profile picture' });
+
+      const buf = await downloadKycImage(profile.photo_storage_path);
+      if (!buf) return res.status(404).json({ message: 'Profile picture unavailable' });
+
+      const isPng = profile.photo_storage_path.endsWith('.png');
+      res.setHeader('Content-Type', isPng ? 'image/png' : 'image/jpeg');
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      return res.send(buf);
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: PROFILE_SCHEMA_MSG });
+      return res.status(500).json({ message: e?.message || 'Failed to load photo' });
+    }
+  });
+
+  // Direct chat with the Aare team (superadmin). Fetching the thread marks admin messages as read.
+  app.get('/v1/portal/messages', portalAuthMiddleware, async (req, res) => {
+    try {
+      const messages = await listPortalMessages(req.portalAccountId, { limit: req.query.limit });
+      await markPortalMessagesRead(req.portalAccountId, 'admin');
+      return res.json({ messages: messages.map(toMessagePublic) });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
+      return res.status(500).json({ message: e?.message || 'Failed to load messages' });
+    }
+  });
+
+  app.get('/v1/portal/messages/unread', portalAuthMiddleware, async (req, res) => {
+    try {
+      const unread = await countUnreadPortalMessages(req.portalAccountId, 'admin');
+      return res.json({ unread });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
+      return res.status(500).json({ message: e?.message || 'Failed to load unread count' });
+    }
+  });
+
+  app.post('/v1/portal/messages', portalAuthMiddleware, async (req, res) => {
+    try {
+      const body = String(req.body?.body || '').trim();
+      if (!body) return res.status(400).json({ message: 'Message cannot be empty' });
+      if (body.length > 4000) return res.status(400).json({ message: 'Message too long (max 4000 characters)' });
+
+      const msg = await createPortalMessage({
+        portalAccountId: req.portalAccountId,
+        sender: 'partner',
+        body,
+      });
+      return res.status(201).json({ message: toMessagePublic(msg) });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
+      return res.status(500).json({ message: e?.message || 'Failed to send message' });
     }
   });
 
