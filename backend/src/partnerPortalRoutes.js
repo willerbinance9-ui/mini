@@ -730,12 +730,12 @@ function registerPartnerPortalRoutes(app) {
       });
 
       if (!ai) {
-        // AI unavailable (no key or API error) — hand the thread to a human so nobody is left waiting.
+        // AI unavailable (no key or API error) — hand the thread to an agent so nobody is left waiting.
         await updatePortalAccount(req.portalAccountId, { chat_human_requested_at: new Date().toISOString() });
         const notice = await createPortalMessage({
           portalAccountId: req.portalAccountId,
           sender: 'ai',
-          body: 'Thanks for your message — connecting you to the Aare team. An admin will reply here shortly.',
+          body: 'Thanks for your message — connecting you to an agent. They will reply here shortly.',
         });
         return res.status(201).json({
           message: toMessagePublic(msg),
@@ -750,14 +750,15 @@ function registerPartnerPortalRoutes(app) {
         body: ai.reply,
       });
 
-      if (ai.handoff) {
+      if (ai.connectAgent) {
         await updatePortalAccount(req.portalAccountId, { chat_human_requested_at: new Date().toISOString() });
       }
 
       return res.status(201).json({
         message: toMessagePublic(msg),
         aiReply: toMessagePublic(aiMsg),
-        humanRequested: ai.handoff,
+        humanRequested: ai.connectAgent,
+        offerAgent: ai.offerAgent,
       });
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
@@ -765,7 +766,7 @@ function registerPartnerPortalRoutes(app) {
     }
   });
 
-  // Explicit "talk to a human" from the chat widget.
+  // Explicit "speak to an agent" from the chat widget (header button or in-chat yes choice).
   app.post('/v1/portal/messages/handoff', portalAuthMiddleware, async (req, res) => {
     try {
       if (!req.portalAccount.chat_human_requested_at) {
@@ -773,14 +774,14 @@ function registerPartnerPortalRoutes(app) {
         await createPortalMessage({
           portalAccountId: req.portalAccountId,
           sender: 'ai',
-          body: 'You are now connected to the Aare team — an admin will reply here shortly.',
+          body: 'You are now connected to an agent — they will reply here shortly.',
         });
       }
       const messages = await listPortalMessages(req.portalAccountId, { limit: 100 });
       return res.json({ messages: messages.map(toMessagePublic), humanRequested: true });
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
-      return res.status(500).json({ message: e?.message || 'Failed to connect you to the team' });
+      return res.status(500).json({ message: e?.message || 'Failed to connect you to an agent' });
     }
   });
 

@@ -296,7 +296,7 @@ function registerAdminPartnerRoutes(app) {
         await createPortalMessage({
           portalAccountId: account.id,
           sender: 'ai',
-          body: 'The Aare team has closed this conversation. I am back to help — ask me anything about the API or the platform.',
+          body: 'Our agent has closed this conversation. I am back to help — ask me anything.',
         });
         return res.json({ ok: true });
       } catch (e) {

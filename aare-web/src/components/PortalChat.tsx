@@ -40,6 +40,7 @@ export function PortalChat() {
   const [loaded, setLoaded] = useState(false);
   const [humanRequested, setHumanRequested] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [offerAgent, setOfferAgent] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
 
@@ -96,7 +97,7 @@ export function PortalChat() {
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, open, sending]);
+  }, [messages.length, open, sending, offerAgent]);
 
   async function send() {
     const body = draft.trim();
@@ -110,6 +111,7 @@ export function PortalChat() {
       ...m,
       { id: tempId, sender: "partner", body, readAt: null, createdAt: new Date().toISOString() },
     ]);
+    setOfferAgent(false);
     try {
       const res = await portalSendMessage(body);
       setMessages((m) => {
@@ -117,6 +119,7 @@ export function PortalChat() {
         return res.aiReply ? [...withoutTemp, res.message, res.aiReply] : [...withoutTemp, res.message];
       });
       if (res.humanRequested) setHumanRequested(true);
+      if (res.offerAgent) setOfferAgent(true);
     } catch (e) {
       setMessages((m) => m.filter((x) => x.id !== tempId));
       setDraft(body);
@@ -126,16 +129,17 @@ export function PortalChat() {
     }
   }
 
-  async function connectToHuman() {
+  async function connectToAgent() {
     if (connecting || humanRequested) return;
     setConnecting(true);
     setError("");
+    setOfferAgent(false);
     try {
       const res = await portalRequestHuman();
       setMessages(res.messages);
       setHumanRequested(true);
     } catch (e) {
-      setError(friendlyChatError(e, "Failed to connect you to the team"));
+      setError(friendlyChatError(e, "Failed to connect you to an agent"));
     } finally {
       setConnecting(false);
     }
@@ -178,25 +182,25 @@ export function PortalChat() {
           >
             <div className="flex items-start justify-between gap-3 border-b border-card-border bg-surface/60 px-5 py-4">
               <div>
-                <p className="font-semibold">{humanRequested ? "Aare team" : "AarAi"}</p>
+                <p className="font-semibold">{humanRequested ? "Agent" : "AarAi"}</p>
                 <p className="text-xs text-muted">
                   {humanRequested
-                    ? "You're connected to the admin team — replies land here."
-                    : "Instant answers about the API and platform."}
+                    ? "You're connected to an agent — replies land here."
+                    : "Ask me anything about Aare."}
                 </p>
               </div>
               {!humanRequested ? (
                 <button
                   type="button"
-                  onClick={() => void connectToHuman()}
+                  onClick={() => void connectToAgent()}
                   disabled={connecting}
                   className="shrink-0 rounded-full border border-card-border px-3 py-1.5 text-xs text-muted transition hover:border-foreground hover:text-foreground disabled:opacity-50"
                 >
-                  {connecting ? "Connecting…" : "Talk to a human"}
+                  {connecting ? "Connecting…" : "Speak to an agent"}
                 </button>
               ) : (
                 <span className="shrink-0 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-400">
-                  Human
+                  Agent
                 </span>
               )}
             </div>
@@ -205,10 +209,7 @@ export function PortalChat() {
               {!loaded ? (
                 <p className="text-center text-sm text-muted">Loading…</p>
               ) : messages.length === 0 && !error ? (
-                <p className="px-4 text-center text-sm text-muted">
-                  Hi! I&apos;m AarAi. Ask me anything about the API, packages, KYC, drops, or your partnership — or
-                  tap &quot;Talk to a human&quot; to reach the team directly.
-                </p>
+                <p className="px-4 text-center text-sm text-muted">Hi! How can I help you today?</p>
               ) : (
                 messages.map((m) => (
                   <div key={m.id} className={`flex ${m.sender === "partner" ? "justify-end" : "justify-start"}`}>
@@ -242,6 +243,34 @@ export function PortalChat() {
                     </span>
                   </div>
                 </div>
+              ) : null}
+              {offerAgent && !humanRequested && !sending ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-start"
+                >
+                  <div className="rounded-2xl rounded-bl-md border border-card-border bg-surface px-4 py-3">
+                    <p className="text-sm font-medium">Do you want to speak to an agent?</p>
+                    <div className="mt-2.5 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void connectToAgent()}
+                        disabled={connecting}
+                        className="rounded-full border border-foreground bg-foreground px-4 py-1.5 text-xs font-semibold text-background disabled:opacity-50"
+                      >
+                        {connecting ? "Connecting…" : "Yes, connect me"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOfferAgent(false)}
+                        className="rounded-full border border-card-border px-4 py-1.5 text-xs text-muted transition hover:border-foreground hover:text-foreground"
+                      >
+                        No, keep chatting
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
               ) : null}
             </div>
 

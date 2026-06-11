@@ -350,6 +350,7 @@ export async function portalSendMessage(body: string) {
     message: PortalChatMessage;
     aiReply?: PortalChatMessage;
     humanRequested?: boolean;
+    offerAgent?: boolean;
   }>("/v1/portal/messages", {
     method: "POST",
     body: JSON.stringify({ body }),

@@ -1445,7 +1445,7 @@
               <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);">
                 <div id="chatThreadHeader" style="font-weight:600;"></div>
                 <div style="display:flex;align-items:center;gap:8px;">
-                  <span id="chatHumanBadge" class="pill hidden" style="background:var(--danger,#e5484d);color:#fff;">Human requested</span>
+                  <span id="chatHumanBadge" class="pill hidden" style="background:var(--danger,#e5484d);color:#fff;">Agent requested</span>
                   <button type="button" class="btn-ghost btn-sm hidden" id="chatReturnAiBtn">Return to AarAi</button>
                 </div>
               </div>
@@ -4055,7 +4055,7 @@
         const preview = (c.lastMessage?.body || '').slice(0, 64);
         const who = c.lastMessage?.sender === 'admin' ? 'You: ' : c.lastMessage?.sender === 'ai' ? 'AarAi: ' : '';
         const badges = [];
-        if (c.humanRequested) badges.push('<span class="pill" style="background:#d97706;color:#fff;">Human requested</span>');
+        if (c.humanRequested) badges.push('<span class="pill" style="background:#d97706;color:#fff;">Agent requested</span>');
         if (c.unreadFromPartner > 0) badges.push(`<span class="pill" style="background:var(--danger,#e5484d);color:#fff;">${c.unreadFromPartner} new</span>`);
         tr.innerHTML = `
           <td>${escapeHtml(acct.full_name || acct.email || c.portalAccountId)}</td>
