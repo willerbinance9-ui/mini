@@ -665,7 +665,123 @@
     }
     @media (max-width: 600px) {
       .grid-2 { grid-template-columns: 1fr; }
-      .content { padding: 16px; }
+      .content { padding: 12px; }
+    }
+
+    /* Icon buttons */
+    .btn-icon {
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.05rem;
+      line-height: 1;
+      border-radius: 12px;
+      flex-shrink: 0;
+    }
+    .btn-icon svg { width: 18px; height: 18px; }
+
+    /* Partner chat — messenger layout */
+    .chat-thread {
+      margin-top: 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+    }
+    .chat-thread-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .chat-thread-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .chat-messages {
+      max-height: 340px;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--bg);
+    }
+    .chat-input-bar {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      padding: 10px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .chat-input-bar textarea {
+      flex: 1;
+      resize: none;
+      padding: 10px 14px;
+      border-radius: 22px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+      margin: 0;
+      min-height: 42px;
+      max-height: 110px;
+    }
+    .chat-send-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .chat-send-btn svg { width: 18px; height: 18px; }
+
+    /* Compact mobile sizing — app-like density */
+    @media (max-width: 700px) {
+      button { padding: 10px 14px; font-size: 0.88rem; font-weight: 600; border-radius: 10px; }
+      .btn-ghost, .btn-danger, .btn-warn { padding: 8px 12px; font-size: 0.8rem; }
+      .btn-icon { width: 38px; height: 38px; padding: 0; }
+      input, select, textarea { padding: 10px 12px; font-size: 0.92rem; margin-bottom: 10px; }
+      .card { padding: 14px; border-radius: 14px; }
+      .card h3 { font-size: 0.92rem !important; }
+      .hint { font-size: 0.75rem; }
+      table { font-size: 0.78rem; }
+      th, td { padding: 6px 8px !important; }
+      .row { gap: 8px; }
+      .pill { font-size: 0.66rem; padding: 2px 8px; }
+
+      /* Full-screen messenger thread on phones */
+      .chat-thread:not(.hidden) {
+        position: fixed;
+        inset: 0;
+        z-index: 300;
+        margin: 0;
+        border: none;
+        border-radius: 0;
+        height: 100dvh;
+      }
+      .chat-thread:not(.hidden) .chat-messages {
+        flex: 1;
+        max-height: none;
+      }
+      .chat-thread-bar { padding-top: max(10px, env(safe-area-inset-top)); }
+      .chat-input-bar { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
     }
   </style>
 </head>
@@ -1393,7 +1509,9 @@
             <h3 style="margin:0 0 8px;font-size:1rem;">Active partners — API keys &amp; usage</h3>
             <p class="hint">Approved partners with keys in use, user counts, commission, and webhook activity.</p>
             <div class="row" style="align-items:flex-end;margin-bottom:12px;">
-              <button type="button" class="btn-primary" id="refreshPartnersBtn" style="width:auto;">Refresh partners</button>
+              <button type="button" class="btn-primary btn-icon" id="refreshPartnersBtn" aria-label="Refresh partners" title="Refresh partners">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg>
+              </button>
             </div>
             <div id="partnersLoading" class="loading hidden">Loading partners…</div>
             <div style="overflow-x:auto;">
@@ -1420,12 +1538,16 @@
             <h3 style="margin:0 0 8px;font-size:1rem;">Partner chat</h3>
             <p class="hint">Direct messages with partner portal accounts. Partners see replies in their aare.cc dashboard chat.</p>
             <div class="row" style="align-items:flex-end;margin-bottom:12px;">
-              <div style="flex:1;min-width:220px;">
+              <div style="flex:1;min-width:180px;">
                 <label>Start or open a chat</label>
-                <select id="chatAccountSelect"><option value="">Select portal account…</option></select>
+                <select id="chatAccountSelect" style="margin-bottom:0;"><option value="">Select portal account…</option></select>
               </div>
-              <button type="button" class="btn-primary" id="chatOpenBtn" style="width:auto;">Open chat</button>
-              <button type="button" class="btn-ghost" id="refreshChatsBtn" style="width:auto;">Refresh</button>
+              <button type="button" class="btn-primary btn-icon" id="chatOpenBtn" aria-label="Open chat" title="Open chat">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 8.5-8.5 8.5 8.5 0 0 1 8.5 8.5z"/></svg>
+              </button>
+              <button type="button" class="btn-ghost btn-icon" id="refreshChatsBtn" aria-label="Refresh chats" title="Refresh">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg>
+              </button>
             </div>
             <div id="chatConvListWrap" style="overflow-x:auto;">
               <table>
@@ -1441,18 +1563,23 @@
                 <tbody id="chatConvRows"></tbody>
               </table>
             </div>
-            <div id="chatThread" class="hidden" style="margin-top:16px;border:1px solid var(--border);border-radius:12px;overflow:hidden;">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);">
-                <div id="chatThreadHeader" style="font-weight:600;"></div>
-                <div style="display:flex;align-items:center;gap:8px;">
-                  <span id="chatHumanBadge" class="pill hidden" style="background:var(--danger,#e5484d);color:#fff;">Agent requested</span>
-                  <button type="button" class="btn-ghost btn-sm hidden" id="chatReturnAiBtn">Return to AarAi</button>
-                </div>
+            <div id="chatThread" class="chat-thread hidden">
+              <div class="chat-thread-bar">
+                <button type="button" class="btn-ghost btn-icon" id="chatCloseBtn" aria-label="Close chat" title="Close">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                </button>
+                <div id="chatThreadHeader" class="chat-thread-title"></div>
+                <span id="chatHumanBadge" class="pill hidden" style="background:var(--danger,#e5484d);color:#fff;">Agent</span>
+                <button type="button" class="btn-ghost btn-icon hidden" id="chatReturnAiBtn" aria-label="Return to AarAi" title="Return to AarAi">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M8 14h.01M16 14h.01"/></svg>
+                </button>
               </div>
-              <div id="chatMessages" style="max-height:340px;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;background:var(--bg);"></div>
-              <div style="display:flex;gap:8px;padding:10px;border-top:1px solid var(--border);">
-                <textarea id="chatDraft" rows="1" placeholder="Reply as Aare team…" style="flex:1;resize:none;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);"></textarea>
-                <button type="button" class="btn-primary" id="chatSendBtn" style="width:auto;">Send</button>
+              <div id="chatMessages" class="chat-messages"></div>
+              <div class="chat-input-bar">
+                <textarea id="chatDraft" rows="1" placeholder="Reply as agent…"></textarea>
+                <button type="button" class="btn-primary chat-send-btn" id="chatSendBtn" aria-label="Send" title="Send">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                </button>
               </div>
             </div>
             <p id="chatErr" class="err hidden"></p>
@@ -1462,9 +1589,9 @@
             <h3 style="margin:0 0 8px;font-size:1rem;">Portal identity verification (KYC)</h3>
             <p class="hint">Partner portal accounts must pass KYC before applying for API access. Review AI verdicts and approve or reject manually.</p>
             <div class="row" style="align-items:flex-end;margin-bottom:12px;">
-              <div>
+              <div style="flex:1;min-width:160px;">
                 <label>Status filter</label>
-                <select id="portalKycStatus">
+                <select id="portalKycStatus" style="margin-bottom:0;">
                   <option value="">All</option>
                   <option value="manual_review" selected>Manual review</option>
                   <option value="submitted">Submitted</option>
@@ -1474,7 +1601,9 @@
                   <option value="draft">Draft</option>
                 </select>
               </div>
-              <button type="button" class="btn-primary" id="refreshPortalKycBtn" style="width:auto;">Refresh KYC</button>
+              <button type="button" class="btn-primary btn-icon" id="refreshPortalKycBtn" aria-label="Refresh KYC" title="Refresh KYC">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg>
+              </button>
             </div>
             <div id="portalKycLoading" class="loading hidden">Loading KYC records…</div>
             <div style="overflow-x:auto;">
@@ -1501,9 +1630,9 @@
             <h3 style="margin:0 0 8px;font-size:1rem;">Aare partnership applications</h3>
             <p class="hint">Submissions from the partnership form at aare.cc. Approve to create a partner tenant and API key.</p>
             <div class="row" style="align-items:flex-end;margin-bottom:12px;">
-              <div>
+              <div style="flex:1;min-width:160px;">
                 <label>Status filter</label>
-                <select id="partnerAppStatus">
+                <select id="partnerAppStatus" style="margin-bottom:0;">
                   <option value="">All</option>
                   <option value="pending" selected>Pending</option>
                   <option value="reviewing">Reviewing</option>
@@ -1511,7 +1640,9 @@
                   <option value="rejected">Rejected</option>
                 </select>
               </div>
-              <button type="button" class="btn-primary" id="refreshPartnerAppsBtn" style="width:auto;">Refresh applications</button>
+              <button type="button" class="btn-primary btn-icon" id="refreshPartnerAppsBtn" aria-label="Refresh applications" title="Refresh applications">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg>
+              </button>
             </div>
             <div id="partnerAppsLoading" class="loading hidden">Loading applications…</div>
             <div style="overflow-x:auto;">
@@ -4130,6 +4261,15 @@
       openChatThread(id).catch(showChatErr);
     };
     document.getElementById('refreshChatsBtn').onclick = () => loadChatConversations().catch(showChatErr);
+    document.getElementById('chatCloseBtn').onclick = () => {
+      document.getElementById('chatThread').classList.add('hidden');
+      chatActiveAccountId = null;
+      if (chatPollTimer) {
+        clearInterval(chatPollTimer);
+        chatPollTimer = null;
+      }
+      loadChatConversations().catch(() => {});
+    };
     document.getElementById('chatReturnAiBtn').onclick = async () => {
       if (!chatActiveAccountId) return;
       if (!confirm('Hand this conversation back to AarAi? It will resume auto-answering.')) return;
