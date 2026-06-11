@@ -1586,6 +1586,68 @@
           </div>
 
           <div class="card" style="margin-bottom:16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">
+              <h3 style="margin:0;font-size:1rem;">Partner activity</h3>
+              <button type="button" class="btn-ghost btn-icon" id="refreshActivityBtn" aria-label="Refresh activity" title="Refresh">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg>
+              </button>
+            </div>
+            <p class="hint">All portal accounts — who is online now and when they were last seen.</p>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Partner</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Last seen</th>
+                    <th>Joined</th>
+                  </tr>
+                </thead>
+                <tbody id="activityRows"></tbody>
+              </table>
+            </div>
+            <p id="activityErr" class="err hidden"></p>
+          </div>
+
+          <div class="card" style="margin-bottom:16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">
+              <h3 style="margin:0;font-size:1rem;">Investor profiles</h3>
+              <button type="button" class="btn-ghost btn-icon" id="refreshProfilesBtn" aria-label="Refresh profiles" title="Refresh">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg>
+              </button>
+            </div>
+            <p class="hint">Completed investor questionnaires — what the drops algorithm uses to match opportunities.</p>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Partner</th>
+                    <th>Invest</th>
+                    <th>Withdraws</th>
+                    <th>To</th>
+                    <th>Completed</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="profileRows"></tbody>
+              </table>
+            </div>
+            <div id="profileDetail" class="hidden" style="margin-top:14px;border:1px solid var(--border);border-radius:12px;padding:14px;">
+              <div style="display:flex;gap:14px;align-items:flex-start;">
+                <div id="profilePhotoWrap" style="width:64px;height:64px;border-radius:50%;overflow:hidden;border:1px solid var(--border);background:var(--bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--muted);font-weight:700;font-size:1.3rem;"></div>
+                <div style="flex:1;min-width:0;">
+                  <p id="profileDetailName" style="margin:0;font-weight:700;"></p>
+                  <p id="profileDetailMeta" style="margin:4px 0 0;font-size:0.8rem;color:var(--muted);"></p>
+                </div>
+              </div>
+              <p style="margin:12px 0 4px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);">Why investing</p>
+              <p id="profileDetailMotivation" style="margin:0;font-size:0.88rem;line-height:1.6;white-space:pre-wrap;"></p>
+            </div>
+            <p id="profilesErr" class="err hidden"></p>
+          </div>
+
+          <div class="card" style="margin-bottom:16px;">
             <h3 style="margin:0 0 8px;font-size:1rem;">Portal identity verification (KYC)</h3>
             <p class="hint">Partner portal accounts must pass KYC before applying for API access. Review AI verdicts and approve or reject manually.</p>
             <div class="row" style="align-items:flex-end;margin-bottom:12px;">
@@ -4131,8 +4193,124 @@
         loadPortalKyc(),
         loadPartnerApplications(),
         loadChatConversations().catch(showChatErr),
+        loadPortalActivity().catch(showActivityErr),
+        loadPortalProfiles().catch(showProfilesErr),
       ]);
     }
+
+    // ---- Partner activity (online / last seen) ----
+    function showActivityErr(e) {
+      const el = document.getElementById('activityErr');
+      el.textContent = e.message || 'Failed to load activity';
+      el.classList.remove('hidden');
+    }
+
+    function lastSeenLabel(iso) {
+      if (!iso) return 'Never';
+      const diffMs = Date.now() - new Date(iso).getTime();
+      const mins = Math.floor(diffMs / 60000);
+      if (mins < 1) return 'Just now';
+      if (mins < 60) return `${mins}m ago`;
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return `${hours}h ago`;
+      const days = Math.floor(hours / 24);
+      if (days < 7) return `${days}d ago`;
+      return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+
+    async function loadPortalActivity() {
+      document.getElementById('activityErr').classList.add('hidden');
+      const data = await api('/admin/api/portal-accounts');
+      const accounts = data.accounts || [];
+      const tbody = document.getElementById('activityRows');
+      tbody.innerHTML = '';
+      if (!accounts.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);">No portal accounts yet</td></tr>';
+        return;
+      }
+      accounts.sort((a, b) => new Date(b.last_seen_at || 0) - new Date(a.last_seen_at || 0));
+      accounts.forEach((a) => {
+        const tr = document.createElement('tr');
+        const status = a.online
+          ? '<span style="display:inline-flex;align-items:center;gap:6px;color:#34d399;font-weight:600;"><span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;"></span>Online</span>'
+          : '<span style="color:var(--muted);">Offline</span>';
+        tr.innerHTML = `
+          <td>${escapeHtml(a.full_name || '—')}</td>
+          <td style="color:var(--muted);">${escapeHtml(a.email || '')}</td>
+          <td>${status}</td>
+          <td>${a.online ? 'Now' : escapeHtml(lastSeenLabel(a.last_seen_at))}</td>
+          <td style="color:var(--muted);">${a.created_at ? new Date(a.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ---- Investor profiles ----
+    let portalProfiles = [];
+
+    function showProfilesErr(e) {
+      const el = document.getElementById('profilesErr');
+      el.textContent = e.message || 'Failed to load profiles';
+      el.classList.remove('hidden');
+    }
+
+    async function loadPortalProfiles() {
+      document.getElementById('profilesErr').classList.add('hidden');
+      const data = await api('/admin/api/portal-profiles');
+      portalProfiles = data.profiles || [];
+      const tbody = document.getElementById('profileRows');
+      tbody.innerHTML = '';
+      if (!portalProfiles.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);">No completed investor profiles yet</td></tr>';
+        return;
+      }
+      portalProfiles.forEach((p) => {
+        const acct = p.account || {};
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(acct.full_name || acct.email || '—')}</td>
+          <td>$${Number(p.investmentAmount || 0).toLocaleString()}</td>
+          <td>${p.withdrawalPercent != null ? p.withdrawalPercent + '%' : '—'} · ${escapeHtml(p.withdrawalFrequency || '—')}</td>
+          <td style="text-transform:capitalize;">${escapeHtml(p.withdrawalMethod || '—')}</td>
+          <td style="color:var(--muted);">${p.completedAt ? new Date(p.completedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}</td>
+          <td><button type="button" class="btn-ghost btn-sm" data-profile-view="${p.portalAccountId}">View</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('[data-profile-view]').forEach((btn) => {
+        btn.onclick = () => openProfileDetail(btn.getAttribute('data-profile-view'));
+      });
+    }
+
+    async function openProfileDetail(accountId) {
+      const p = portalProfiles.find((x) => x.portalAccountId === accountId);
+      if (!p) return;
+      const acct = p.account || {};
+      document.getElementById('profileDetail').classList.remove('hidden');
+      document.getElementById('profileDetailName').textContent = acct.full_name || acct.email || accountId;
+      document.getElementById('profileDetailMeta').textContent =
+        `${acct.email || ''} · invests $${Number(p.investmentAmount || 0).toLocaleString()} · withdraws ${p.withdrawalPercent != null ? p.withdrawalPercent + '%' : '—'} ${p.withdrawalFrequency || ''} to ${p.withdrawalMethod || '—'}`;
+      document.getElementById('profileDetailMotivation').textContent = p.motivation || '—';
+
+      const wrap = document.getElementById('profilePhotoWrap');
+      wrap.innerHTML = (acct.full_name || acct.email || '?').charAt(0).toUpperCase();
+      if (p.hasPhoto) {
+        try {
+          const token = localStorage.getItem(TOKEN_KEY);
+          const res = await fetch(`/admin/api/portal-profiles/${accountId}/photo`, {
+            headers: token ? { Authorization: 'Bearer ' + token } : {},
+          });
+          if (res.ok) {
+            const blob = await res.blob();
+            wrap.innerHTML = `<img src="${URL.createObjectURL(blob)}" alt="" style="width:100%;height:100%;object-fit:cover;" />`;
+          }
+        } catch { /* keep initial letter */ }
+      }
+      document.getElementById('profileDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    document.getElementById('refreshActivityBtn').onclick = () => loadPortalActivity().catch(showActivityErr);
+    document.getElementById('refreshProfilesBtn').onclick = () => loadPortalProfiles().catch(showProfilesErr);
 
     // ---- Partner chat (superadmin <-> portal accounts) ----
     let chatActiveAccountId = null;
@@ -4222,7 +4400,7 @@
           bubble = 'background:var(--card);border:1px solid var(--border);border-bottom-left-radius:4px;';
         }
         div.style.cssText = `max-width:78%;padding:8px 12px;border-radius:14px;font-size:0.88rem;line-height:1.5;white-space:pre-wrap;word-break:break-word;align-self:${isAdmin || isAi ? 'flex-end' : 'flex-start'};` + bubble;
-        const label = isAdmin ? escapeHtml(m.admin_username || 'admin') + ' · ' : isAi ? 'AarAi · ' : '';
+        const label = isAdmin ? 'Agent · ' : isAi ? 'AarAi · ' : '';
         div.innerHTML = `${escapeHtml(m.body)}<div style="font-size:0.65rem;opacity:0.7;margin-top:4px;">${label}${fmtChatTime(m.created_at)}</div>`;
         wrap.appendChild(div);
       });

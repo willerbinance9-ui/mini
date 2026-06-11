@@ -226,7 +226,7 @@ export function PortalChat() {
                           m.sender === "partner" ? "text-background/60" : "text-muted"
                         }`}
                       >
-                        {m.sender === "admin" ? "Aare team · " : m.sender === "ai" ? "AarAi · " : ""}
+                        {m.sender === "admin" ? "Agent · " : m.sender === "ai" ? "AarAi · " : ""}
                         {fmtTime(m.createdAt)}
                       </p>
                     </div>

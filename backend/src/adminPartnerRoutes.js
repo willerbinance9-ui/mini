@@ -15,9 +15,22 @@ const {
   markPortalMessagesRead,
   listPortalChatConversationsAdmin,
   listPortalAccountsAdmin,
+  listPortalInvestorProfilesAdmin,
+  getPortalInvestorProfile,
   updatePortalAccount,
   isMissingTableError,
 } = require('./db');
+const { downloadKycImage } = require('./services/partnerKycStorage');
+
+const ONLINE_WINDOW_MS = 2 * 60 * 1000;
+
+function withOnlineFlag(account) {
+  const lastSeen = account.last_seen_at ? new Date(account.last_seen_at).getTime() : 0;
+  return {
+    ...account,
+    online: Boolean(lastSeen && Date.now() - lastSeen < ONLINE_WINDOW_MS),
+  };
+}
 const { adminAuthMiddleware, requireSuperAdmin } = require('./middleware/adminAuth');
 const { hashPartnerApiKey } = require('./middleware/partnerAuth');
 const { sendEmail } = require('./services/emailNotify');
@@ -221,12 +234,62 @@ function registerAdminPartnerRoutes(app) {
   app.get('/admin/api/portal-accounts', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const accounts = await listPortalAccountsAdmin({ limit: req.query.limit });
-      return res.json({ accounts });
+      return res.json({ accounts: accounts.map(withOnlineFlag) });
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: SCHEMA_MSG });
       return res.status(500).json({ message: e?.message || 'Failed to list portal accounts' });
     }
   });
+
+  // Completed investor profiles (questionnaire answers the drops algorithm uses).
+  app.get('/admin/api/portal-profiles', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const rows = await listPortalInvestorProfilesAdmin({ limit: req.query.limit });
+      return res.json({
+        profiles: rows.map((p) => ({
+          id: p.id,
+          portalAccountId: p.portal_account_id,
+          account: p.partner_portal_accounts
+            ? withOnlineFlag(p.partner_portal_accounts)
+            : null,
+          motivation: p.motivation,
+          investmentAmount: p.investment_amount != null ? Number(p.investment_amount) : null,
+          withdrawalMethod: p.withdrawal_method,
+          withdrawalPercent: p.withdrawal_percent != null ? Number(p.withdrawal_percent) : null,
+          withdrawalFrequency: p.withdrawal_frequency,
+          hasPhoto: Boolean(p.photo_storage_path),
+          completedAt: p.completed_at,
+          updatedAt: p.updated_at,
+        })),
+      });
+    } catch (e) {
+      if (isMissingTableError(e)) {
+        return res.status(503).json({
+          message: 'Investor profile schema missing. Run backend/sql/migrations/20260627_portal_investor_profile.sql.',
+        });
+      }
+      return res.status(500).json({ message: e?.message || 'Failed to list investor profiles' });
+    }
+  });
+
+  app.get(
+    '/admin/api/portal-profiles/:accountId/photo',
+    adminAuthMiddleware,
+    requireSuperAdmin,
+    async (req, res) => {
+      try {
+        const profile = await getPortalInvestorProfile(req.params.accountId);
+        if (!profile?.photo_storage_path) return res.status(404).json({ message: 'No profile picture' });
+        const buf = await downloadKycImage(profile.photo_storage_path);
+        if (!buf) return res.status(404).json({ message: 'Profile picture unavailable' });
+        res.setHeader('Content-Type', profile.photo_storage_path.endsWith('.png') ? 'image/png' : 'image/jpeg');
+        res.setHeader('Cache-Control', 'private, max-age=300');
+        return res.send(buf);
+      } catch (e) {
+        return res.status(500).json({ message: e?.message || 'Failed to load photo' });
+      }
+    }
+  );
 
   app.get(
     '/admin/api/portal-chats/:accountId/messages',

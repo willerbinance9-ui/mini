@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
-const { getPortalAccountById } = require('../db');
+const { getPortalAccountById, touchPortalAccountLastSeen } = require('../db');
+
+const LAST_SEEN_THROTTLE_MS = 60_000;
 
 const PORTAL_JWT_PURPOSE = 'partner_portal';
 
@@ -32,6 +34,11 @@ function portalAuthMiddleware(req, res, next) {
       req.portalAccount = account;
       req.portalAccountId = account.id;
       req.partnerId = account.partner_id || null;
+
+      const lastSeen = account.last_seen_at ? new Date(account.last_seen_at).getTime() : 0;
+      if (Date.now() - lastSeen > LAST_SEEN_THROTTLE_MS) {
+        void touchPortalAccountLastSeen(account.id).catch(() => {});
+      }
       next();
     })
     .catch((e) => res.status(500).json({ message: e?.message || 'Auth failed' }));

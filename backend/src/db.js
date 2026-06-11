@@ -901,9 +901,29 @@ async function listPortalChatConversationsAdmin({ limit = 500 } = {}) {
 async function listPortalAccountsAdmin({ limit = 200 } = {}) {
   const { data, error } = await supabase
     .from('partner_portal_accounts')
-    .select('id, email, full_name, partner_id, created_at')
+    .select('id, email, full_name, partner_id, api_package, app_preference, last_seen_at, created_at')
     .order('created_at', { ascending: false })
     .limit(Math.min(500, Math.max(1, Number(limit) || 200)));
+  if (error && isMissingTableError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function touchPortalAccountLastSeen(portalAccountId) {
+  const { error } = await supabase
+    .from('partner_portal_accounts')
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq('id', portalAccountId);
+  if (error && !isMissingTableError(error) && error.code !== '42703') throw error;
+}
+
+async function listPortalInvestorProfilesAdmin({ limit = 100 } = {}) {
+  const { data, error } = await supabase
+    .from('partner_portal_investor_profiles')
+    .select('*, partner_portal_accounts(id, email, full_name, last_seen_at)')
+    .not('completed_at', 'is', null)
+    .order('updated_at', { ascending: false })
+    .limit(Math.min(200, Math.max(1, Number(limit) || 100)));
   if (error && isMissingTableError(error)) return [];
   if (error) throw error;
   return data || [];
@@ -5022,6 +5042,8 @@ module.exports = {
   countUnreadPortalMessages,
   listPortalChatConversationsAdmin,
   listPortalAccountsAdmin,
+  touchPortalAccountLastSeen,
+  listPortalInvestorProfilesAdmin,
   createPortalPackagePayment,
   getPortalPackagePaymentById,
   getLatestPortalPackagePayment,
