@@ -33,6 +33,7 @@ const { PARTNER_COMMISSION_RATE } = require('./platformRevenueService');
 const { normalizePhoneDigits, sendLoginOtp, verifyOtpCode } = require('./services/portalOtp');
 const { uploadKycImage, downloadKycImage } = require('./services/partnerKycStorage');
 const { reviewPartnerKyc } = require('./services/partnerKycAiReview');
+const { generateChatReply } = require('./services/aareChatAi');
 
 const SCHEMA_MSG =
   'Partner portal schema missing. Run backend/sql/migrations/20260624_partner_portal.sql and 20260625_partner_portal_kyc.sql in Supabase.';
@@ -669,12 +670,17 @@ function registerPartnerPortalRoutes(app) {
     }
   });
 
-  // Direct chat with the Aare team (superadmin). Fetching the thread marks admin messages as read.
+  // Direct chat: AarAi answers first; thread escalates to a human admin on request.
+  // Fetching the thread marks admin/AI messages as read.
   app.get('/v1/portal/messages', portalAuthMiddleware, async (req, res) => {
     try {
       const messages = await listPortalMessages(req.portalAccountId, { limit: req.query.limit });
       await markPortalMessagesRead(req.portalAccountId, 'admin');
-      return res.json({ messages: messages.map(toMessagePublic) });
+      await markPortalMessagesRead(req.portalAccountId, 'ai');
+      return res.json({
+        messages: messages.map(toMessagePublic),
+        humanRequested: Boolean(req.portalAccount.chat_human_requested_at),
+      });
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
       return res.status(500).json({ message: e?.message || 'Failed to load messages' });
@@ -683,7 +689,7 @@ function registerPartnerPortalRoutes(app) {
 
   app.get('/v1/portal/messages/unread', portalAuthMiddleware, async (req, res) => {
     try {
-      const unread = await countUnreadPortalMessages(req.portalAccountId, 'admin');
+      const unread = await countUnreadPortalMessages(req.portalAccountId, ['admin', 'ai']);
       return res.json({ unread });
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
@@ -697,15 +703,84 @@ function registerPartnerPortalRoutes(app) {
       if (!body) return res.status(400).json({ message: 'Message cannot be empty' });
       if (body.length > 4000) return res.status(400).json({ message: 'Message too long (max 4000 characters)' });
 
+      const account = req.portalAccount;
       const msg = await createPortalMessage({
         portalAccountId: req.portalAccountId,
         sender: 'partner',
         body,
       });
-      return res.status(201).json({ message: toMessagePublic(msg) });
+
+      // Human already handling this thread — no AI reply.
+      if (account.chat_human_requested_at) {
+        return res.status(201).json({ message: toMessagePublic(msg), humanRequested: true });
+      }
+
+      // AarAi answers using full site knowledge + this account's context.
+      const { application, partner, kyc } = await resolvePortalContext(account);
+      const thread = await listPortalMessages(req.portalAccountId, { limit: 12 });
+      const ai = await generateChatReply({
+        account,
+        context: {
+          kycStatus: kyc?.status || 'draft',
+          applicationStatus: application?.status || null,
+          apiPackage: account.api_package || null,
+          hasPartnerAccess: Boolean(partner && partner.status === 'active'),
+        },
+        messages: thread,
+      });
+
+      if (!ai) {
+        // AI unavailable (no key or API error) — hand the thread to a human so nobody is left waiting.
+        await updatePortalAccount(req.portalAccountId, { chat_human_requested_at: new Date().toISOString() });
+        const notice = await createPortalMessage({
+          portalAccountId: req.portalAccountId,
+          sender: 'ai',
+          body: 'Thanks for your message — connecting you to the Aare team. An admin will reply here shortly.',
+        });
+        return res.status(201).json({
+          message: toMessagePublic(msg),
+          aiReply: toMessagePublic(notice),
+          humanRequested: true,
+        });
+      }
+
+      const aiMsg = await createPortalMessage({
+        portalAccountId: req.portalAccountId,
+        sender: 'ai',
+        body: ai.reply,
+      });
+
+      if (ai.handoff) {
+        await updatePortalAccount(req.portalAccountId, { chat_human_requested_at: new Date().toISOString() });
+      }
+
+      return res.status(201).json({
+        message: toMessagePublic(msg),
+        aiReply: toMessagePublic(aiMsg),
+        humanRequested: ai.handoff,
+      });
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
       return res.status(500).json({ message: e?.message || 'Failed to send message' });
+    }
+  });
+
+  // Explicit "talk to a human" from the chat widget.
+  app.post('/v1/portal/messages/handoff', portalAuthMiddleware, async (req, res) => {
+    try {
+      if (!req.portalAccount.chat_human_requested_at) {
+        await updatePortalAccount(req.portalAccountId, { chat_human_requested_at: new Date().toISOString() });
+        await createPortalMessage({
+          portalAccountId: req.portalAccountId,
+          sender: 'ai',
+          body: 'You are now connected to the Aare team — an admin will reply here shortly.',
+        });
+      }
+      const messages = await listPortalMessages(req.portalAccountId, { limit: 100 });
+      return res.json({ messages: messages.map(toMessagePublic), humanRequested: true });
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
+      return res.status(500).json({ message: e?.message || 'Failed to connect you to the team' });
     }
   });
 

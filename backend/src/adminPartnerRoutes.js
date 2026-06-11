@@ -15,6 +15,7 @@ const {
   markPortalMessagesRead,
   listPortalChatConversationsAdmin,
   listPortalAccountsAdmin,
+  updatePortalAccount,
   isMissingTableError,
 } = require('./db');
 const { adminAuthMiddleware, requireSuperAdmin } = require('./middleware/adminAuth');
@@ -239,7 +240,12 @@ function registerAdminPartnerRoutes(app) {
         const messages = await listPortalMessages(account.id, { limit: req.query.limit });
         await markPortalMessagesRead(account.id, 'partner');
         return res.json({
-          account: { id: account.id, email: account.email, fullName: account.full_name },
+          account: {
+            id: account.id,
+            email: account.email,
+            fullName: account.full_name,
+            humanRequested: Boolean(account.chat_human_requested_at),
+          },
           messages,
         });
       } catch (e) {
@@ -272,6 +278,30 @@ function registerAdminPartnerRoutes(app) {
       } catch (e) {
         if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
         return res.status(500).json({ message: e?.message || 'Failed to send message' });
+      }
+    }
+  );
+
+  // Hand the thread back to AarAi after the admin resolves the issue.
+  app.post(
+    '/admin/api/portal-chats/:accountId/return-to-ai',
+    adminAuthMiddleware,
+    requireSuperAdmin,
+    async (req, res) => {
+      try {
+        const account = await getPortalAccountById(req.params.accountId);
+        if (!account) return res.status(404).json({ message: 'Portal account not found' });
+
+        await updatePortalAccount(account.id, { chat_human_requested_at: null });
+        await createPortalMessage({
+          portalAccountId: account.id,
+          sender: 'ai',
+          body: 'The Aare team has closed this conversation. I am back to help — ask me anything about the API or the platform.',
+        });
+        return res.json({ ok: true });
+      } catch (e) {
+        if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
+        return res.status(500).json({ message: e?.message || 'Failed to return thread to AI' });
       }
     }
   );

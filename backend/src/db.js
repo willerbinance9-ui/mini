@@ -634,13 +634,12 @@ async function updatePortalAccount(accountId, patch) {
   if (patch.phone_verified_at !== undefined) row.phone_verified_at = patch.phone_verified_at;
   if (patch.api_package !== undefined) row.api_package = patch.api_package;
   if (patch.api_package_selected_at !== undefined) row.api_package_selected_at = patch.api_package_selected_at;
+  if (patch.chat_human_requested_at !== undefined) row.chat_human_requested_at = patch.chat_human_requested_at;
   const { data, error } = await supabase
     .from('partner_portal_accounts')
     .update(row)
     .eq('id', accountId)
-    .select(
-      'id, email, full_name, phone, phone_country, country_of_residency, phone_verified_at, partner_id, application_id, created_at, updated_at'
-    )
+    .select('*')
     .single();
   if (error) throw error;
   return data;
@@ -855,11 +854,12 @@ async function markPortalMessagesRead(portalAccountId, fromSender) {
 }
 
 async function countUnreadPortalMessages(portalAccountId, fromSender) {
+  const senders = Array.isArray(fromSender) ? fromSender : [fromSender];
   const { count, error } = await supabase
     .from('partner_portal_messages')
     .select('id', { count: 'exact', head: true })
     .eq('portal_account_id', portalAccountId)
-    .eq('sender', fromSender)
+    .in('sender', senders)
     .is('read_at', null);
   if (error && isMissingTableError(error)) return 0;
   if (error) throw error;
@@ -870,7 +870,7 @@ async function countUnreadPortalMessages(portalAccountId, fromSender) {
 async function listPortalChatConversationsAdmin({ limit = 500 } = {}) {
   const { data, error } = await supabase
     .from('partner_portal_messages')
-    .select('*, partner_portal_accounts(id, email, full_name, partner_id)')
+    .select('*, partner_portal_accounts(id, email, full_name, partner_id, chat_human_requested_at)')
     .order('created_at', { ascending: false })
     .limit(Math.min(1000, Math.max(1, Number(limit) || 500)));
   if (error && isMissingTableError(error)) return [];
@@ -887,6 +887,7 @@ async function listPortalChatConversationsAdmin({ limit = 500 } = {}) {
         lastMessage: { sender: msg.sender, body: msg.body, createdAt: msg.created_at },
         unreadFromPartner: 0,
         messageCount: 0,
+        humanRequested: Boolean(msg.partner_portal_accounts?.chat_human_requested_at),
       };
       byAccount.set(acctId, conv);
     }

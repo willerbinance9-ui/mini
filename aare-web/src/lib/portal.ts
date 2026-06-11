@@ -331,14 +331,14 @@ export async function portalSubmitKyc() {
 
 export type PortalChatMessage = {
   id: string;
-  sender: "partner" | "admin";
+  sender: "partner" | "admin" | "ai";
   body: string;
   readAt: string | null;
   createdAt: string;
 };
 
 export async function portalGetMessages() {
-  return portalFetch<{ messages: PortalChatMessage[] }>("/v1/portal/messages");
+  return portalFetch<{ messages: PortalChatMessage[]; humanRequested: boolean }>("/v1/portal/messages");
 }
 
 export async function portalGetUnreadCount() {
@@ -346,10 +346,21 @@ export async function portalGetUnreadCount() {
 }
 
 export async function portalSendMessage(body: string) {
-  return portalFetch<{ message: PortalChatMessage }>("/v1/portal/messages", {
+  return portalFetch<{
+    message: PortalChatMessage;
+    aiReply?: PortalChatMessage;
+    humanRequested?: boolean;
+  }>("/v1/portal/messages", {
     method: "POST",
     body: JSON.stringify({ body }),
   });
+}
+
+export async function portalRequestHuman() {
+  return portalFetch<{ messages: PortalChatMessage[]; humanRequested: boolean }>(
+    "/v1/portal/messages/handoff",
+    { method: "POST", body: JSON.stringify({}) }
+  );
 }
 
 export const COUNTRY_OPTIONS = [

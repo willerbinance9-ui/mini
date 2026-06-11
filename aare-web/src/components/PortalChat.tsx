@@ -6,6 +6,7 @@ import {
   portalGetMessages,
   portalGetUnreadCount,
   portalSendMessage,
+  portalRequestHuman,
   type PortalChatMessage,
 } from "@/lib/portal";
 
@@ -37,6 +38,8 @@ export function PortalChat() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [humanRequested, setHumanRequested] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
 
@@ -44,6 +47,7 @@ export function PortalChat() {
     try {
       const res = await portalGetMessages();
       setMessages(res.messages);
+      setHumanRequested(res.humanRequested);
       setUnread(0);
       setError("");
       setLoaded(true);
@@ -92,21 +96,48 @@ export function PortalChat() {
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, open]);
+  }, [messages.length, open, sending]);
 
   async function send() {
     const body = draft.trim();
     if (!body || sending) return;
     setSending(true);
     setError("");
+    setDraft("");
+    // Optimistic bubble while AarAi thinks
+    const tempId = `tmp-${Date.now()}`;
+    setMessages((m) => [
+      ...m,
+      { id: tempId, sender: "partner", body, readAt: null, createdAt: new Date().toISOString() },
+    ]);
     try {
       const res = await portalSendMessage(body);
-      setMessages((m) => [...m, res.message]);
-      setDraft("");
+      setMessages((m) => {
+        const withoutTemp = m.filter((x) => x.id !== tempId);
+        return res.aiReply ? [...withoutTemp, res.message, res.aiReply] : [...withoutTemp, res.message];
+      });
+      if (res.humanRequested) setHumanRequested(true);
     } catch (e) {
+      setMessages((m) => m.filter((x) => x.id !== tempId));
+      setDraft(body);
       setError(friendlyChatError(e, "Failed to send"));
     } finally {
       setSending(false);
+    }
+  }
+
+  async function connectToHuman() {
+    if (connecting || humanRequested) return;
+    setConnecting(true);
+    setError("");
+    try {
+      const res = await portalRequestHuman();
+      setMessages(res.messages);
+      setHumanRequested(true);
+    } catch (e) {
+      setError(friendlyChatError(e, "Failed to connect you to the team"));
+    } finally {
+      setConnecting(false);
     }
   }
 
@@ -145,9 +176,29 @@ export function PortalChat() {
             transition={{ duration: 0.2 }}
             className="fixed bottom-24 right-5 z-40 flex h-[min(560px,70vh)] w-[min(380px,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-card-border bg-background shadow-2xl"
           >
-            <div className="border-b border-card-border bg-surface/60 px-5 py-4">
-              <p className="font-semibold">Aare team</p>
-              <p className="text-xs text-muted">Direct line to the admin team — replies land here.</p>
+            <div className="flex items-start justify-between gap-3 border-b border-card-border bg-surface/60 px-5 py-4">
+              <div>
+                <p className="font-semibold">{humanRequested ? "Aare team" : "AarAi"}</p>
+                <p className="text-xs text-muted">
+                  {humanRequested
+                    ? "You're connected to the admin team — replies land here."
+                    : "Instant answers about the API and platform."}
+                </p>
+              </div>
+              {!humanRequested ? (
+                <button
+                  type="button"
+                  onClick={() => void connectToHuman()}
+                  disabled={connecting}
+                  className="shrink-0 rounded-full border border-card-border px-3 py-1.5 text-xs text-muted transition hover:border-foreground hover:text-foreground disabled:opacity-50"
+                >
+                  {connecting ? "Connecting…" : "Talk to a human"}
+                </button>
+              ) : (
+                <span className="shrink-0 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-400">
+                  Human
+                </span>
+              )}
             </div>
 
             <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
@@ -155,7 +206,8 @@ export function PortalChat() {
                 <p className="text-center text-sm text-muted">Loading…</p>
               ) : messages.length === 0 && !error ? (
                 <p className="px-4 text-center text-sm text-muted">
-                  No messages yet. Ask us anything about your partnership, drops, or payouts.
+                  Hi! I&apos;m AarAi. Ask me anything about the API, packages, KYC, drops, or your partnership — or
+                  tap &quot;Talk to a human&quot; to reach the team directly.
                 </p>
               ) : (
                 messages.map((m) => (
@@ -173,13 +225,24 @@ export function PortalChat() {
                           m.sender === "partner" ? "text-background/60" : "text-muted"
                         }`}
                       >
-                        {m.sender === "admin" ? "Aare team · " : ""}
+                        {m.sender === "admin" ? "Aare team · " : m.sender === "ai" ? "AarAi · " : ""}
                         {fmtTime(m.createdAt)}
                       </p>
                     </div>
                   </div>
                 ))
               )}
+              {sending && !humanRequested ? (
+                <div className="flex justify-start">
+                  <div className="rounded-2xl rounded-bl-md border border-card-border bg-surface px-4 py-2.5">
+                    <span className="inline-flex gap-1">
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted [animation-delay:0ms]" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted [animation-delay:150ms]" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted [animation-delay:300ms]" />
+                    </span>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {error ? (
