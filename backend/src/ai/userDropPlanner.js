@@ -6,6 +6,7 @@ const {
   isEligible,
 } = require('../airfarmingDrops');
 const { hasLlmCredentials, aiModel, aiProvider, providerConfig, apiKeyForProvider } = require('./llmClient');
+const { WEEKLY_DROP_COUNT, DROPS_PER_DAY, WORK_DAYS } = require('../weeklyDropGrid');
 
 const INTERVAL_OPTIONS = [2, 3, 4, 5, 6, 8, 10, 12, 18, 24];
 
@@ -38,6 +39,64 @@ function distributeProfits(dropCount, targetTotalUsd) {
     shares[shares.length - 1] = roundUsd(shares[shares.length - 1] + diff);
   }
   return shares;
+}
+
+/** Weekly plan: random day totals (some days much higher than others), then split each day across 4 drops. */
+function distributeWeeklyProfits(targetTotalUsd) {
+  const target = roundUsd(targetTotalUsd);
+  if (target <= 0) return [];
+
+  const dayWeights = [];
+  for (let d = 0; d < WORK_DAYS; d += 1) {
+    dayWeights.push(0.08 + Math.random() * 2.42);
+  }
+  const dayWeightSum = dayWeights.reduce((a, b) => a + b, 0);
+  const dayBudgets = dayWeights.map((w) => roundUsd((target * w) / dayWeightSum));
+
+  const shares = [];
+  for (let d = 0; d < WORK_DAYS; d += 1) {
+    const dayTotal = dayBudgets[d];
+    const slotWeights = [];
+    for (let s = 0; s < DROPS_PER_DAY; s += 1) {
+      slotWeights.push(0.35 + Math.random() * 1.35);
+    }
+    const slotWeightSum = slotWeights.reduce((a, b) => a + b, 0);
+    const slotShares = slotWeights.map((w) => roundUsd((dayTotal * w) / slotWeightSum));
+    let slotSum = roundUsd(slotShares.reduce((a, b) => a + b, 0));
+    const dayDiff = roundUsd(dayTotal - slotSum);
+    if (Math.abs(dayDiff) >= 0.01 && slotShares.length) {
+      slotShares[slotShares.length - 1] = roundUsd(slotShares[slotShares.length - 1] + dayDiff);
+      slotSum = roundUsd(slotShares.reduce((a, b) => a + b, 0));
+    }
+    shares.push(...slotShares);
+  }
+
+  let sum = roundUsd(shares.reduce((a, b) => a + b, 0));
+  const diff = roundUsd(target - sum);
+  if (Math.abs(diff) >= 0.01 && shares.length) {
+    shares[shares.length - 1] = roundUsd(shares[shares.length - 1] + diff);
+    sum = roundUsd(shares.reduce((a, b) => a + b, 0));
+  }
+
+  return shares;
+}
+
+function profitSharesForPlan(ctx) {
+  if (ctx.dropCount === WEEKLY_DROP_COUNT) {
+    return distributeWeeklyProfits(ctx.targetTotalUsd);
+  }
+  return distributeProfits(ctx.dropCount, ctx.targetTotalUsd);
+}
+
+function weeklyDayProfitSummary(shares) {
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  const totals = [];
+  for (let d = 0; d < WORK_DAYS; d += 1) {
+    const start = d * DROPS_PER_DAY;
+    const slice = shares.slice(start, start + DROPS_PER_DAY);
+    totals.push(roundUsd(slice.reduce((s, n) => s + n, 0)));
+  }
+  return totals.map((usd, i) => `${dayNames[i]} ${usd}`).join(' · ');
 }
 
 async function bandWindowForSlot(userId, weekStart, slot, balance) {
@@ -112,7 +171,7 @@ async function buildItemFromShare(ctx, slot, profitShare, caps, overrides = {}) 
 }
 
 async function buildVariedItems(ctx, rawItems, caps) {
-  const profitShares = distributeProfits(ctx.dropCount, ctx.targetTotalUsd);
+  const profitShares = profitSharesForPlan(ctx);
   const items = [];
 
   for (let i = 0; i < ctx.dropCount; i += 1) {
@@ -172,11 +231,14 @@ async function runDeterministicUserDropPlan(ctx) {
   const items = await buildVariedItems(ctx, rawItems, caps);
   const totalProjected = roundUsd(items.reduce((s, it) => s + it.projectedProfit, 0));
   const tierSummary = [...new Set(items.map((it) => it.bandIndex))].join(', ');
+  const daySummary =
+    ctx.dropCount === WEEKLY_DROP_COUNT
+      ? ` · days ${weeklyDayProfitSummary(items.map((it) => it.projectedProfit))}`
+      : '';
   return {
     plannerMode: 'deterministic',
     planSummary:
-      `${ctx.dropCount} drops · ${totalProjected} USD projected · tiers ${tierSummary} · ` +
-      `${items.map((it) => it.intervalHours + 'h').join(', ')} spacing`,
+      `${ctx.dropCount} drops · ${totalProjected} USD projected · tiers ${tierSummary}${daySummary}`,
     items,
     totalProjectedUsd: totalProjected,
   };
@@ -246,6 +308,7 @@ Rules:
 - Each projectedProfitUsd must be <= maxProfitPerDrop
 - percent should match projectedProfitUsd relative to referenceBalance and the tier window
 - intervalHours: hours until the NEXT drop (first = hours from now); use different values per drop (2–24h)
+- When dropCount is 20, plan Mon–Fri with 4 drops per day; make some weekdays much higher profit than others (not equal per day)
 - Do NOT use identical projectedProfitUsd or bandIndex for every drop unless dropCount is 1`;
 
 async function runAiUserDropPlan(ctx, options = {}) {
@@ -301,8 +364,8 @@ async function suggestUserDropPlan({
   const n = Number(dropCount);
   const target = roundUsd(targetTotalUsd);
   const bal = roundUsd(balance);
-  if (!Number.isInteger(n) || n < 1 || n > 12) {
-    return { ok: false, error: 'dropCount must be 1–12' };
+  if (!Number.isInteger(n) || n < 1 || n > 20) {
+    return { ok: false, error: 'dropCount must be 1–20' };
   }
   if (target < 0) return { ok: false, error: 'targetTotalUsd must be non-negative' };
   if (bal <= 0) return { ok: false, error: 'User needs a positive airfarming balance' };

@@ -301,7 +301,7 @@ export function AirfarmingTradeScreen() {
             </Animated.View>
 
             <Card>
-              <Text style={styles.section}>Upcoming drops</Text>
+              <Text style={styles.section}>Next drop</Text>
               <UpcomingDropsList drops={upcomingDrops} />
             </Card>
 
@@ -395,10 +395,6 @@ export function AirfarmingTradeScreen() {
                     hours before each drop. Auto-fund may adjust live balance before settlement but cannot change a late
                     snapshot. Not financial advice.
                   </Text>
-                </CollapsibleNotice>
-
-                <CollapsibleNotice noticeId='week' title='Week summary' storageKeyPrefix={noticeDismissPrefix}>
-                  <Text style={styles.meta}>Week {status.weekStart} (UTC). Drops every 2–5 hours.</Text>
                 </CollapsibleNotice>
 
                 <CollapsibleNotice noticeId='history' title='Drop history' storageKeyPrefix={noticeDismissPrefix}>

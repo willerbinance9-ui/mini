@@ -12,6 +12,13 @@ const {
 const { mondayUtcYmd } = require('./ai/applyPlan');
 const { suggestUserDropPlan } = require('./ai/userDropPlanner');
 const { isDropPausedForUser } = require('./airfarmingPause');
+const {
+  WEEKLY_DROP_COUNT,
+  isWeeklyDropPlan,
+  weeklyDropDueTimes,
+  weeklyIntervalHours,
+  weeklySlotLabel,
+} = require('./weeklyDropGrid');
 
 function ymdToUtcMs(ymd) {
   const [y, m, d] = ymd.split('-').map(Number);
@@ -79,6 +86,11 @@ async function aiSuggestUserDropSchedule(userId, { weekStart, dropCount, targetT
   });
   if (!suggestion.ok) return suggestion;
 
+  const items =
+    Number(dropCount) === WEEKLY_DROP_COUNT
+      ? enrichWeeklyPlanItems(suggestion.items, ws)
+      : suggestion.items;
+
   const row = await upsertUserDropSchedule({
     userId,
     weekStart: ws,
@@ -88,15 +100,25 @@ async function aiSuggestUserDropSchedule(userId, { weekStart, dropCount, targetT
     status: 'draft',
     planSummary: suggestion.planSummary,
     plannerMode: suggestion.plannerMode,
-    items: suggestion.items,
+    items,
   });
 
   return {
     ok: true,
-    schedule: userDropScheduleRowToApi(row),
+    schedule: userDropScheduleRowToApi({ ...row, items }),
     totalProjectedUsd: suggestion.totalProjectedUsd,
     plannerMode: suggestion.plannerMode,
   };
+}
+
+function enrichWeeklyPlanItems(items, weekStart) {
+  if (!Array.isArray(items) || items.length !== WEEKLY_DROP_COUNT) return items;
+  const nowMs = Date.now();
+  return items.map((it, idx) => ({
+    ...it,
+    dayLabel: weeklySlotLabel(idx),
+    intervalHours: weeklyIntervalHours(idx, weekStart, nowMs),
+  }));
 }
 
 async function applyUserDropSchedule(userId, { weekStart } = {}) {
@@ -117,16 +139,31 @@ async function applyUserDropSchedule(userId, { weekStart } = {}) {
 
   const items = row.items;
   const weekEnd = weekEndMs(ws);
-  let dueMs = Date.now() + Number(items[0].intervalHours || 2) * 3600 * 1000;
-  if (dueMs >= weekEnd) {
-    return { ok: false, error: 'First drop falls outside the current week. Reduce intervals or drop count.' };
-  }
+  const weeklyPlan = isWeeklyDropPlan(row.drop_count);
+  let dueTimes;
 
-  for (let i = 1; i < items.length; i += 1) {
-    dueMs += Number(items[i].intervalHours || 2) * 3600 * 1000;
-    if (dueMs >= weekEnd) {
-      return { ok: false, error: 'Drop schedule exceeds the current week. Adjust intervals or drop count.' };
+  if (weeklyPlan) {
+    if (items.length !== WEEKLY_DROP_COUNT) {
+      return { ok: false, error: `Weekly plan needs ${WEEKLY_DROP_COUNT} drops (4/day × 5 weekdays). Run AI suggest first.` };
     }
+    dueTimes = weeklyDropDueTimes(ws);
+    const lastDue = dueTimes[dueTimes.length - 1];
+    if (lastDue >= weekEnd) {
+      return { ok: false, error: 'Weekly drop schedule exceeds the current week.' };
+    }
+  } else {
+    let dueMs = Date.now() + Number(items[0].intervalHours || 2) * 3600 * 1000;
+    if (dueMs >= weekEnd) {
+      return { ok: false, error: 'First drop falls outside the current week. Reduce intervals or drop count.' };
+    }
+
+    for (let i = 1; i < items.length; i += 1) {
+      dueMs += Number(items[i].intervalHours || 2) * 3600 * 1000;
+      if (dueMs >= weekEnd) {
+        return { ok: false, error: 'Drop schedule exceeds the current week. Adjust intervals or drop count.' };
+      }
+    }
+    dueTimes = null;
   }
 
   await deleteScheduledAirfarmingDropsForUserWeek(userId, ws);
@@ -134,10 +171,13 @@ async function applyUserDropSchedule(userId, { weekStart } = {}) {
   let startIndex = maxIdx + 1;
   if (startIndex < 0) startIndex = 0;
 
-  dueMs = Date.now() + Number(items[0].intervalHours || 2) * 3600 * 1000;
+  let dueMs = weeklyPlan
+    ? dueTimes[0]
+    : Date.now() + Number(items[0].intervalHours || 2) * 3600 * 1000;
   const created = [];
   for (let i = 0; i < items.length; i += 1) {
-    if (i > 0) dueMs += Number(items[i].intervalHours || 2) * 3600 * 1000;
+    if (weeklyPlan) dueMs = dueTimes[i];
+    else if (i > 0) dueMs += Number(items[i].intervalHours || 2) * 3600 * 1000;
     const it = items[i];
     const drop = await insertAirfarmingDrop({
       id: crypto.randomUUID(),
@@ -178,9 +218,39 @@ async function applyUserDropSchedule(userId, { weekStart } = {}) {
   };
 }
 
+async function setUserWeeklyDropBudget(userId, { weekStart, budgetUsd, forceDeterministic, apply }) {
+  const ws = weekStart || mondayUtcYmd();
+  const targetTotalUsd = Number(budgetUsd);
+  if (!Number.isFinite(targetTotalUsd) || targetTotalUsd <= 0) {
+    return { ok: false, error: 'Weekly budget must be greater than zero.' };
+  }
+
+  const suggestion = await aiSuggestUserDropSchedule(userId, {
+    weekStart: ws,
+    dropCount: WEEKLY_DROP_COUNT,
+    targetTotalUsd,
+    forceDeterministic: forceDeterministic === true,
+  });
+  if (!suggestion.ok) return suggestion;
+  if (!apply) return suggestion;
+
+  const applied = await applyUserDropSchedule(userId, { weekStart: ws });
+  if (!applied.ok) return applied;
+
+  return {
+    ok: true,
+    schedule: applied.schedule,
+    dropsCreated: applied.dropsCreated,
+    totalProjectedUsd: suggestion.totalProjectedUsd,
+    plannerMode: suggestion.plannerMode,
+  };
+}
+
 module.exports = {
   getUserDropScheduleView,
   saveUserDropScheduleDraft,
   aiSuggestUserDropSchedule,
   applyUserDropSchedule,
+  setUserWeeklyDropBudget,
+  WEEKLY_DROP_COUNT,
 };

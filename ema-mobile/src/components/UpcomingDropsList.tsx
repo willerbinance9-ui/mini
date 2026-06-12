@@ -30,12 +30,11 @@ export function UpcomingDropsList({ drops }: UpcomingDropsListProps) {
     return <Text style={styles.empty}>No upcoming drops scheduled for this week yet.</Text>;
   }
 
-  const visible = drops.slice(0, 2);
-  const remaining = Math.max(0, drops.length - visible.length);
+  const nextDrop = drops[0];
 
   return (
     <View style={styles.list}>
-      {visible.map((drop, index) => {
+      {[nextDrop].map((drop, index) => {
         const key = drop.id || drop.previewKey || `drop-${index}`;
         return (
           <View key={key} style={styles.row}>
@@ -50,11 +49,6 @@ export function UpcomingDropsList({ drops }: UpcomingDropsListProps) {
           </View>
         );
       })}
-      {remaining > 0 ? (
-        <Text style={styles.moreText}>
-          {remaining} more {remaining === 1 ? 'drop is' : 'drops are'} coming
-        </Text>
-      ) : null}
     </View>
   );
 }
@@ -73,5 +67,4 @@ const styles = StyleSheet.create({
   due: { color: palette.textSecondary, fontSize: 12, marginBottom: 6 },
   range: { color: palette.textPrimary, fontSize: 13, fontWeight: '600' },
   countdown: { color: palette.textSecondary, fontSize: 12, marginTop: 6 },
-  moreText: { color: palette.primary, fontSize: 12, fontWeight: '700', marginTop: 2 },
 });

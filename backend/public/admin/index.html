@@ -817,9 +817,6 @@
         <button type="button" class="nav-item" data-tab="withdrawals">
           <span class="nav-icon">💸</span> Withdrawals
         </button>
-        <button type="button" class="nav-item superadmin-only" data-tab="aiearnings">
-          <span class="nav-icon">🤖</span> AI earnings
-        </button>
         <button type="button" class="nav-item superadmin-only" data-tab="tiers">
           <span class="nav-icon">📊</span> Drop tiers
         </button>
@@ -947,50 +944,13 @@
                 </div>
               </section>
 
-              <section id="directDropSection" class="card admin-section hidden">
-                <h3 class="admin-section-title">Send direct drop</h3>
-                <p class="admin-section-desc">Superadmin only. Schedule one custom drop directly without creating a plan.</p>
-                <div class="form-grid-2">
-                  <div>
-                    <label>Delay value</label>
-                    <input id="directDropDelayValue" type="number" min="0" step="1" value="1" />
-                  </div>
-                  <div>
-                    <label>Delay unit</label>
-                    <select id="directDropDelayUnit">
-                      <option value="minutes">Minutes</option>
-                      <option value="hours" selected>Hours</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label>Drop percent (%)</label>
-                    <input id="directDropPercent" type="number" min="0.01" step="0.01" placeholder="12.5" />
-                  </div>
-                  <div>
-                    <label>Min balance required (USD)</label>
-                    <input id="directDropMinBalance" type="number" min="0" step="0.01" placeholder="100" />
-                  </div>
-                  <div>
-                    <label>Max balance required (USD)</label>
-                    <input id="directDropMaxBalance" type="number" min="0" step="0.01" placeholder="145" />
-                  </div>
-                </div>
-                <div class="btn-toolbar">
-                  <button type="button" class="btn-primary" id="sendDirectDropBtn">Schedule direct drop</button>
-                </div>
-              </section>
-
               <section class="card admin-section superadmin-only">
-                <h3 class="admin-section-title">Custom drop plan (AI)</h3>
-                <p class="admin-section-desc">Set how many upcoming drops this user gets and the combined profit target. AI suggests percent and hours between each drop.</p>
+                <h3 class="admin-section-title">Weekly drop budget</h3>
+                <p class="admin-section-desc">Set the user&apos;s total profit budget for the week. AI splits it across <strong>20 drops</strong> — 4 per weekday (Mon–Fri UTC) at 08:00, 11:00, 14:00, and 17:00.</p>
                 <div class="form-grid-2">
                   <div>
-                    <label>Upcoming drops</label>
-                    <input id="userDropPlanCount" type="number" min="1" max="12" step="1" value="3" />
-                  </div>
-                  <div>
-                    <label>Target total profit (USD)</label>
-                    <input id="userDropPlanTarget" type="number" min="0" step="0.01" placeholder="500.00" />
+                    <label>Weekly budget (USD)</label>
+                    <input id="userDropPlanTarget" type="number" min="0.01" step="0.01" placeholder="500.00" />
                   </div>
                   <div>
                     <label>Week (UTC Mon)</label>
@@ -999,17 +959,17 @@
                 </div>
                 <p id="userDropPlanMeta" class="hint" style="margin-bottom:0;"></p>
                 <div class="btn-toolbar">
-                  <button type="button" class="btn-primary" id="userDropPlanAiBtn">AI suggest</button>
-                  <button type="button" class="btn-warn" id="userDropPlanApplyBtn">Apply to schedule</button>
+                  <button type="button" class="btn-primary" id="userDropPlanAiBtn">Preview week plan</button>
+                  <button type="button" class="btn-warn" id="userDropPlanApplyBtn">Generate &amp; schedule week</button>
                 </div>
                 <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin-top:8px;font-size:0.85rem;color:var(--muted);">
                   <input id="userDropFastAi" type="checkbox" checked style="width:auto;margin:0;" />
-                  Fast suggest (no AI, recommended)
+                  Fast planner (no AI, recommended)
                 </label>
                 <p id="userDropPlanSummary" class="hint" style="margin-top:12px;"></p>
                 <div class="table-scroll">
                   <table>
-                    <thead><tr><th>#</th><th>%</th><th>Interval (h)</th><th>Projected</th><th>Tier window</th></tr></thead>
+                    <thead><tr><th>#</th><th>Day</th><th>%</th><th>Projected</th><th>Tier window</th></tr></thead>
                     <tbody id="userDropPlanRows"></tbody>
                   </table>
                 </div>
@@ -1782,101 +1742,6 @@
           </div>
         </div>
 
-        <div id="panelAiEarnings" class="hidden superadmin-only">
-          <div class="card">
-            <h3 style="margin:0 0 8px;font-size:1rem;">Daily AI earnings planner</h3>
-            <p class="hint" style="margin-bottom:12px;">
-              Set today’s payout budget (UTC). Run the planner to assign per-user drop tiers and windows.
-              Under budget → plan goes <strong>active</strong> automatically; over budget → <strong>pending approval</strong>.
-            </p>
-            <div class="row" style="align-items:flex-end;margin-bottom:12px;">
-              <div>
-                <label>Plan date (UTC)</label>
-                <input id="aiPlanDate" type="date" />
-              </div>
-              <div>
-                <label>Today’s budget (USD)</label>
-                <input id="aiBudgetUsd" type="number" step="0.01" min="0" placeholder="5000" />
-              </div>
-              <div>
-                <label>Market regime</label>
-                <select id="aiRegime">
-                  <option value="calm">Calm</option>
-                  <option value="normal" selected>Normal</option>
-                  <option value="volatile">Volatile</option>
-                  <option value="risk_off">Risk off</option>
-                </select>
-              </div>
-              <div style="flex:2;">
-                <label>Market notes</label>
-                <input id="aiMarketNotes" type="text" placeholder="Optional context for the planner" />
-              </div>
-            </div>
-            <div class="row" style="margin-bottom:12px;">
-              <button type="button" class="btn-primary" id="aiSaveBudgetBtn" style="width:auto;">Save budget</button>
-              <button type="button" class="btn-ghost" id="aiFetchMarketBtn" style="width:auto;">Default market snapshot</button>
-              <button type="button" class="btn-primary" id="aiRunPlannerBtn" style="width:auto;">Run planner</button>
-              <button type="button" class="btn-ghost" id="aiApprovePlanBtn" style="width:auto;" disabled>Approve plan</button>
-            </div>
-            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin-bottom:12px;font-size:0.85rem;color:var(--muted);">
-              <input id="aiFastPlanner" type="checkbox" checked style="width:auto;margin:0;" />
-              Fast planner (no AI, recommended — avoids server timeouts)
-            </label>
-            <p id="aiPlanSummary" class="hint"></p>
-            <p id="aiPlanOk" class="hint hidden" style="color:var(--ok);"></p>
-            <p id="aiPlanErr" class="err hidden"></p>
-          </div>
-          <div class="card">
-            <h3 style="margin:0 0 8px;font-size:1rem;">Plan history</h3>
-            <p class="hint" style="margin-bottom:10px;">Click a date to load that plan. Status shows whether the day&apos;s budget was approved and how much was paid out.</p>
-            <div style="overflow-x:auto;max-height:200px;margin-bottom:16px;">
-              <table class="tier-ref-table">
-                <thead>
-                  <tr>
-                    <th>Date (UTC)</th>
-                    <th>Status</th>
-                    <th>Budget</th>
-                    <th>Projected</th>
-                    <th>Spent</th>
-                    <th>Left</th>
-                  </tr>
-                </thead>
-                <tbody id="aiPlansListRows"></tbody>
-              </table>
-            </div>
-          </div>
-          <div class="card">
-            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:8px;">
-              <span id="aiStatusPill" class="badge">—</span>
-              <span class="hint" id="aiBudgetStats">Budget — · Projected — · Spent —</span>
-            </div>
-            <p id="aiServeSummary" class="hint" style="margin-bottom:12px;"></p>
-            <div id="aiPlanLoading" class="loading hidden">Loading plan…</div>
-            <div style="overflow-x:auto;">
-              <table>
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th>AF balance</th>
-                    <th>Tier · %</th>
-                    <th>Window</th>
-                    <th>Projected</th>
-                    <th>Potential now</th>
-                    <th>Drops (plan day)</th>
-                    <th>Week</th>
-                    <th>Service status</th>
-                  </tr>
-                </thead>
-                <tbody id="aiAllocRows"></tbody>
-              </table>
-            </div>
-            <p class="hint" style="margin-top:10px;">
-              <strong>Projected</strong> = estimate at plan time. <strong>Potential now</strong> = profit if balance is in window today.
-              <strong>Drops (plan day)</strong> = due or paid on this UTC date. <strong>Served</strong> = paid drop on plan date with profit credited.
-            </p>
-          </div>
-        </div>
-
         <div id="panelTiers" class="hidden superadmin-only">
           <div class="card">
             <h3 style="margin:0 0 8px;font-size:1rem;">What each drop tier means</h3>
@@ -2054,7 +1919,6 @@
       users: 'Users',
       support: 'Support tickets',
       withdrawals: 'Withdrawals',
-      aiearnings: 'AI earnings',
       tiers: 'Drop tiers',
       drops: 'Airfarming drops',
       vipfarmers: 'VIP Farmers',
@@ -2153,11 +2017,9 @@
       });
       const wallets = document.getElementById('walletsSection');
       if (wallets) wallets.classList.toggle('hidden', !isSuper);
-      const directDrop = document.getElementById('directDropSection');
-      if (directDrop) directDrop.classList.toggle('hidden', !isSuper);
       const danger = document.getElementById('dangerUserSection');
       if (danger) danger.classList.toggle('hidden', !isSuper);
-      if (!isSuper && ['drops', 'aiearnings', 'tiers', 'livetrading', 'ghost'].includes(activeTab)) setTab('users');
+      if (!isSuper && ['drops', 'tiers', 'livetrading', 'ghost'].includes(activeTab)) setTab('users');
     }
 
     function setAdminSession(me) {
@@ -2242,7 +2104,6 @@
       document.getElementById('panelUsers').classList.toggle('hidden', tab !== 'users');
       document.getElementById('panelSupport').classList.toggle('hidden', tab !== 'support');
       document.getElementById('panelWithdrawals').classList.toggle('hidden', tab !== 'withdrawals');
-      document.getElementById('panelAiEarnings').classList.toggle('hidden', tab !== 'aiearnings');
       document.getElementById('panelTiers').classList.toggle('hidden', tab !== 'tiers');
       document.getElementById('panelDrops').classList.toggle('hidden', tab !== 'drops');
       document.getElementById('panelVipFarmers').classList.toggle('hidden', tab !== 'vipfarmers');
@@ -2259,7 +2120,6 @@
         if (tab === 'users') showUsersErr(e);
         else if (tab === 'support') showTicketsErr(e);
         else if (tab === 'withdrawals') showWithdrawalsErr(e);
-        else if (tab === 'aiearnings') showAiPlanErr(e);
         else if (tab === 'tiers') showTiersErr(e);
         else if (tab === 'drops') showDropsErr(e);
         else if (tab === 'vipfarmers') showVipErr(e);
@@ -2750,11 +2610,12 @@
       return utc.toISOString().slice(0, 10);
     }
 
+    const WEEKLY_DROP_COUNT = 20;
+
     function readUserDropPlanInputs() {
-      const dropCount = Number(document.getElementById('userDropPlanCount').value);
-      const targetTotalUsd = Number(document.getElementById('userDropPlanTarget').value);
+      const budgetUsd = Number(document.getElementById('userDropPlanTarget').value);
       const weekStart = document.getElementById('userDropPlanWeek').value || mondayUtcYmdClient();
-      return { dropCount, targetTotalUsd, weekStart };
+      return { budgetUsd, weekStart };
     }
 
     function renderUserDropPlan() {
@@ -2767,11 +2628,11 @@
       const view = userDropPlanView;
       const bal = view?.airfarmingBalance ?? viewingUserDetail?.airfarmingBalance ?? 0;
       metaEl.textContent = 'Airfarming balance ' + fmtMoney(bal) +
-        (view?.weekStart ? ' · Week ' + view.weekStart : '');
+        (view?.weekStart ? ' · Week ' + view.weekStart : '') +
+        ' · 20 drops (4/day Mon–Fri)';
 
       const schedule = view?.schedule;
       if (schedule) {
-        document.getElementById('userDropPlanCount').value = schedule.dropCount;
         document.getElementById('userDropPlanTarget').value = schedule.targetTotalUsd;
         if (schedule.weekStart) document.getElementById('userDropPlanWeek').value = schedule.weekStart;
       } else if (!document.getElementById('userDropPlanWeek').value) {
@@ -2791,20 +2652,27 @@
 
       const items = schedule?.items || [];
       if (!items.length) {
-        rowsEl.innerHTML = '<tr><td colspan="5" style="color:var(--muted);">Run AI suggest to preview drops</td></tr>';
+        rowsEl.innerHTML = '<tr><td colspan="5" style="color:var(--muted);">Preview week plan to see 20 drops</td></tr>';
       } else {
         let total = 0;
+        const dayTotals = {};
         rowsEl.innerHTML = items.map((it, idx) => {
           total += Number(it.projectedProfit || 0);
-          return '<tr><td>' + (idx + 1) + '</td><td>' + Number(it.percent).toFixed(2) + '%</td>' +
-            '<td>' + Number(it.intervalHours) + 'h</td><td>' + fmtMoney(it.projectedProfit || 0) + '</td>' +
+          const dayLabel = it.dayLabel || ('Drop ' + (idx + 1));
+          const dayKey = dayLabel.split(' ')[0] || 'Day';
+          dayTotals[dayKey] = (dayTotals[dayKey] || 0) + Number(it.projectedProfit || 0);
+          return '<tr><td>' + (idx + 1) + '</td><td>' + escapeHtml(dayLabel) + '</td><td>' + Number(it.percent).toFixed(2) + '%</td>' +
+            '<td>' + fmtMoney(it.projectedProfit || 0) + '</td>' +
             '<td>' + escapeHtml(formatDropTierWindow(it)) + '</td></tr>';
         }).join('') +
+          '<tr><td colspan="5" style="color:var(--muted);font-size:0.8rem;">' +
+          Object.keys(dayTotals).map((d) => d + ' ' + fmtMoney(dayTotals[d])).join(' · ') +
+          '</td></tr>' +
           '<tr><td colspan="3"><strong>Total projected</strong></td><td colspan="2"><strong>' + fmtMoney(total) + '</strong></td></tr>';
       }
 
       if (applyBtn) {
-        applyBtn.disabled = !items.length || schedule?.status === 'applied';
+        applyBtn.disabled = !Number(document.getElementById('userDropPlanTarget').value) > 0;
       }
     }
 
@@ -2820,23 +2688,20 @@
       renderUserDropPlan();
     }
 
-    async function aiSuggestUserDropPlan() {
+    async function runWeeklyDropBudget(apply) {
       clearUserPageAlert();
-      const { dropCount, targetTotalUsd, weekStart } = readUserDropPlanInputs();
-      if (!Number.isInteger(dropCount) || dropCount < 1 || dropCount > 12) {
-        showUserPageAlert('Drop count must be 1–12', 'error');
+      const { budgetUsd, weekStart } = readUserDropPlanInputs();
+      if (!Number.isFinite(budgetUsd) || budgetUsd <= 0) {
+        showUserPageAlert('Enter a weekly budget greater than zero.', 'error');
         return;
       }
-      if (!Number.isFinite(targetTotalUsd) || targetTotalUsd < 0) {
-        showUserPageAlert('Enter a valid target total', 'error');
-        return;
-      }
+      if (apply && !confirm('Schedule ' + WEEKLY_DROP_COUNT + ' drops for week ' + weekStart + ' with budget ' + fmtMoney(budgetUsd) + '?')) return;
       try {
         const deterministic = document.getElementById('userDropFastAi')?.checked !== false;
-        const data = await api('/admin/api/users/' + viewingUserId + '/drop-schedule/ai-suggest', {
+        const data = await api('/admin/api/users/' + viewingUserId + '/weekly-drop-budget', {
           method: 'POST',
           timeoutMs: 120000,
-          body: JSON.stringify({ dropCount, targetTotalUsd, weekStart, deterministic }),
+          body: JSON.stringify({ budgetUsd, weekStart, deterministic, apply }),
         });
         userDropPlanView = {
           weekStart: data.schedule.weekStart,
@@ -2844,31 +2709,27 @@
           schedule: data.schedule,
         };
         renderUserDropPlan();
-        showUserPageAlert('AI drop plan ready. Review the table, then Apply to schedule.', 'success');
+        if (apply) {
+          const d = await api('/admin/api/users/' + viewingUserId);
+          renderUserDetail(d);
+          showUserPageAlert(
+            'Weekly plan scheduled — ' + (data.dropsCreated || WEEKLY_DROP_COUNT) + ' drops, ' + fmtMoney(data.totalProjectedUsd || budgetUsd) + ' projected.',
+            'success'
+          );
+        } else {
+          showUserPageAlert('Week plan ready. Review the table, then Generate & schedule week.', 'success');
+        }
       } catch (e) {
         showUserPageAlert(e.message, 'error');
       }
     }
 
+    async function aiSuggestUserDropPlan() {
+      await runWeeklyDropBudget(false);
+    }
+
     async function applyUserDropPlan() {
-      clearUserPageAlert();
-      const { weekStart } = readUserDropPlanInputs();
-      if (!confirm('Replace this user\'s scheduled drops for week ' + weekStart + ' with this plan?')) return;
-      try {
-        const res = await api('/admin/api/users/' + viewingUserId + '/drop-schedule/apply', {
-          method: 'POST',
-          body: JSON.stringify({ weekStart }),
-        });
-        const d = await api('/admin/api/users/' + viewingUserId);
-        renderUserDetail(d);
-        await loadUserDropPlan(viewingUserId);
-        showUserPageAlert(
-          'Drop plan applied' + (res.dropsCreated ? ' (' + res.dropsCreated + ' scheduled).' : '.'),
-          'success'
-        );
-      } catch (e) {
-        showUserPageAlert(e.message, 'error');
-      }
+      await runWeeklyDropBudget(true);
     }
 
     function updatePauseButton(af) {
@@ -3060,53 +2921,6 @@
           u.airfarmingBalance = d.airfarmingBalance;
         }
         renderUsersTable();
-      } catch (e) {
-        showUserPageAlert(e.message, 'error');
-      }
-    }
-
-    async function sendDirectDrop() {
-      clearUserPageAlert();
-      if (adminRole !== 'superadmin') {
-        showUserPageAlert('Superadmin login required to send direct drops.', 'error');
-        return;
-      }
-      const delayValue = Number(document.getElementById('directDropDelayValue').value);
-      const delayUnit = document.getElementById('directDropDelayUnit').value;
-      const percent = Number(document.getElementById('directDropPercent').value);
-      const minBalance = Number(document.getElementById('directDropMinBalance').value);
-      const maxBalance = Number(document.getElementById('directDropMaxBalance').value);
-
-      if (!Number.isFinite(delayValue) || delayValue < 0) {
-        showUserPageAlert('Delay value must be 0 or greater.', 'error');
-        return;
-      }
-      if (!Number.isFinite(percent) || percent <= 0) {
-        showUserPageAlert('Percent must be greater than 0.', 'error');
-        return;
-      }
-      if (!Number.isFinite(minBalance) || minBalance < 0 || !Number.isFinite(maxBalance) || maxBalance < 0) {
-        showUserPageAlert('Balance window must be valid non-negative numbers.', 'error');
-        return;
-      }
-      if (maxBalance < minBalance) {
-        showUserPageAlert('Max balance must be greater than or equal to min balance.', 'error');
-        return;
-      }
-
-      const delayMinutes = delayUnit === 'hours' ? delayValue * 60 : delayValue;
-      try {
-        const data = await api('/admin/api/users/' + viewingUserId + '/drops/direct', {
-          method: 'POST',
-          body: JSON.stringify({ delayMinutes, percent, minBalance, maxBalance }),
-        });
-        const drop = data.drop;
-        showUserPageAlert(
-          'VIP priority drop scheduled for ' + new Date(drop.dueAt).toLocaleString() + ' at ' + drop.percent + '%.',
-          'success'
-        );
-        const d = await api('/admin/api/users/' + viewingUserId);
-        renderUserDetail(d);
       } catch (e) {
         showUserPageAlert(e.message, 'error');
       }
@@ -3966,7 +3780,6 @@
           await loadP2pTrades();
         }
       }
-      else if (activeTab === 'aiearnings') await loadAiPlan();
       else if (activeTab === 'tiers') await loadTiers();
       else if (activeTab === 'drops') await loadDrops();
       else if (activeTab === 'vipfarmers') await loadVipFarmers();
@@ -5596,11 +5409,6 @@
     document.getElementById('toggleUserPauseBtn').onclick = () => toggleUserPause();
     document.getElementById('saveDropCapsBtn').onclick = () => saveDropCaps();
     document.getElementById('saveGlobalPauseBtn').onclick = () => saveGlobalPause();
-    document.getElementById('aiPlanDate').onchange = () => loadAiPlan().catch(showAiPlanErr);
-    document.getElementById('aiSaveBudgetBtn').onclick = () => saveAiBudget().catch(showAiPlanErr);
-    document.getElementById('aiFetchMarketBtn').onclick = () => fetchAiMarket().catch(showAiPlanErr);
-    document.getElementById('aiRunPlannerBtn').onclick = () => runAiPlanner().catch(showAiPlanErr);
-    document.getElementById('aiApprovePlanBtn').onclick = () => approveAiPlan().catch(showAiPlanErr);
     document.getElementById('refreshGlobalPauseBtn').onclick = () => loadGlobalPause();
     document.getElementById('applyAdjustBtn').onclick = () => applyWalletAdjust();
     document.getElementById('adjustMode').onchange = () => refreshAdjustDirectionVisibility();
@@ -5610,7 +5418,6 @@
     document.getElementById('userDropPlanAiBtn').onclick = () => aiSuggestUserDropPlan();
     document.getElementById('userDropPlanApplyBtn').onclick = () => applyUserDropPlan();
     document.getElementById('moveToAfBtn').onclick = () => moveToAirfarming();
-    document.getElementById('sendDirectDropBtn').onclick = () => sendDirectDrop();
     document.getElementById('deleteUserBtn').onclick = () => deleteCurrentUser();
     document.getElementById('saveTicketBtn').onclick = () => saveTicketStatus();
     document.getElementById('closeTicketBtn').onclick = () => closeModal('ticketModal');

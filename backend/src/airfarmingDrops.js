@@ -290,12 +290,13 @@ async function toPublicUpcomingDrop(row, ctx = {}) {
   const percent = Number(synced?.percent ?? row.percent);
   const eligibilityBal = snapshotBal != null ? snapshotBal : liveBal;
   const eligibleNow = isEligible(eligibilityBal, synced.min_balance, synced.max_balance);
+  const hidePlannedPercent = Boolean(row.percent_locked) && nowMs < dueMs;
 
-  // Keep profit estimates for when the drop is live (optional UI), but always expose percent + eligibility.
+  // Admin weekly plans keep % hidden until the drop is due; profit estimates only when % is visible.
   let projectedProfitBase = 0;
   let projectedProfit = null;
   let dropPotentialMultiplier = 1;
-  if (percentLocked && eligibleNow && Number.isFinite(percent)) {
+  if (!hidePlannedPercent && percentLocked && eligibleNow && Number.isFinite(percent)) {
     projectedProfitBase = await computeProfit(eligibilityBal, percent);
     projectedProfit = projectedProfitBase;
     if (ctx.userId) {
@@ -307,9 +308,9 @@ async function toPublicUpcomingDrop(row, ctx = {}) {
 
   return {
     ...base,
-    percent: Number.isFinite(percent) ? percent : null,
+    percent: hidePlannedPercent || !Number.isFinite(percent) ? null : percent,
     eligibleNow,
-    projectedProfit,
+    projectedProfit: hidePlannedPercent ? null : projectedProfit,
     projectedProfitBase: projectedProfitBase || 0,
     dropPotentialMultiplier,
   };
@@ -382,14 +383,17 @@ async function buildUpcomingDropsQueue(userId, weekStart, airfarmingBalance, opt
     scheduled = prepared;
   }
 
-  const projected = await projectUpcomingDropsForWeek(userId, weekStart, scheduled);
+  const projected = scheduled.length
+    ? []
+    : await projectUpcomingDropsForWeek(userId, weekStart, scheduled);
   const allRows = [...scheduled, ...projected].sort(
     (a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime()
   );
 
+  const PUBLIC_UPCOMING_LIMIT = 1;
   const ctx = { userId, airfarmingBalance, nowMs };
   const upcomingDrops = [];
-  for (const row of allRows) {
+  for (const row of allRows.slice(0, PUBLIC_UPCOMING_LIMIT)) {
     const isProjected = !row.id;
     const pub = await toPublicUpcomingDrop(row, { ...ctx, isProjected });
     if (pub) upcomingDrops.push(pub);

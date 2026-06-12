@@ -99,6 +99,8 @@ const {
   saveUserDropScheduleDraft,
   aiSuggestUserDropSchedule,
   applyUserDropSchedule,
+  setUserWeeklyDropBudget,
+  WEEKLY_DROP_COUNT,
 } = require('./userDropScheduleService');
 
 const SUPPORT_STATUSES = new Set(['under_review', 'in_progress', 'resolved', 'closed']);
@@ -353,7 +355,7 @@ function registerAdminRoutes(app) {
   });
 
   const dropScheduleSchemaMsg =
-    'User drop schedules schema missing. Run backend/sql/migrations/20260606_user_drop_schedules.sql in Supabase.';
+    'User drop schedules schema missing. Run backend/sql/migrations/20260606_user_drop_schedules.sql and 20260702_weekly_drop_budget.sql in Supabase.';
 
   app.get('/admin/api/users/:id/drop-schedule', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
@@ -372,8 +374,8 @@ function registerAdminRoutes(app) {
       const dropCount = Number(req.body?.dropCount);
       const targetTotalUsd = Number(req.body?.targetTotalUsd);
       const weekStart = req.body?.weekStart ? String(req.body.weekStart).slice(0, 10) : undefined;
-      if (!Number.isInteger(dropCount) || dropCount < 1 || dropCount > 12) {
-        return res.status(400).json({ message: 'dropCount must be 1–12' });
+      if (!Number.isInteger(dropCount) || dropCount < 1 || dropCount > 20) {
+        return res.status(400).json({ message: 'dropCount must be 1–20' });
       }
       if (!Number.isFinite(targetTotalUsd) || targetTotalUsd < 0) {
         return res.status(400).json({ message: 'targetTotalUsd must be a non-negative number' });
@@ -394,8 +396,8 @@ function registerAdminRoutes(app) {
       const dropCount = Number(req.body?.dropCount);
       const targetTotalUsd = Number(req.body?.targetTotalUsd);
       const weekStart = req.body?.weekStart ? String(req.body.weekStart).slice(0, 10) : undefined;
-      if (!Number.isInteger(dropCount) || dropCount < 1 || dropCount > 12) {
-        return res.status(400).json({ message: 'dropCount must be 1–12' });
+      if (!Number.isInteger(dropCount) || dropCount < 1 || dropCount > 20) {
+        return res.status(400).json({ message: 'dropCount must be 1–20' });
       }
       if (!Number.isFinite(targetTotalUsd) || targetTotalUsd < 0) {
         return res.status(400).json({ message: 'targetTotalUsd must be a non-negative number' });
@@ -427,6 +429,35 @@ function registerAdminRoutes(app) {
       if (isMissingTableError(e)) return res.status(503).json({ message: dropScheduleSchemaMsg });
       console.error('[admin/drop-schedule/apply]', e);
       return res.status(500).json({ message: e.message || 'Apply failed' });
+    }
+  });
+
+  app.post('/admin/api/users/:id/weekly-drop-budget', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const budgetUsd = Number(req.body?.budgetUsd ?? req.body?.targetTotalUsd);
+      const weekStart = req.body?.weekStart ? String(req.body.weekStart).slice(0, 10) : undefined;
+      const apply = req.body?.apply === true;
+      if (!Number.isFinite(budgetUsd) || budgetUsd <= 0) {
+        return res.status(400).json({ message: 'budgetUsd must be greater than zero' });
+      }
+      const result = await setUserWeeklyDropBudget(req.params.id, {
+        weekStart,
+        budgetUsd,
+        forceDeterministic: req.body?.deterministic !== false,
+        apply,
+      });
+      if (!result.ok) return res.status(400).json({ message: result.error });
+      return res.json({
+        ...result,
+        dropCount: WEEKLY_DROP_COUNT,
+        schedulePattern: '4 drops per weekday (Mon–Fri UTC)',
+      });
+    } catch (e) {
+      if (isMissingTableError(e) || e.statusCode === 503) {
+        return res.status(503).json({ message: e.message || dropScheduleSchemaMsg });
+      }
+      console.error('[admin/weekly-drop-budget]', e);
+      return res.status(500).json({ message: e.message || 'Weekly drop budget failed' });
     }
   });
 
