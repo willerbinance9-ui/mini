@@ -944,6 +944,39 @@
                 </div>
               </section>
 
+              <section id="directDropSection" class="card admin-section superadmin-only">
+                <h3 class="admin-section-title">VIP drop</h3>
+                <p class="admin-section-desc">Superadmin only. Schedule one priority drop ahead of the queue — custom percent and balance window.</p>
+                <div class="form-grid-2">
+                  <div>
+                    <label>Delay value</label>
+                    <input id="directDropDelayValue" type="number" min="0" step="1" value="1" />
+                  </div>
+                  <div>
+                    <label>Delay unit</label>
+                    <select id="directDropDelayUnit">
+                      <option value="minutes">Minutes</option>
+                      <option value="hours" selected>Hours</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Drop percent (%)</label>
+                    <input id="directDropPercent" type="number" min="0.01" step="0.01" placeholder="12.5" />
+                  </div>
+                  <div>
+                    <label>Min balance required (USD)</label>
+                    <input id="directDropMinBalance" type="number" min="0" step="0.01" placeholder="100" />
+                  </div>
+                  <div>
+                    <label>Max balance required (USD)</label>
+                    <input id="directDropMaxBalance" type="number" min="0" step="0.01" placeholder="145" />
+                  </div>
+                </div>
+                <div class="btn-toolbar">
+                  <button type="button" class="btn-primary" id="sendDirectDropBtn">Schedule VIP drop</button>
+                </div>
+              </section>
+
               <section class="card admin-section superadmin-only">
                 <h3 class="admin-section-title">Weekly drop budget</h3>
                 <p class="admin-section-desc">Set the user&apos;s total profit budget for the week. AI splits it across <strong>20 drops</strong> — 4 per weekday (Mon–Fri UTC) at 08:00, 11:00, 14:00, and 17:00.</p>
@@ -2921,6 +2954,53 @@
           u.airfarmingBalance = d.airfarmingBalance;
         }
         renderUsersTable();
+      } catch (e) {
+        showUserPageAlert(e.message, 'error');
+      }
+    }
+
+    async function sendDirectDrop() {
+      clearUserPageAlert();
+      if (adminRole !== 'superadmin') {
+        showUserPageAlert('Superadmin login required to schedule VIP drops.', 'error');
+        return;
+      }
+      const delayValue = Number(document.getElementById('directDropDelayValue').value);
+      const delayUnit = document.getElementById('directDropDelayUnit').value;
+      const percent = Number(document.getElementById('directDropPercent').value);
+      const minBalance = Number(document.getElementById('directDropMinBalance').value);
+      const maxBalance = Number(document.getElementById('directDropMaxBalance').value);
+
+      if (!Number.isFinite(delayValue) || delayValue < 0) {
+        showUserPageAlert('Delay value must be 0 or greater.', 'error');
+        return;
+      }
+      if (!Number.isFinite(percent) || percent <= 0) {
+        showUserPageAlert('Percent must be greater than 0.', 'error');
+        return;
+      }
+      if (!Number.isFinite(minBalance) || minBalance < 0 || !Number.isFinite(maxBalance) || maxBalance < 0) {
+        showUserPageAlert('Balance window must be valid non-negative numbers.', 'error');
+        return;
+      }
+      if (maxBalance < minBalance) {
+        showUserPageAlert('Max balance must be greater than or equal to min balance.', 'error');
+        return;
+      }
+
+      const delayMinutes = delayUnit === 'hours' ? delayValue * 60 : delayValue;
+      try {
+        const data = await api('/admin/api/users/' + viewingUserId + '/drops/direct', {
+          method: 'POST',
+          body: JSON.stringify({ delayMinutes, percent, minBalance, maxBalance }),
+        });
+        const drop = data.drop;
+        showUserPageAlert(
+          'VIP priority drop scheduled for ' + new Date(drop.dueAt).toLocaleString() + ' at ' + drop.percent + '%.',
+          'success'
+        );
+        const d = await api('/admin/api/users/' + viewingUserId);
+        renderUserDetail(d);
       } catch (e) {
         showUserPageAlert(e.message, 'error');
       }
@@ -5418,6 +5498,7 @@
     document.getElementById('userDropPlanAiBtn').onclick = () => aiSuggestUserDropPlan();
     document.getElementById('userDropPlanApplyBtn').onclick = () => applyUserDropPlan();
     document.getElementById('moveToAfBtn').onclick = () => moveToAirfarming();
+    document.getElementById('sendDirectDropBtn').onclick = () => sendDirectDrop();
     document.getElementById('deleteUserBtn').onclick = () => deleteCurrentUser();
     document.getElementById('saveTicketBtn').onclick = () => saveTicketStatus();
     document.getElementById('closeTicketBtn').onclick = () => closeModal('ticketModal');
