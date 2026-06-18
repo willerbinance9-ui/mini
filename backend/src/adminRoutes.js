@@ -992,7 +992,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/admin/api/airfarming/payouts/pending', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+  app.get('/admin/api/airfarming/payouts/pending', adminAuthMiddleware, async (req, res) => {
     try {
       const scheduled = await listScheduledAirfarmingDropsAdmin({ upcomingOnly: false, limit: 500 });
       const overdue = (scheduled || []).filter(
@@ -1027,7 +1027,6 @@ function registerAdminRoutes(app) {
   app.post(
     '/admin/api/airfarming/payouts/:id/approve',
     adminAuthMiddleware,
-    requireSuperAdmin,
     async (req, res) => {
       try {
         const drop = await getAirfarmingDropById(req.params.id);
@@ -1086,7 +1085,6 @@ function registerAdminRoutes(app) {
   app.post(
     '/admin/api/airfarming/payouts/:id/reject',
     adminAuthMiddleware,
-    requireSuperAdmin,
     async (req, res) => {
       try {
         const drop = await getAirfarmingDropById(req.params.id);

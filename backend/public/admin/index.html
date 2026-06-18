@@ -1234,10 +1234,10 @@
             </div>
             <p id="withdrawalsErr" class="err hidden"></p>
           </div>
-          <div id="pendingDropPayoutsCard" class="card superadmin-only">
+          <div id="pendingDropPayoutsCard" class="card">
             <h3 style="margin:0 0 8px;font-size:1rem;">Pending drop payouts</h3>
             <p class="hint" style="margin-bottom:12px;">
-              When a drop countdown ends and eligibility is in range, payout waits for superadmin approval.
+              When a drop countdown ends and eligibility is in range, payout waits for admin approval.
             </p>
             <p id="dropPayoutStats" class="hint"></p>
             <div id="dropPayoutsLoading" class="loading hidden">Loading pending payouts…</div>
@@ -3695,10 +3695,9 @@
         const vip = p.isVipPriority
           ? ' <span class="pill" style="background:rgba(245,158,11,0.18);border-color:rgba(245,158,11,0.45);color:#fbbf24;">VIP</span>'
           : '';
-        const actionCell = adminRole === 'superadmin'
-          ? '<button type="button" class="btn-primary" data-approve-drop-payout="' + p.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Approve</button>' +
-            '<button type="button" class="btn-danger" data-reject-drop-payout="' + p.id + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Reject</button>'
-          : '<span style="color:var(--muted);font-size:0.78rem;">Superadmin only</span>';
+        const actionCell =
+          '<button type="button" class="btn-primary" data-approve-drop-payout="' + p.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Approve</button>' +
+          '<button type="button" class="btn-danger" data-reject-drop-payout="' + p.id + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Reject</button>';
         tr.innerHTML =
           '<td>' + escapeHtml(p.userEmail || '—') + vip + '<br><span style="color:var(--muted);font-size:0.72rem;">#' + p.dropIndex + '</span></td>' +
           '<td>' + new Date(p.dueAt).toLocaleString() + '</td>' +
@@ -3716,7 +3715,7 @@
         btn.onclick = () => actOnDropPayout(btn.getAttribute('data-reject-drop-payout'), 'reject', btn);
       });
       document.getElementById('dropPayoutStats').textContent =
-        pendingDropPayouts.length + ' drop payout(s) awaiting superadmin action';
+        pendingDropPayouts.length + ' drop payout(s) awaiting admin action';
     }
 
     async function loadPendingWithdrawals() {
@@ -3855,8 +3854,8 @@
       else if (activeTab === 'support') await loadTickets();
       else if (activeTab === 'withdrawals') {
         await loadPendingWithdrawals();
+        await loadPendingDropPayouts();
         if (adminRole === 'superadmin') {
-          await loadPendingDropPayouts();
           await loadP2pTrades();
         }
       }
