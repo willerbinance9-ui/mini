@@ -31,7 +31,9 @@ const {
   updateAirfarmingAutoFundSetting,
   listAllGhostAccountsAdmin,
   listAllGhostAccountMembersAdmin,
+  listRecalledGhostLendsAdmin,
   listUsersAdmin,
+  utcTodayYmd,
 } = require('./db');
 const { computeProfit } = require('./airfarmingDrops');
 const { ELIGIBILITY_SNAPSHOT_MS, computeDropPhase } = require('./airfarmingDropUtils');
@@ -687,6 +689,74 @@ async function buildGhostAccountStatus(ownerUserId) {
   };
 }
 
+function startOfUtcMonthYmd() {
+  const today = utcTodayYmd();
+  return `${today.slice(0, 7)}-01`;
+}
+
+function aggregateGhostRecallRows(rows) {
+  const empty = () => ({ count: 0, profitUsd: 0, principalUsd: 0, totalSweepUsd: 0 });
+  const totals = { all: empty(), today: empty(), month: empty() };
+  const today = utcTodayYmd();
+  const monthStart = startOfUtcMonthYmd();
+
+  for (const row of rows || []) {
+    const profit = roundMoney(Number(row.recalled_profit_net || 0));
+    const principal = roundMoney(Number(row.recalled_principal || 0));
+    const sweep = roundMoney(profit + principal);
+    const at = String(row.recalled_at || '').slice(0, 10);
+
+    const bump = (bucket) => {
+      bucket.count += 1;
+      bucket.profitUsd = roundMoney(bucket.profitUsd + profit);
+      bucket.principalUsd = roundMoney(bucket.principalUsd + principal);
+      bucket.totalSweepUsd = roundMoney(bucket.totalSweepUsd + sweep);
+    };
+
+    bump(totals.all);
+    if (at === today) bump(totals.today);
+    if (at >= monthStart) bump(totals.month);
+  }
+
+  return totals;
+}
+
+async function getGhostRevenueAdminStats({ recentLimit = 50 } = {}) {
+  const rows = await listRecalledGhostLendsAdmin(10000);
+  const recentSlice = rows.slice(0, Math.min(recentLimit, rows.length));
+
+  const userIds = new Set();
+  for (const row of recentSlice) {
+    const ownerId = row.ghost_accounts?.owner_user_id;
+    if (ownerId) userIds.add(ownerId);
+    if (row.member_user_id) userIds.add(row.member_user_id);
+  }
+  const users = await getUsersByIds([...userIds]);
+  const emailById = new Map(users.map((u) => [u.id, u.email]));
+
+  return {
+    summary: aggregateGhostRecallRows(rows),
+    recent: recentSlice.map((row) => {
+      const ownerUserId = row.ghost_accounts?.owner_user_id || null;
+      const profit = roundMoney(Number(row.recalled_profit_net || 0));
+      const principal = roundMoney(Number(row.recalled_principal || 0));
+      return {
+        id: row.id,
+        ghostAccountId: row.ghost_account_id,
+        dropId: row.drop_id,
+        ownerUserId,
+        ownerEmail: ownerUserId ? emailById.get(ownerUserId) || '—' : '—',
+        memberUserId: row.member_user_id,
+        memberEmail: row.member_user_id ? emailById.get(row.member_user_id) || '—' : '—',
+        recalledAt: row.recalled_at,
+        profitUsd: profit,
+        principalUsd: principal,
+        totalSweepUsd: roundMoney(profit + principal),
+      };
+    }),
+  };
+}
+
 async function listGhostAccountsAdminSummary() {
   const rows = await listAllGhostAccountsAdmin(200);
   if (!rows.length) return [];
@@ -981,6 +1051,7 @@ module.exports = {
   syncScheduledLendsForAccount,
   maskEmail,
   listGhostAccountsAdminSummary,
+  getGhostRevenueAdminStats,
   buildGhostNetworkAdmin,
   buildGhostParticleNetworkAdmin,
 };

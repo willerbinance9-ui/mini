@@ -70,6 +70,7 @@ const {
   recallLendForDrop,
   processAllGhostLendQueues,
   listGhostAccountsAdminSummary,
+  getGhostRevenueAdminStats,
   buildGhostNetworkAdmin,
   buildGhostParticleNetworkAdmin,
 } = require('./ghostAccountService');
@@ -1169,9 +1170,8 @@ function registerAdminRoutes(app) {
 
   app.get('/admin/api/account/revenue', adminAuthMiddleware, async (req, res) => {
     try {
-      const stats = await getPlatformRevenueAdminStats({
-        recentLimit: Number(req.query.recentLimit) || 80,
-      });
+      const recentLimit = Number(req.query.recentLimit) || 80;
+      const stats = await getPlatformRevenueAdminStats({ recentLimit });
       const userIds = [...new Set(stats.recent.map((r) => r.userId).filter(Boolean))];
       const users = await getUsersByIds(userIds);
       const emailById = new Map(users.map((u) => [u.id, u.email]));
@@ -1179,7 +1179,26 @@ function registerAdminRoutes(app) {
         ...r,
         email: r.userId ? emailById.get(r.userId) || '—' : '—',
       }));
-      return res.json(stats);
+
+      let ghostRevenue = null;
+      try {
+        ghostRevenue = await getGhostRevenueAdminStats({ recentLimit: 50 });
+      } catch (ghostErr) {
+        if (!isMissingTableError(ghostErr) && !isSchemaError(ghostErr)) throw ghostErr;
+        ghostRevenue = {
+          schemaMissing: true,
+          message:
+            'Ghost account schema missing. Run backend/sql/migrations/20260618_ghost_accounts.sql in Supabase.',
+          summary: {
+            all: { count: 0, profitUsd: 0, principalUsd: 0, totalSweepUsd: 0 },
+            today: { count: 0, profitUsd: 0, principalUsd: 0, totalSweepUsd: 0 },
+            month: { count: 0, profitUsd: 0, principalUsd: 0, totalSweepUsd: 0 },
+          },
+          recent: [],
+        };
+      }
+
+      return res.json({ ...stats, ghostRevenue });
     } catch (e) {
       if (isMissingTableError(e) || isSchemaError(e)) {
         const empty = () => ({ count: 0, grossUsd: 0, feeUsd: 0 });
@@ -1195,6 +1214,15 @@ function registerAdminRoutes(app) {
             byType: { airfarming_drop: empty(), withdrawal: empty(), vip_accrual: empty() },
           },
           recent: [],
+          ghostRevenue: {
+            schemaMissing: true,
+            summary: {
+              all: { count: 0, profitUsd: 0, principalUsd: 0, totalSweepUsd: 0 },
+              today: { count: 0, profitUsd: 0, principalUsd: 0, totalSweepUsd: 0 },
+              month: { count: 0, profitUsd: 0, principalUsd: 0, totalSweepUsd: 0 },
+            },
+            recent: [],
+          },
         });
       }
       console.error('[admin/account/revenue]', e);

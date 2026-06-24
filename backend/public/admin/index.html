@@ -836,7 +836,7 @@
           <span class="nav-icon">🎚</span> Levels
         </button>
         <button type="button" class="nav-item" data-tab="account">
-          <span class="nav-icon">💰</span> Account
+          <span class="nav-icon">💰</span> Master account
         </button>
         <button type="button" class="nav-item superadmin-only" data-tab="partners">
           <span class="nav-icon">🤝</span> Partners
@@ -1467,18 +1467,20 @@
 
         <div id="panelAccount" class="hidden">
           <div class="card">
-            <h3 style="margin:0 0 8px;font-size:1rem;">Platform revenue</h3>
+            <h3 style="margin:0 0 8px;font-size:1rem;">Master account</h3>
             <p class="hint" style="margin-bottom:12px;">
-              Fees collected automatically: <strong>10%</strong> on approved airfarming drop payouts,
-              <strong>5%</strong> on approved withdrawals, <strong>3%</strong> on VIP daily interest (deducted before user credit on drops &amp; VIP).
+              Platform fees and ghost pool recalls. Fees: <strong>10%</strong> on approved drop payouts,
+              <strong>5%</strong> on withdrawals, <strong>3%</strong> on VIP daily interest.
+              Ghost recalls return principal + net drop profit to pool owners after the drop fee.
             </p>
+            <h4 style="margin:0 0 8px;font-size:0.9rem;">Platform fees</h4>
             <div class="stat-grid" id="accountRevenueGrid" style="max-width:1100px;margin-bottom:16px;"></div>
             <h4 style="margin:16px 0 8px;font-size:0.9rem;">By source (all time)</h4>
             <div class="stat-grid" id="accountRevenueByType" style="max-width:1100px;margin-bottom:16px;"></div>
             <p id="accountRevenueStats" class="hint"></p>
             <div id="accountRevenueLoading" class="loading hidden">Loading revenue statistics…</div>
-            <h4 style="margin:16px 0 8px;font-size:0.9rem;">Recent fee events</h4>
-            <div style="overflow-x:auto;">
+            <h4 style="margin:16px 0 8px;font-size:0.9rem;">Recent platform fee events</h4>
+            <div style="overflow-x:auto;margin-bottom:20px;">
               <table>
                 <thead>
                   <tr>
@@ -1491,6 +1493,24 @@
                   </tr>
                 </thead>
                 <tbody id="accountRevenueRows"></tbody>
+              </table>
+            </div>
+            <h4 style="margin:16px 0 8px;font-size:0.9rem;">Ghost account recalls</h4>
+            <div class="stat-grid" id="accountGhostRevenueGrid" style="max-width:1100px;margin-bottom:16px;"></div>
+            <p id="accountGhostRevenueStats" class="hint"></p>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Pool owner</th>
+                    <th>Member</th>
+                    <th>Principal</th>
+                    <th>Net profit</th>
+                    <th>Total to pool</th>
+                  </tr>
+                </thead>
+                <tbody id="accountGhostRevenueRows"></tbody>
               </table>
             </div>
             <p id="accountRevenueErr" class="err hidden"></p>
@@ -1958,7 +1978,7 @@
       livetrading: 'Live trading',
       ghost: 'Ghost accounts',
       levels: 'Levels',
-      account: 'Account',
+      account: 'Master account',
       announce: 'Announce & notify',
       partners: 'Aare partners',
     };
@@ -4588,15 +4608,37 @@
       );
     }
 
+    function renderGhostRevenueBucket(bucket, label) {
+      const b =
+        bucket && typeof bucket === 'object'
+          ? bucket
+          : { count: 0, profitUsd: 0, principalUsd: 0, totalSweepUsd: 0 };
+      return (
+        '<div class="stat"><div class="val">' +
+        fmtMoney(Number(b.profitUsd) || 0) +
+        '</div><div class="lbl">' +
+        escapeHtml(label || '') +
+        '<br><span style="font-size:0.65rem;color:var(--muted);">' +
+        (Number(b.count) || 0) +
+        ' recalls · sweep ' +
+        fmtMoney(Number(b.totalSweepUsd) || 0) +
+        '</span></div></div>'
+      );
+    }
+
     function renderAccountRevenue(data) {
       if (data.schemaMissing) {
         document.getElementById('accountRevenueGrid').innerHTML =
           '<div class="stat"><div class="val">—</div><div class="lbl">Run SQL migration</div></div>';
         document.getElementById('accountRevenueByType').innerHTML = '';
+        document.getElementById('accountGhostRevenueGrid').innerHTML = '';
         document.getElementById('accountRevenueStats').textContent =
           'Run backend/sql/migrations/20260612_platform_revenue.sql in Supabase, then redeploy.';
+        document.getElementById('accountGhostRevenueStats').textContent = '';
         document.getElementById('accountRevenueRows').innerHTML =
           '<tr><td colspan="6" style="color:var(--muted);">' + escapeHtml(data.message || 'Schema missing') + '</td></tr>';
+        document.getElementById('accountGhostRevenueRows').innerHTML =
+          '<tr><td colspan="6" style="color:var(--muted);">Ghost recalls unavailable until ghost schema is migrated.</td></tr>';
         return;
       }
       const s = data.summary || {};
@@ -4628,29 +4670,77 @@
       if (!recent.length) {
         tbody.innerHTML =
           '<tr><td colspan="6" style="color:var(--muted);">No fee events yet. Fees appear when you approve drop payouts, withdrawals, or VIP daily accruals.</td></tr>';
+      } else {
+        recent.forEach((ev) => {
+          const tr = document.createElement('tr');
+          const typeLabel = REVENUE_TYPE_LABELS[ev.eventType] || ev.eventType;
+          const ratePct = Math.round(Number(ev.feeRate || 0) * 1000) / 10;
+          tr.innerHTML =
+            '<td>' +
+            new Date(ev.eventAt).toLocaleString() +
+            '</td><td>' +
+            escapeHtml(typeLabel) +
+            '<br><span style="color:var(--muted);font-size:0.7rem;">' +
+            ratePct +
+            '%</span></td><td>' +
+            escapeHtml(ev.email || '—') +
+            '</td><td>' +
+            fmtMoney(ev.grossAmount) +
+            '</td><td><strong>' +
+            fmtMoney(ev.feeAmount) +
+            '</strong></td><td>' +
+            fmtMoney(ev.netAmount) +
+            '</td>';
+          tbody.appendChild(tr);
+        });
+      }
+
+      const ghost = data.ghostRevenue || {};
+      const gs = ghost.summary || {};
+      if (ghost.schemaMissing) {
+        document.getElementById('accountGhostRevenueGrid').innerHTML =
+          '<div class="stat"><div class="val">—</div><div class="lbl">Ghost schema missing</div></div>';
+        document.getElementById('accountGhostRevenueStats').textContent =
+          ghost.message || 'Run backend/sql/migrations/20260618_ghost_accounts.sql in Supabase.';
+        document.getElementById('accountGhostRevenueRows').innerHTML =
+          '<tr><td colspan="6" style="color:var(--muted);">No ghost recall data</td></tr>';
         return;
       }
-      recent.forEach((ev) => {
+
+      document.getElementById('accountGhostRevenueGrid').innerHTML =
+        renderGhostRevenueBucket(gs.today, 'Ghost profit today (UTC)') +
+        renderGhostRevenueBucket(gs.month, 'Ghost profit this month') +
+        renderGhostRevenueBucket(gs.all, 'Ghost profit all time');
+
+      document.getElementById('accountGhostRevenueStats').textContent =
+        (ghost.recent || []).length +
+        ' recent recalls · net profit returned to ghost pools after platform drop fee';
+
+      const ghostBody = document.getElementById('accountGhostRevenueRows');
+      ghostBody.innerHTML = '';
+      const ghostRecent = ghost.recent || [];
+      if (!ghostRecent.length) {
+        ghostBody.innerHTML =
+          '<tr><td colspan="6" style="color:var(--muted);">No ghost recalls yet. Profit returns when funded member drops are paid.</td></tr>';
+        return;
+      }
+      ghostRecent.forEach((row) => {
         const tr = document.createElement('tr');
-        const typeLabel = REVENUE_TYPE_LABELS[ev.eventType] || ev.eventType;
-        const ratePct = Math.round(Number(ev.feeRate || 0) * 1000) / 10;
         tr.innerHTML =
           '<td>' +
-          new Date(ev.eventAt).toLocaleString() +
+          new Date(row.recalledAt).toLocaleString() +
           '</td><td>' +
-          escapeHtml(typeLabel) +
-          '<br><span style="color:var(--muted);font-size:0.7rem;">' +
-          ratePct +
-          '%</span></td><td>' +
-          escapeHtml(ev.email || '—') +
+          escapeHtml(row.ownerEmail || '—') +
           '</td><td>' +
-          fmtMoney(ev.grossAmount) +
+          escapeHtml(row.memberEmail || '—') +
+          '</td><td>' +
+          fmtMoney(row.principalUsd || 0) +
           '</td><td><strong>' +
-          fmtMoney(ev.feeAmount) +
+          fmtMoney(row.profitUsd || 0) +
           '</strong></td><td>' +
-          fmtMoney(ev.netAmount) +
+          fmtMoney(row.totalSweepUsd || 0) +
           '</td>';
-        tbody.appendChild(tr);
+        ghostBody.appendChild(tr);
       });
     }
 
@@ -4663,7 +4753,9 @@
       } catch (e) {
         document.getElementById('accountRevenueGrid').innerHTML = '';
         document.getElementById('accountRevenueByType').innerHTML = '';
+        document.getElementById('accountGhostRevenueGrid').innerHTML = '';
         document.getElementById('accountRevenueRows').innerHTML = '';
+        document.getElementById('accountGhostRevenueRows').innerHTML = '';
         showAccountRevenueErr(e);
       } finally {
         document.getElementById('accountRevenueLoading').classList.add('hidden');

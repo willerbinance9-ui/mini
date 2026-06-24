@@ -4966,6 +4966,22 @@ async function listGhostAccountLedger(ghostAccountId, limit = 50) {
   return data || [];
 }
 
+async function listRecalledGhostLendsAdmin(limit = 5000) {
+  const cap = Math.min(10000, Math.max(1, Number(limit) || 5000));
+  const { data, error } = await supabase
+    .from('ghost_account_lends')
+    .select(
+      'id, ghost_account_id, member_user_id, drop_id, recalled_at, recalled_principal, recalled_profit_net, ghost_accounts(owner_user_id)'
+    )
+    .eq('status', 'recalled')
+    .not('recalled_at', 'is', null)
+    .order('recalled_at', { ascending: false })
+    .limit(cap);
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
 async function listAllGhostAccountsAdmin(limit = 100) {
   const { data, error } = await supabase
     .from('ghost_accounts')
@@ -5285,5 +5301,6 @@ module.exports = {
   insertGhostAccountLedger,
   listGhostAccountLedger,
   listAllGhostAccountsAdmin,
+  listRecalledGhostLendsAdmin,
   listAllGhostAccountMembersAdmin,
 };
