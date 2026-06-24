@@ -5004,6 +5004,123 @@ async function listAllGhostAccountMembersAdmin(limit = 500) {
   return data || [];
 }
 
+async function ensureUserTradingWallet(userId) {
+  const existing = await getUserTradingWallet(userId);
+  if (existing) return existing;
+  const { data, error } = await supabase
+    .from('user_trading_wallets')
+    .insert({
+      user_id: userId,
+      balance: 0,
+      allocated_total: 0,
+      updated_at: new Date().toISOString(),
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function getUserTradingWallet(userId) {
+  const { data, error } = await supabase
+    .from('user_trading_wallets')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function upsertUserTradingWalletBalance(userId, balance) {
+  await ensureUserTradingWallet(userId);
+  const { data, error } = await supabase
+    .from('user_trading_wallets')
+    .upsert(
+      {
+        user_id: userId,
+        balance,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' }
+    )
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function incrementUserTradingAllocatedTotal(userId, delta) {
+  const wallet = await ensureUserTradingWallet(userId);
+  const next = Number(wallet.allocated_total || 0) + Number(delta || 0);
+  const { data, error } = await supabase
+    .from('user_trading_wallets')
+    .update({
+      allocated_total: next,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', userId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function listUserTradingDealsByUserId(userId) {
+  const { data, error } = await supabase
+    .from('user_trading_deals')
+    .select('*')
+    .eq('user_id', userId)
+    .order('opened_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+async function getUserTradingDealById(dealId, userId) {
+  const { data, error } = await supabase
+    .from('user_trading_deals')
+    .select('*')
+    .eq('id', dealId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function insertUserTradingDeal(row) {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('user_trading_deals')
+    .insert({
+      ...row,
+      updated_at: now,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function updateUserTradingDeal(dealId, userId, patch) {
+  const { data, error } = await supabase
+    .from('user_trading_deals')
+    .update(patch)
+    .eq('id', dealId)
+    .eq('user_id', userId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function deleteUserTradingDeal(dealId, userId) {
+  const { error } = await supabase
+    .from('user_trading_deals')
+    .delete()
+    .eq('id', dealId)
+    .eq('user_id', userId);
+  if (error) throw error;
+}
+
 module.exports = {
   utcTodayYmd,
   getUserByEmail,
@@ -5303,4 +5420,13 @@ module.exports = {
   listAllGhostAccountsAdmin,
   listRecalledGhostLendsAdmin,
   listAllGhostAccountMembersAdmin,
+  ensureUserTradingWallet,
+  getUserTradingWallet,
+  upsertUserTradingWalletBalance,
+  incrementUserTradingAllocatedTotal,
+  listUserTradingDealsByUserId,
+  getUserTradingDealById,
+  insertUserTradingDeal,
+  updateUserTradingDeal,
+  deleteUserTradingDeal,
 };

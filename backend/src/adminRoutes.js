@@ -74,6 +74,14 @@ const {
   buildGhostNetworkAdmin,
   buildGhostParticleNetworkAdmin,
 } = require('./ghostAccountService');
+const {
+  adminGetTradingDesk,
+  adminCreateDeal,
+  adminUpdateDeal,
+  adminDeleteDeal,
+  isMissingTableError: isTradingSchemaError,
+  SCHEMA_MSG: TRADING_SCHEMA_MSG,
+} = require('./services/userTradingService');
 
 function newId() {
   return crypto.randomUUID();
@@ -459,6 +467,57 @@ function registerAdminRoutes(app) {
       }
       console.error('[admin/weekly-drop-budget]', e);
       return res.status(500).json({ message: e.message || 'Weekly drop budget failed' });
+    }
+  });
+
+  app.get('/admin/api/users/:id/trading', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const user = await getUserById(req.params.id);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      const desk = await adminGetTradingDesk(req.params.id);
+      return res.json(desk);
+    } catch (e) {
+      if (isTradingSchemaError(e)) return res.status(503).json({ message: TRADING_SCHEMA_MSG });
+      console.error('[admin/users/trading]', e);
+      return res.status(500).json({ message: e.message || 'Failed to load trading desk' });
+    }
+  });
+
+  app.post('/admin/api/users/:id/trading/deals', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const user = await getUserById(req.params.id);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      const deal = await adminCreateDeal(req.params.id, req.body || {});
+      return res.status(201).json({ deal });
+    } catch (e) {
+      if (isTradingSchemaError(e)) return res.status(503).json({ message: TRADING_SCHEMA_MSG });
+      if (e.status) return res.status(e.status).json({ message: e.message });
+      console.error('[admin/users/trading/deals POST]', e);
+      return res.status(500).json({ message: e.message || 'Failed to create deal' });
+    }
+  });
+
+  app.patch('/admin/api/users/:id/trading/deals/:dealId', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const deal = await adminUpdateDeal(req.params.id, req.params.dealId, req.body || {});
+      return res.json({ deal });
+    } catch (e) {
+      if (isTradingSchemaError(e)) return res.status(503).json({ message: TRADING_SCHEMA_MSG });
+      if (e.status) return res.status(e.status).json({ message: e.message });
+      console.error('[admin/users/trading/deals PATCH]', e);
+      return res.status(500).json({ message: e.message || 'Failed to update deal' });
+    }
+  });
+
+  app.delete('/admin/api/users/:id/trading/deals/:dealId', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      await adminDeleteDeal(req.params.id, req.params.dealId);
+      return res.json({ ok: true });
+    } catch (e) {
+      if (isTradingSchemaError(e)) return res.status(503).json({ message: TRADING_SCHEMA_MSG });
+      if (e.status) return res.status(e.status).json({ message: e.message });
+      console.error('[admin/users/trading/deals DELETE]', e);
+      return res.status(500).json({ message: e.message || 'Failed to delete deal' });
     }
   });
 

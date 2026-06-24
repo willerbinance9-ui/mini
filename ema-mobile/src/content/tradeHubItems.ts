@@ -1,11 +1,11 @@
-export type TradeHubItemId = 'airfarming' | 'ghost' | 'vip' | 'expert' | 'liveTrading';
+export type TradeHubItemId = 'airfarming' | 'ghost' | 'vip' | 'expert' | 'liveTrading' | 'trades';
 
 export type TradeHubItem = {
   id: TradeHubItemId;
   title: string;
   meta: string;
   roi: string;
-  route: 'AirfarmingTrade' | 'GhostAccount' | 'VipFarmersTrade' | 'ExpertAutoTrading' | 'LiveTrading';
+  route: 'AirfarmingTrade' | 'GhostAccount' | 'VipFarmersTrade' | 'ExpertAutoTrading' | 'LiveTrading' | 'Trades';
 };
 
 export const TRADE_HUB_ITEMS: TradeHubItem[] = [
@@ -43,6 +43,13 @@ export const TRADE_HUB_ITEMS: TradeHubItem[] = [
     meta: 'Open a real account · Synthetix EA or Quantix EA',
     roi: 'Prices, open trades & history in-app',
     route: 'LiveTrading',
+  },
+  {
+    id: 'trades',
+    title: 'Trades',
+    meta: 'MT5-style desk · open positions & deal history',
+    roi: 'Allocate cash and track balance & P&L',
+    route: 'Trades',
   },
 ];
 

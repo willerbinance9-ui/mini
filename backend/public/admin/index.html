@@ -1018,6 +1018,79 @@
                   </table>
                 </div>
               </section>
+
+              <section id="userTradingDeskSection" class="card admin-section superadmin-only">
+                <h3 class="admin-section-title">Trading desk</h3>
+                <p class="admin-section-desc">Manage this user&apos;s trading balance, open positions, and closed deal history (shown in the Trades app).</p>
+                <p id="userTradingDeskMeta" class="hint" style="margin-bottom:12px;"></p>
+                <h4 style="font-size:0.88rem;margin:0 0 10px;color:var(--muted);">Add deal</h4>
+                <div class="form-grid-2">
+                  <div>
+                    <label>Symbol</label>
+                    <input id="userTradingSymbol" type="text" placeholder="XAUUSD" />
+                  </div>
+                  <div>
+                    <label>Side</label>
+                    <select id="userTradingSide">
+                      <option value="buy">Buy</option>
+                      <option value="sell">Sell</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Volume (lots)</label>
+                    <input id="userTradingVolume" type="number" min="0.01" step="0.01" placeholder="0.10" />
+                  </div>
+                  <div>
+                    <label>Open price</label>
+                    <input id="userTradingOpenPrice" type="number" min="0" step="0.00001" />
+                  </div>
+                  <div>
+                    <label>Close price</label>
+                    <input id="userTradingClosePrice" type="number" min="0" step="0.00001" placeholder="Leave empty if open" />
+                  </div>
+                  <div>
+                    <label>Profit (USD)</label>
+                    <input id="userTradingProfit" type="number" step="0.01" value="0" />
+                  </div>
+                  <div>
+                    <label>Status</label>
+                    <select id="userTradingStatus">
+                      <option value="open">Open</option>
+                      <option value="closed">Closed</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Ticket (optional)</label>
+                    <input id="userTradingTicket" type="text" placeholder="Auto-generated" />
+                  </div>
+                  <div>
+                    <label>Opened at</label>
+                    <input id="userTradingOpenedAt" type="datetime-local" />
+                  </div>
+                  <div>
+                    <label>Closed at</label>
+                    <input id="userTradingClosedAt" type="datetime-local" />
+                  </div>
+                </div>
+                <div class="btn-toolbar">
+                  <button type="button" class="btn-primary" id="userTradingAddDealBtn">Add deal</button>
+                  <button type="button" class="btn-ghost" id="userTradingReloadBtn">Reload</button>
+                </div>
+                <h4 style="font-size:0.88rem;margin:16px 0 10px;color:var(--muted);">Open positions</h4>
+                <div class="table-scroll">
+                  <table>
+                    <thead><tr><th>Ticket</th><th>Symbol</th><th>Side</th><th>Vol</th><th>Open</th><th>P&amp;L</th><th></th></tr></thead>
+                    <tbody id="userTradingOpenRows"></tbody>
+                  </table>
+                </div>
+                <h4 style="font-size:0.88rem;margin:16px 0 10px;color:var(--muted);">History</h4>
+                <div class="table-scroll">
+                  <table>
+                    <thead><tr><th>Ticket</th><th>Symbol</th><th>Side</th><th>Vol</th><th>Profit</th><th>Closed</th><th></th></tr></thead>
+                    <tbody id="userTradingHistoryRows"></tbody>
+                  </table>
+                </div>
+              </section>
                 </div>
               </div>
 
@@ -2785,6 +2858,162 @@
       await runWeeklyDropBudget(true);
     }
 
+    function toDatetimeLocalValue(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      const pad = (n) => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    function fromDatetimeLocalValue(value) {
+      if (!value) return null;
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return null;
+      return d.toISOString();
+    }
+
+    function renderUserTradingDesk(data) {
+      const meta = document.getElementById('userTradingDeskMeta');
+      const openEl = document.getElementById('userTradingOpenRows');
+      const histEl = document.getElementById('userTradingHistoryRows');
+      if (!meta || !openEl || !histEl) return;
+      if (!data) {
+        meta.textContent = 'Trading desk unavailable.';
+        openEl.innerHTML = '<tr><td colspan="7">—</td></tr>';
+        histEl.innerHTML = '<tr><td colspan="7">—</td></tr>';
+        return;
+      }
+      meta.textContent =
+        'Balance ' + fmtMoney(data.balance || 0) +
+        ' · Equity ' + fmtMoney(data.equity || 0) +
+        ' · Floating ' + fmtMoney(data.openProfit || 0) +
+        ' · Allocated ' + fmtMoney(data.allocatedTotal || 0);
+      const open = data.openDeals || [];
+      const history = data.history || [];
+      openEl.innerHTML = open.length
+        ? open.map((d) =>
+            '<tr><td>' + escapeHtml(d.ticket) + '</td><td>' + escapeHtml(d.symbol) + '</td><td>' + escapeHtml(d.side) +
+            '</td><td>' + Number(d.volume).toFixed(2) + '</td><td>' + Number(d.openPrice).toFixed(5) +
+            '</td><td>' + fmtMoney(d.profit || 0) + '</td><td>' +
+            '<button type="button" class="btn-ghost" data-close-deal="' + d.id + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Close</button> ' +
+            '<button type="button" class="btn-danger" data-delete-deal="' + d.id + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Delete</button></td></tr>'
+          ).join('')
+        : '<tr><td colspan="7">No open positions</td></tr>';
+      histEl.innerHTML = history.length
+        ? history.map((d) =>
+            '<tr><td>' + escapeHtml(d.ticket) + '</td><td>' + escapeHtml(d.symbol) + '</td><td>' + escapeHtml(d.side) +
+            '</td><td>' + Number(d.volume).toFixed(2) + '</td><td>' + fmtMoney(d.profit || 0) +
+            '</td><td>' + (d.closedAt ? new Date(d.closedAt).toLocaleString() : '—') + '</td><td>' +
+            '<button type="button" class="btn-danger" data-delete-deal="' + d.id + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Delete</button></td></tr>'
+          ).join('')
+        : '<tr><td colspan="7">No history</td></tr>';
+      openEl.querySelectorAll('[data-close-deal]').forEach((btn) => {
+        btn.onclick = () => void closeUserTradingDeal(btn.getAttribute('data-close-deal'));
+      });
+      [openEl, histEl].forEach((el) => {
+        el.querySelectorAll('[data-delete-deal]').forEach((btn) => {
+          btn.onclick = () => void deleteUserTradingDeal(btn.getAttribute('data-delete-deal'));
+        });
+      });
+    }
+
+    async function loadUserTradingDesk(userId) {
+      if (adminRole !== 'superadmin') return;
+      try {
+        const data = await api('/admin/api/users/' + userId + '/trading');
+        renderUserTradingDesk(data);
+      } catch (e) {
+        renderUserTradingDesk(null);
+        showUserPageAlert('Trading desk: ' + e.message, 'error');
+      }
+    }
+
+    function readUserTradingDealForm() {
+      const status = document.getElementById('userTradingStatus').value;
+      const closePriceRaw = document.getElementById('userTradingClosePrice').value;
+      const closePrice = closePriceRaw ? Number(closePriceRaw) : null;
+      return {
+        symbol: document.getElementById('userTradingSymbol').value.trim(),
+        side: document.getElementById('userTradingSide').value,
+        volume: Number(document.getElementById('userTradingVolume').value),
+        openPrice: Number(document.getElementById('userTradingOpenPrice').value),
+        closePrice,
+        profit: Number(document.getElementById('userTradingProfit').value || 0),
+        status,
+        ticket: document.getElementById('userTradingTicket').value.trim() || undefined,
+        openedAt: fromDatetimeLocalValue(document.getElementById('userTradingOpenedAt').value) || new Date().toISOString(),
+        closedAt: fromDatetimeLocalValue(document.getElementById('userTradingClosedAt').value),
+      };
+    }
+
+    async function addUserTradingDeal() {
+      if (!viewingUserId) return;
+      clearUserPageAlert();
+      try {
+        const body = readUserTradingDealForm();
+        await api('/admin/api/users/' + viewingUserId + '/trading/deals', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        showUserPageAlert('Deal added.', 'success');
+        document.getElementById('userTradingSymbol').value = '';
+        document.getElementById('userTradingVolume').value = '';
+        document.getElementById('userTradingOpenPrice').value = '';
+        document.getElementById('userTradingClosePrice').value = '';
+        document.getElementById('userTradingProfit').value = '0';
+        document.getElementById('userTradingTicket').value = '';
+        document.getElementById('userTradingOpenedAt').value = '';
+        document.getElementById('userTradingClosedAt').value = '';
+        await loadUserTradingDesk(viewingUserId);
+      } catch (e) {
+        showUserPageAlert(e.message, 'error');
+      }
+    }
+
+    async function closeUserTradingDeal(dealId) {
+      if (!viewingUserId || !dealId) return;
+      const profitStr = prompt('Profit (USD) when closing this position:', '0');
+      if (profitStr == null) return;
+      const profit = Number(profitStr);
+      if (!Number.isFinite(profit)) {
+        showUserPageAlert('Invalid profit amount.', 'error');
+        return;
+      }
+      const closePriceStr = prompt('Close price:', '');
+      if (closePriceStr == null || !closePriceStr.trim()) {
+        showUserPageAlert('Close price is required.', 'error');
+        return;
+      }
+      const closePrice = Number(closePriceStr);
+      if (!closePrice || closePrice <= 0) {
+        showUserPageAlert('Invalid close price.', 'error');
+        return;
+      }
+      try {
+        await api('/admin/api/users/' + viewingUserId + '/trading/deals/' + dealId, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'closed', profit, closePrice, closedAt: new Date().toISOString() }),
+        });
+        showUserPageAlert('Position closed.', 'success');
+        await loadUserTradingDesk(viewingUserId);
+      } catch (e) {
+        showUserPageAlert(e.message, 'error');
+      }
+    }
+
+    async function deleteUserTradingDeal(dealId) {
+      if (!viewingUserId || !dealId) return;
+      if (!confirm('Delete this deal? Balance will be adjusted if it was closed.')) return;
+      try {
+        await api('/admin/api/users/' + viewingUserId + '/trading/deals/' + dealId, { method: 'DELETE' });
+        showUserPageAlert('Deal deleted.', 'success');
+        await loadUserTradingDesk(viewingUserId);
+      } catch (e) {
+        showUserPageAlert(e.message, 'error');
+      }
+    }
+
     function updatePauseButton(af) {
       const btn = document.getElementById('toggleUserPauseBtn');
       if (!btn) return;
@@ -2849,6 +3078,7 @@
       void loadUserCharts(id);
       void loadUserJournal(id);
       if (adminRole === 'superadmin') void loadUserDropPlan(id);
+      if (adminRole === 'superadmin') void loadUserTradingDesk(id);
     }
 
     async function applyWalletAdjust() {
@@ -5590,6 +5820,10 @@
     document.getElementById('userDropPlanApplyBtn').onclick = () => applyUserDropPlan();
     document.getElementById('moveToAfBtn').onclick = () => moveToAirfarming();
     document.getElementById('sendDirectDropBtn').onclick = () => sendDirectDrop();
+    document.getElementById('userTradingAddDealBtn').onclick = () => void addUserTradingDeal();
+    document.getElementById('userTradingReloadBtn').onclick = () => {
+      if (viewingUserId) void loadUserTradingDesk(viewingUserId);
+    };
     document.getElementById('deleteUserBtn').onclick = () => deleteCurrentUser();
     document.getElementById('saveTicketBtn').onclick = () => saveTicketStatus();
     document.getElementById('closeTicketBtn').onclick = () => closeModal('ticketModal');

@@ -43,6 +43,7 @@ export type RootStackParamList = {
   VipFarmersTrade: undefined;
   ExpertAutoTrading: undefined;
   LiveTrading: undefined;
+  Trades: undefined;
   LiveTradingCreateBot: undefined;
   LiveTradingCreateSetup: { botType: import('../services/liveTradingService').LiveTradingBotType };
   LiveTradingAccount: { accountId: string };
