@@ -1,4 +1,4 @@
-const { isMissingTableError } = require('./db');
+const { isMissingTableError, isSchemaError } = require('./db');
 const {
   getVipSummary,
   investVip,
@@ -23,8 +23,8 @@ function requireCronSecret(req) {
 function registerVipFarmerRoutes(app, { authMiddleware }) {
   const schemaMsg =
     'VIP Farmers schema missing. Run backend/sql/migrations/20260605_vip_farmers.sql in Supabase.';
-  const exitSchemaMsg =
-    'VIP exit schema missing. Run backend/sql/migrations/20260704_vip_exit_requests.sql in Supabase.';
+  const exitUnavailableMsg =
+    'Exit withdrawals are not available yet. Please try again later or contact support.';
 
   app.get('/vip-farmers/summary', authMiddleware, async (req, res) => {
     try {
@@ -85,7 +85,9 @@ function registerVipFarmerRoutes(app, { authMiddleware }) {
       return res.json(quote);
     } catch (e) {
       if (e.statusCode === 400) return res.status(400).json({ message: e.message });
-      if (isMissingTableError(e)) return res.status(503).json({ message: exitSchemaMsg });
+      if (isMissingTableError(e) || isSchemaError(e)) {
+        return res.status(503).json({ message: exitUnavailableMsg });
+      }
       return res.status(500).json({ message: e.message || 'Exit preview failed' });
     }
   });
@@ -96,7 +98,10 @@ function registerVipFarmerRoutes(app, { authMiddleware }) {
       return res.status(201).json(result);
     } catch (e) {
       if (e.statusCode === 400) return res.status(400).json({ message: e.message });
-      if (isMissingTableError(e)) return res.status(503).json({ message: exitSchemaMsg });
+      if (isMissingTableError(e) || isSchemaError(e)) {
+        return res.status(503).json({ message: exitUnavailableMsg });
+      }
+      console.error('[vip-farmers/exit/request]', e);
       return res.status(500).json({ message: e.message || 'Exit request failed' });
     }
   });
@@ -106,7 +111,9 @@ function registerVipFarmerRoutes(app, { authMiddleware }) {
       const result = await listUserVipExitRequests(req.userId, req.query.limit);
       return res.json(result);
     } catch (e) {
-      if (isMissingTableError(e)) return res.status(503).json({ message: exitSchemaMsg });
+      if (isMissingTableError(e) || isSchemaError(e)) {
+        return res.status(503).json({ message: exitUnavailableMsg });
+      }
       return res.status(500).json({ message: e.message || 'Failed to load exit requests' });
     }
   });

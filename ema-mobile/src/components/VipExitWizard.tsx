@@ -179,7 +179,12 @@ export function VipExitWizard({ visible, summary, onClose, onComplete }: Props) 
       });
       setDone(true);
     } catch (e) {
-      Alert.alert('Request failed', sanitizeUserFacingError((e as Error).message));
+      const err = e as Error & { status?: number };
+      const message =
+        err.status === 503
+          ? 'Exit withdrawals are not available yet. Please try again later or contact support.'
+          : sanitizeUserFacingError(err.message);
+      Alert.alert('Request failed', message);
     } finally {
       setSubmitting(false);
     }

@@ -4677,11 +4677,16 @@ function vipExitRequestToApi(row, email) {
 
 async function insertVipExitRequest(row) {
   const now = new Date().toISOString();
-  const { data, error } = await supabase
-    .from('vip_exit_requests')
-    .insert({ ...row, updated_at: now })
-    .select('*')
-    .single();
+  const payload = { ...row, updated_at: now };
+  let { data, error } = await supabase.from('vip_exit_requests').insert(payload).select('*').single();
+  if (error && isMissingColumnError(error, 'investment_extra_credit_usd')) {
+    const { investment_extra_credit_usd: _credit, ...withoutCredit } = payload;
+    ({ data, error } = await supabase
+      .from('vip_exit_requests')
+      .insert(withoutCredit)
+      .select('*')
+      .single());
+  }
   if (error) throw error;
   return data;
 }
