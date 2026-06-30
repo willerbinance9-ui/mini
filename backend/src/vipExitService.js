@@ -239,15 +239,30 @@ function parseChargeOptions(body = {}) {
   };
 }
 
-function computeApprovedTotals(req, chargeOptions) {
+function readAppliedAmount(body, amountKey, applyKey, quoted) {
+  if (body[applyKey] === false) return 0;
+  if (body[amountKey] != null && body[amountKey] !== '') {
+    const n = roundUsd(body[amountKey]);
+    if (!Number.isFinite(n) || n < 0) {
+      throw badRequest(`${amountKey} must be a non-negative amount`);
+    }
+    return n;
+  }
+  return roundUsd(quoted);
+}
+
+function resolveAppliedAmounts(req, body = {}) {
   const revenueSelected = roundUsd(req.revenue_selected_usd);
-  const penalty = chargeOptions.applyPenalty ? roundUsd(req.penalty_usd) : 0;
-  const gasFees = chargeOptions.applyGasFees ? roundUsd(req.gas_fees_usd) : 0;
-  const commission = chargeOptions.applyCommission ? roundUsd(req.commission_usd) : 0;
-  const gasReward = chargeOptions.applyGasReward ? roundUsd(req.gas_reward_usd) : 0;
-  const extraCredit = chargeOptions.applyInvestmentExtraCredit
-    ? roundUsd(req.investment_extra_credit_usd)
-    : 0;
+  const penalty = readAppliedAmount(body, 'penaltyUsd', 'applyPenalty', req.penalty_usd);
+  const gasFees = readAppliedAmount(body, 'gasFeesUsd', 'applyGasFees', req.gas_fees_usd);
+  const commission = readAppliedAmount(body, 'commissionUsd', 'applyCommission', req.commission_usd);
+  const gasReward = readAppliedAmount(body, 'gasRewardUsd', 'applyGasReward', req.gas_reward_usd);
+  const extraCredit = readAppliedAmount(
+    body,
+    'investmentExtraCreditUsd',
+    'applyInvestmentExtraCredit',
+    req.investment_extra_credit_usd
+  );
   const principalReturn = req.mode === 'full_stop' ? roundUsd(req.principal_return_usd) : 0;
   const netRevenue = roundUsd(Math.max(0, revenueSelected - penalty - gasFees - commission + gasReward));
   const netTotal = roundUsd(netRevenue + principalReturn + extraCredit);
@@ -261,7 +276,14 @@ function computeApprovedTotals(req, chargeOptions) {
     principalReturn,
     netRevenue,
     netTotal,
-    chargeOptions,
+  };
+}
+
+function computeApprovedTotals(req, chargeInput = {}) {
+  const applied = resolveAppliedAmounts(req, chargeInput);
+  return {
+    ...applied,
+    chargeOptions: parseChargeOptions(chargeInput),
   };
 }
 
@@ -413,5 +435,6 @@ module.exports = {
   rejectVipExitRequest,
   computeApprovedTotals,
   parseChargeOptions,
+  resolveAppliedAmounts,
   VIP_EXIT_REVENUE_PERCENTS,
 };

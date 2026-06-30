@@ -1413,10 +1413,10 @@
             </div>
             <p id="vipErr" class="err hidden"></p>
           </div>
-          <div class="card" style="margin-top:16px;">
+          <div id="vipExitRequestsCard" class="card superadmin-only" style="margin-top:16px;">
             <h3 style="margin:0 0 8px;font-size:1rem;">Pending VIP exit requests</h3>
             <p class="hint" style="margin-bottom:12px;">
-              Revenue and principal exit requests from the mobile app. Choose which charges to apply on approve; the member is notified automatically.
+              Superadmin only. Set penalty, commission, gas fees, rewards, and extra credit for each request, then approve. The member is notified automatically with the final payout.
             </p>
             <p id="vipExitStats" class="hint"></p>
             <div id="vipExitLoading" class="loading hidden">Loading exit requests…</div>
@@ -2065,21 +2065,32 @@
   </div>
 
   <div id="vipExitApproveModal" class="modal-backdrop hidden" data-modal>
-    <div class="card modal">
+    <div class="card modal modal-wide">
       <div class="modal-header">
-        <h2>Approve VIP exit</h2>
+        <h2>Set payout &amp; approve VIP exit</h2>
         <button type="button" class="modal-close" data-close-modal="vipExitApproveModal" aria-label="Close">×</button>
       </div>
       <p id="vipExitApproveMeta" class="hint"></p>
-      <p class="hint" style="margin-bottom:10px;">Uncheck a charge to waive it. The member receives an in-app notification with the final breakdown.</p>
-      <div id="vipExitChargeOptions" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+      <p class="hint" style="margin-bottom:10px;">
+        Adjust each amount below (quoted values are pre-filled). Set to <strong>0</strong> to waive a charge. Net payout updates as you edit.
+      </p>
+      <div class="grid-2" style="margin-bottom:12px;">
+        <div>
+          <label>Revenue selected (fixed)</label>
+          <input id="vipExitRevenueSelected" type="text" readonly style="opacity:0.85;" />
+        </div>
+        <div id="vipExitPrincipalField">
+          <label>Principal return (fixed)</label>
+          <input id="vipExitPrincipalReturn" type="text" readonly style="opacity:0.85;" />
+        </div>
+      </div>
+      <div id="vipExitChargeOptions" class="grid-2" style="margin-bottom:12px;"></div>
       <div class="card" style="padding:12px;background:var(--surface-2);margin-bottom:12px;">
         <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Net revenue</span><strong id="vipExitPreviewNetRevenue">—</strong></div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span id="vipExitPreviewPrincipalLabel">Principal return</span><strong id="vipExitPreviewPrincipal">—</strong></div>
-        <div style="display:flex;justify-content:space-between;font-size:1.05rem;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);"><span>Net payout</span><strong id="vipExitPreviewNetTotal">—</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:1.05rem;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);"><span>Net payout to member</span><strong id="vipExitPreviewNetTotal">—</strong></div>
       </div>
       <div class="row">
-        <button type="button" class="btn-primary" id="vipExitApproveConfirmBtn" style="width:auto;">Approve &amp; notify member</button>
+        <button type="button" class="btn-primary" id="vipExitApproveConfirmBtn" style="width:auto;">Approve payout &amp; notify member</button>
         <button type="button" class="btn-ghost" data-close-modal="vipExitApproveModal" style="width:auto;">Cancel</button>
       </div>
       <p id="vipExitApproveErr" class="err hidden"></p>
@@ -5182,8 +5193,12 @@
             ? 'TRC20<br><span style="font-size:0.72rem;color:var(--muted);">' + escapeHtml(r.walletAddress || '—') + '</span>'
             : 'Platform';
         const actionCell =
-          '<button type="button" class="btn-primary" data-approve-vip-exit="' + r.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Approve</button>' +
-          '<button type="button" class="btn-danger" data-reject-vip-exit="' + r.id + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Reject</button>';
+          '<button type="button" class="btn-primary" data-approve-vip-exit="' +
+          r.id +
+          '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Set payout</button>' +
+          '<button type="button" class="btn-danger" data-reject-vip-exit="' +
+          r.id +
+          '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Reject</button>';
         tr.innerHTML =
           '<td>' + escapeHtml(r.userEmail || '—') + '</td>' +
           '<td>' + escapeHtml(modeLabel) + '</td>' +
@@ -5206,6 +5221,7 @@
     }
 
     async function loadVipExitRequests() {
+      if (adminRole !== 'superadmin') return;
       document.getElementById('vipExitErr').classList.add('hidden');
       document.getElementById('vipExitLoading').classList.remove('hidden');
       try {
@@ -5225,48 +5241,47 @@
       return Math.round(Number(n || 0) * 100) / 100;
     }
 
-    function computeVipExitAppliedPreview(req, chargeOptions) {
+    function computeVipExitAppliedPreview(req, amounts) {
       const revenueSelected = roundUsdAdmin(req.revenueSelectedUsd);
-      const penalty = chargeOptions.applyPenalty ? roundUsdAdmin(req.penaltyUsd) : 0;
-      const gasFees = chargeOptions.applyGasFees ? roundUsdAdmin(req.gasFeesUsd) : 0;
-      const commission = chargeOptions.applyCommission ? roundUsdAdmin(req.commissionUsd) : 0;
-      const gasReward = chargeOptions.applyGasReward ? roundUsdAdmin(req.gasRewardUsd) : 0;
-      const extraCredit = chargeOptions.applyInvestmentExtraCredit
-        ? roundUsdAdmin(req.investmentExtraCreditUsd)
-        : 0;
+      const penalty = roundUsdAdmin(amounts.penaltyUsd);
+      const gasFees = roundUsdAdmin(amounts.gasFeesUsd);
+      const commission = roundUsdAdmin(amounts.commissionUsd);
+      const gasReward = roundUsdAdmin(amounts.gasRewardUsd);
+      const extraCredit = roundUsdAdmin(amounts.investmentExtraCreditUsd);
       const principalReturn = req.mode === 'full_stop' ? roundUsdAdmin(req.principalReturnUsd) : 0;
       const netRevenue = roundUsdAdmin(Math.max(0, revenueSelected - penalty - gasFees - commission + gasReward));
       const netTotal = roundUsdAdmin(netRevenue + principalReturn + extraCredit);
-      return { netRevenue, netTotal, principalReturn, extraCredit };
+      return { netRevenue, netTotal, principalReturn, extraCredit, revenueSelected };
     }
 
-    function readVipExitChargeOptions() {
+    function readVipExitAppliedAmounts() {
+      const read = (id) => {
+        const el = document.getElementById(id);
+        const n = Number(el?.value);
+        return Number.isFinite(n) && n >= 0 ? roundUsdAdmin(n) : 0;
+      };
       return {
-        applyPenalty: document.getElementById('vipExitApplyPenalty')?.checked !== false,
-        applyGasFees: document.getElementById('vipExitApplyGasFees')?.checked !== false,
-        applyCommission: document.getElementById('vipExitApplyCommission')?.checked !== false,
-        applyGasReward: document.getElementById('vipExitApplyGasReward')?.checked !== false,
-        applyInvestmentExtraCredit: document.getElementById('vipExitApplyExtraCredit')?.checked !== false,
+        penaltyUsd: read('vipExitPenaltyUsd'),
+        gasFeesUsd: read('vipExitGasFeesUsd'),
+        commissionUsd: read('vipExitCommissionUsd'),
+        gasRewardUsd: read('vipExitGasRewardUsd'),
+        investmentExtraCreditUsd: read('vipExitExtraCreditUsd'),
       };
     }
 
     function renderVipExitApprovePreview() {
       if (!vipExitApproveTarget) return;
-      const opts = readVipExitChargeOptions();
-      const preview = computeVipExitAppliedPreview(vipExitApproveTarget, opts);
+      const amounts = readVipExitAppliedAmounts();
+      const preview = computeVipExitAppliedPreview(vipExitApproveTarget, amounts);
       document.getElementById('vipExitPreviewNetRevenue').textContent = fmtMoney(preview.netRevenue);
-      document.getElementById('vipExitPreviewPrincipal').textContent = fmtMoney(preview.principalReturn);
       document.getElementById('vipExitPreviewNetTotal').textContent = fmtMoney(preview.netTotal);
-      const principalLabel = document.getElementById('vipExitPreviewPrincipalLabel');
-      if (vipExitApproveTarget.mode === 'full_stop') {
-        principalLabel.textContent = 'Principal return';
-        principalLabel.parentElement.style.display = 'flex';
-      } else {
-        principalLabel.parentElement.style.display = 'none';
-      }
     }
 
     function openVipExitApproveModal(id) {
+      if (adminRole !== 'superadmin') {
+        alert('Only superadmin can set payout amounts and approve VIP exits.');
+        return;
+      }
       const req = pendingVipExitRequests.find((r) => r.id === id);
       if (!req) return;
       vipExitApproveTarget = req;
@@ -5274,59 +5289,96 @@
       const modeLabel = req.mode === 'full_stop' ? 'Stop all' : 'Partial continue';
       const dest = req.destination === 'direct_wallet' ? 'TRC20 wallet' : 'Platform wallet';
       document.getElementById('vipExitApproveMeta').textContent =
-        (req.userEmail || 'Member') + ' · ' + modeLabel + ' · ' + Number(req.revenuePercent) + '% revenue · ' + dest;
+        (req.userEmail || 'Member') +
+        ' · ' +
+        modeLabel +
+        ' · ' +
+        Number(req.revenuePercent) +
+        '% revenue · ' +
+        dest +
+        ' · quoted net ' +
+        fmtMoney(req.netTotalUsd || 0);
 
-      const options = [
-        { id: 'vipExitApplyPenalty', label: 'Penalty', amount: req.penaltyUsd, defaultOn: Number(req.penaltyUsd) > 0 },
-        { id: 'vipExitApplyGasFees', label: 'Gas fees', amount: req.gasFeesUsd, defaultOn: Number(req.gasFeesUsd) > 0 },
-        { id: 'vipExitApplyCommission', label: 'Commission (30%)', amount: req.commissionUsd, defaultOn: Number(req.commissionUsd) > 0 },
-        { id: 'vipExitApplyGasReward', label: 'Gas reward', amount: req.gasRewardUsd, defaultOn: Number(req.gasRewardUsd) > 0 },
+      document.getElementById('vipExitRevenueSelected').value = fmtMoney(req.revenueSelectedUsd || 0);
+      const principalField = document.getElementById('vipExitPrincipalField');
+      if (req.mode === 'full_stop') {
+        principalField.style.display = 'block';
+        document.getElementById('vipExitPrincipalReturn').value = fmtMoney(req.principalReturnUsd || 0);
+      } else {
+        principalField.style.display = 'none';
+      }
+
+      const fields = [
         {
-          id: 'vipExitApplyExtraCredit',
+          id: 'vipExitPenaltyUsd',
+          label: 'Penalty',
+          value: req.penaltyUsd,
+          hint: 'Quoted ' + fmtMoney(req.penaltyUsd || 0) + (req.penaltyFree ? ' (penalty-free day)' : ''),
+        },
+        {
+          id: 'vipExitGasFeesUsd',
+          label: 'Gas fees',
+          value: req.gasFeesUsd,
+          hint: 'Quoted ' + fmtMoney(req.gasFeesUsd || 0),
+        },
+        {
+          id: 'vipExitCommissionUsd',
+          label: 'Commission',
+          value: req.commissionUsd,
+          hint: 'Quoted ' + fmtMoney(req.commissionUsd || 0),
+        },
+        {
+          id: 'vipExitGasRewardUsd',
+          label: 'Gas reward',
+          value: req.gasRewardUsd,
+          hint: 'Quoted ' + fmtMoney(req.gasRewardUsd || 0),
+        },
+        {
+          id: 'vipExitExtraCreditUsd',
           label: 'Investment extra credit',
-          amount: req.investmentExtraCreditUsd,
-          defaultOn: Number(req.investmentExtraCreditUsd) > 0,
+          value: req.investmentExtraCreditUsd,
+          hint: 'Quoted ' + fmtMoney(req.investmentExtraCreditUsd || 0),
         },
       ];
       const container = document.getElementById('vipExitChargeOptions');
       container.innerHTML = '';
-      options.forEach((opt) => {
-        const disabled = Number(opt.amount || 0) <= 0;
-        const label = document.createElement('label');
-        label.style.cssText =
-          'display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;opacity:' +
-          (disabled ? '0.55' : '1') +
-          ';';
-        label.innerHTML =
-          '<input type="checkbox" id="' +
-          opt.id +
-          '" style="width:auto;margin:0;" ' +
-          (disabled ? 'disabled' : 'checked') +
-          ' />' +
-          '<span>' +
-          escapeHtml(opt.label) +
-          ' · ' +
-          fmtMoney(opt.amount || 0) +
-          '</span>';
-        container.appendChild(label);
-        if (!disabled) {
-          label.querySelector('input').addEventListener('change', renderVipExitApprovePreview);
-        }
+      fields.forEach((field) => {
+        const wrap = document.createElement('div');
+        wrap.innerHTML =
+          '<label for="' +
+          field.id +
+          '">' +
+          escapeHtml(field.label) +
+          '</label>' +
+          '<input id="' +
+          field.id +
+          '" type="number" step="0.01" min="0" value="' +
+          Number(field.value || 0).toFixed(2) +
+          '" />' +
+          '<p class="hint" style="margin:4px 0 0;font-size:0.72rem;">' +
+          escapeHtml(field.hint) +
+          '</p>';
+        container.appendChild(wrap);
+        wrap.querySelector('input').addEventListener('input', renderVipExitApprovePreview);
       });
       renderVipExitApprovePreview();
       document.getElementById('vipExitApproveModal').classList.remove('hidden');
     }
 
     async function confirmVipExitApprove() {
+      if (adminRole !== 'superadmin') {
+        alert('Only superadmin can approve VIP exits.');
+        return;
+      }
       if (!vipExitApproveTarget) return;
       const btn = document.getElementById('vipExitApproveConfirmBtn');
-      const chargeOptions = readVipExitChargeOptions();
+      const appliedAmounts = readVipExitAppliedAmounts();
       document.getElementById('vipExitApproveErr').classList.add('hidden');
       btn.disabled = true;
       try {
         await api('/admin/api/vip-farmers/exit-requests/' + vipExitApproveTarget.id + '/approve', {
           method: 'POST',
-          body: JSON.stringify(chargeOptions),
+          body: JSON.stringify(appliedAmounts),
         });
         closeModal('vipExitApproveModal');
         vipExitApproveTarget = null;
@@ -5341,6 +5393,10 @@
     }
 
     async function actOnVipExitRequest(id, action, btnEl) {
+      if (adminRole !== 'superadmin') {
+        alert('Only superadmin can action VIP exit requests.');
+        return;
+      }
       if (!id) return;
       if (action === 'reject') {
         const note = prompt('Rejection note (optional):', '');

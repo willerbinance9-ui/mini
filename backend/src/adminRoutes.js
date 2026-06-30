@@ -1376,7 +1376,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.get('/admin/api/vip-farmers/exit-requests', adminAuthMiddleware, async (req, res) => {
+  app.get('/admin/api/vip-farmers/exit-requests', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const status = String(req.query.status || 'pending').trim();
       const result = await listAdminVipExitRequests({
@@ -1397,7 +1397,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/admin/api/vip-farmers/exit-requests/:id/preview-approve', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/vip-farmers/exit-requests/:id/preview-approve', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const result = await previewApproveVipExitRequest(req.params.id, req.body || {});
       return res.json(result);
@@ -1408,7 +1408,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/admin/api/vip-farmers/exit-requests/:id/approve', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/vip-farmers/exit-requests/:id/approve', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const result = await approveVipExitRequest(req.params.id, req.body || {});
       return res.json(result);
@@ -1425,7 +1425,7 @@ function registerAdminRoutes(app) {
     }
   });
 
-  app.post('/admin/api/vip-farmers/exit-requests/:id/reject', adminAuthMiddleware, async (req, res) => {
+  app.post('/admin/api/vip-farmers/exit-requests/:id/reject', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const result = await rejectVipExitRequest(req.params.id, req.body?.note);
       return res.json(result);
