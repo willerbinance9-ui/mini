@@ -4655,6 +4655,16 @@ function vipExitRequestToApi(row, email) {
     principalReturnUsd: Number(row.principal_return_usd),
     netTotalUsd: Number(row.net_total_usd),
     investmentExtraCreditUsd: Number(row.investment_extra_credit_usd || 0),
+    appliedPenaltyUsd: row.applied_penalty_usd != null ? Number(row.applied_penalty_usd) : null,
+    appliedGasFeesUsd: row.applied_gas_fees_usd != null ? Number(row.applied_gas_fees_usd) : null,
+    appliedCommissionUsd: row.applied_commission_usd != null ? Number(row.applied_commission_usd) : null,
+    appliedGasRewardUsd: row.applied_gas_reward_usd != null ? Number(row.applied_gas_reward_usd) : null,
+    appliedInvestmentExtraCreditUsd:
+      row.applied_investment_extra_credit_usd != null
+        ? Number(row.applied_investment_extra_credit_usd)
+        : null,
+    appliedNetRevenueUsd: row.applied_net_revenue_usd != null ? Number(row.applied_net_revenue_usd) : null,
+    appliedNetTotalUsd: row.applied_net_total_usd != null ? Number(row.applied_net_total_usd) : null,
     workingDays: Number(row.working_days),
     calendarDays: Number(row.calendar_days),
     penaltyFree: Boolean(row.penalty_free),
@@ -4687,6 +4697,15 @@ async function updateVipExitRequest(id, patch) {
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.adminNote !== undefined) row.admin_note = patch.adminNote;
   if (patch.reviewedAt !== undefined) row.reviewed_at = patch.reviewedAt;
+  if (patch.appliedPenaltyUsd !== undefined) row.applied_penalty_usd = patch.appliedPenaltyUsd;
+  if (patch.appliedGasFeesUsd !== undefined) row.applied_gas_fees_usd = patch.appliedGasFeesUsd;
+  if (patch.appliedCommissionUsd !== undefined) row.applied_commission_usd = patch.appliedCommissionUsd;
+  if (patch.appliedGasRewardUsd !== undefined) row.applied_gas_reward_usd = patch.appliedGasRewardUsd;
+  if (patch.appliedInvestmentExtraCreditUsd !== undefined) {
+    row.applied_investment_extra_credit_usd = patch.appliedInvestmentExtraCreditUsd;
+  }
+  if (patch.appliedNetRevenueUsd !== undefined) row.applied_net_revenue_usd = patch.appliedNetRevenueUsd;
+  if (patch.appliedNetTotalUsd !== undefined) row.applied_net_total_usd = patch.appliedNetTotalUsd;
   const { data, error } = await supabase
     .from('vip_exit_requests')
     .update(row)

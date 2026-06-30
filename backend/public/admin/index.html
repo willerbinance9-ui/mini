@@ -1416,7 +1416,7 @@
           <div class="card" style="margin-top:16px;">
             <h3 style="margin:0 0 8px;font-size:1rem;">Pending VIP exit requests</h3>
             <p class="hint" style="margin-bottom:12px;">
-              Revenue and principal exit requests from the mobile app. Approve to credit platform wallet or mark direct TRC20 payout sent.
+              Revenue and principal exit requests from the mobile app. Choose which charges to apply on approve; the member is notified automatically.
             </p>
             <p id="vipExitStats" class="hint"></p>
             <div id="vipExitLoading" class="loading hidden">Loading exit requests…</div>
@@ -2064,6 +2064,28 @@
     </div>
   </div>
 
+  <div id="vipExitApproveModal" class="modal-backdrop hidden" data-modal>
+    <div class="card modal">
+      <div class="modal-header">
+        <h2>Approve VIP exit</h2>
+        <button type="button" class="modal-close" data-close-modal="vipExitApproveModal" aria-label="Close">×</button>
+      </div>
+      <p id="vipExitApproveMeta" class="hint"></p>
+      <p class="hint" style="margin-bottom:10px;">Uncheck a charge to waive it. The member receives an in-app notification with the final breakdown.</p>
+      <div id="vipExitChargeOptions" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+      <div class="card" style="padding:12px;background:var(--surface-2);margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span>Net revenue</span><strong id="vipExitPreviewNetRevenue">—</strong></div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span id="vipExitPreviewPrincipalLabel">Principal return</span><strong id="vipExitPreviewPrincipal">—</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:1.05rem;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);"><span>Net payout</span><strong id="vipExitPreviewNetTotal">—</strong></div>
+      </div>
+      <div class="row">
+        <button type="button" class="btn-primary" id="vipExitApproveConfirmBtn" style="width:auto;">Approve &amp; notify member</button>
+        <button type="button" class="btn-ghost" data-close-modal="vipExitApproveModal" style="width:auto;">Cancel</button>
+      </div>
+      <p id="vipExitApproveErr" class="err hidden"></p>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script>
     const TOKEN_KEY = 'ema_admin_token';
@@ -2119,6 +2141,7 @@
     let pendingWithdrawals = [];
     let pendingDropPayouts = [];
     let pendingVipExitRequests = [];
+    let vipExitApproveTarget = null;
     let p2pTrades = [];
     let aiPlan = null;
     let aiAllocations = [];
@@ -5173,7 +5196,7 @@
         tbody.appendChild(tr);
       });
       tbody.querySelectorAll('button[data-approve-vip-exit]').forEach((btn) => {
-        btn.onclick = () => actOnVipExitRequest(btn.getAttribute('data-approve-vip-exit'), 'approve', btn);
+        btn.onclick = () => openVipExitApproveModal(btn.getAttribute('data-approve-vip-exit'));
       });
       tbody.querySelectorAll('button[data-reject-vip-exit]').forEach((btn) => {
         btn.onclick = () => actOnVipExitRequest(btn.getAttribute('data-reject-vip-exit'), 'reject', btn);
@@ -5198,6 +5221,125 @@
       }
     }
 
+    function roundUsdAdmin(n) {
+      return Math.round(Number(n || 0) * 100) / 100;
+    }
+
+    function computeVipExitAppliedPreview(req, chargeOptions) {
+      const revenueSelected = roundUsdAdmin(req.revenueSelectedUsd);
+      const penalty = chargeOptions.applyPenalty ? roundUsdAdmin(req.penaltyUsd) : 0;
+      const gasFees = chargeOptions.applyGasFees ? roundUsdAdmin(req.gasFeesUsd) : 0;
+      const commission = chargeOptions.applyCommission ? roundUsdAdmin(req.commissionUsd) : 0;
+      const gasReward = chargeOptions.applyGasReward ? roundUsdAdmin(req.gasRewardUsd) : 0;
+      const extraCredit = chargeOptions.applyInvestmentExtraCredit
+        ? roundUsdAdmin(req.investmentExtraCreditUsd)
+        : 0;
+      const principalReturn = req.mode === 'full_stop' ? roundUsdAdmin(req.principalReturnUsd) : 0;
+      const netRevenue = roundUsdAdmin(Math.max(0, revenueSelected - penalty - gasFees - commission + gasReward));
+      const netTotal = roundUsdAdmin(netRevenue + principalReturn + extraCredit);
+      return { netRevenue, netTotal, principalReturn, extraCredit };
+    }
+
+    function readVipExitChargeOptions() {
+      return {
+        applyPenalty: document.getElementById('vipExitApplyPenalty')?.checked !== false,
+        applyGasFees: document.getElementById('vipExitApplyGasFees')?.checked !== false,
+        applyCommission: document.getElementById('vipExitApplyCommission')?.checked !== false,
+        applyGasReward: document.getElementById('vipExitApplyGasReward')?.checked !== false,
+        applyInvestmentExtraCredit: document.getElementById('vipExitApplyExtraCredit')?.checked !== false,
+      };
+    }
+
+    function renderVipExitApprovePreview() {
+      if (!vipExitApproveTarget) return;
+      const opts = readVipExitChargeOptions();
+      const preview = computeVipExitAppliedPreview(vipExitApproveTarget, opts);
+      document.getElementById('vipExitPreviewNetRevenue').textContent = fmtMoney(preview.netRevenue);
+      document.getElementById('vipExitPreviewPrincipal').textContent = fmtMoney(preview.principalReturn);
+      document.getElementById('vipExitPreviewNetTotal').textContent = fmtMoney(preview.netTotal);
+      const principalLabel = document.getElementById('vipExitPreviewPrincipalLabel');
+      if (vipExitApproveTarget.mode === 'full_stop') {
+        principalLabel.textContent = 'Principal return';
+        principalLabel.parentElement.style.display = 'flex';
+      } else {
+        principalLabel.parentElement.style.display = 'none';
+      }
+    }
+
+    function openVipExitApproveModal(id) {
+      const req = pendingVipExitRequests.find((r) => r.id === id);
+      if (!req) return;
+      vipExitApproveTarget = req;
+      document.getElementById('vipExitApproveErr').classList.add('hidden');
+      const modeLabel = req.mode === 'full_stop' ? 'Stop all' : 'Partial continue';
+      const dest = req.destination === 'direct_wallet' ? 'TRC20 wallet' : 'Platform wallet';
+      document.getElementById('vipExitApproveMeta').textContent =
+        (req.userEmail || 'Member') + ' · ' + modeLabel + ' · ' + Number(req.revenuePercent) + '% revenue · ' + dest;
+
+      const options = [
+        { id: 'vipExitApplyPenalty', label: 'Penalty', amount: req.penaltyUsd, defaultOn: Number(req.penaltyUsd) > 0 },
+        { id: 'vipExitApplyGasFees', label: 'Gas fees', amount: req.gasFeesUsd, defaultOn: Number(req.gasFeesUsd) > 0 },
+        { id: 'vipExitApplyCommission', label: 'Commission (30%)', amount: req.commissionUsd, defaultOn: Number(req.commissionUsd) > 0 },
+        { id: 'vipExitApplyGasReward', label: 'Gas reward', amount: req.gasRewardUsd, defaultOn: Number(req.gasRewardUsd) > 0 },
+        {
+          id: 'vipExitApplyExtraCredit',
+          label: 'Investment extra credit',
+          amount: req.investmentExtraCreditUsd,
+          defaultOn: Number(req.investmentExtraCreditUsd) > 0,
+        },
+      ];
+      const container = document.getElementById('vipExitChargeOptions');
+      container.innerHTML = '';
+      options.forEach((opt) => {
+        const disabled = Number(opt.amount || 0) <= 0;
+        const label = document.createElement('label');
+        label.style.cssText =
+          'display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;opacity:' +
+          (disabled ? '0.55' : '1') +
+          ';';
+        label.innerHTML =
+          '<input type="checkbox" id="' +
+          opt.id +
+          '" style="width:auto;margin:0;" ' +
+          (disabled ? 'disabled' : 'checked') +
+          ' />' +
+          '<span>' +
+          escapeHtml(opt.label) +
+          ' · ' +
+          fmtMoney(opt.amount || 0) +
+          '</span>';
+        container.appendChild(label);
+        if (!disabled) {
+          label.querySelector('input').addEventListener('change', renderVipExitApprovePreview);
+        }
+      });
+      renderVipExitApprovePreview();
+      document.getElementById('vipExitApproveModal').classList.remove('hidden');
+    }
+
+    async function confirmVipExitApprove() {
+      if (!vipExitApproveTarget) return;
+      const btn = document.getElementById('vipExitApproveConfirmBtn');
+      const chargeOptions = readVipExitChargeOptions();
+      document.getElementById('vipExitApproveErr').classList.add('hidden');
+      btn.disabled = true;
+      try {
+        await api('/admin/api/vip-farmers/exit-requests/' + vipExitApproveTarget.id + '/approve', {
+          method: 'POST',
+          body: JSON.stringify(chargeOptions),
+        });
+        closeModal('vipExitApproveModal');
+        vipExitApproveTarget = null;
+        await loadVipExitRequests();
+        await loadVipFarmers();
+      } catch (e) {
+        document.getElementById('vipExitApproveErr').textContent = e.message;
+        document.getElementById('vipExitApproveErr').classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
     async function actOnVipExitRequest(id, action, btnEl) {
       if (!id) return;
       if (action === 'reject') {
@@ -5218,18 +5360,9 @@
         }
         return;
       }
-      if (!confirm('Approve this VIP exit request and apply payout?')) return;
-      btnEl.disabled = true;
-      try {
-        await api('/admin/api/vip-farmers/exit-requests/' + id + '/approve', { method: 'POST' });
-        await loadVipExitRequests();
-        await loadVipFarmers();
-      } catch (e) {
-        alert(e.message);
-      } finally {
-        btnEl.disabled = false;
-      }
     }
+
+    document.getElementById('vipExitApproveConfirmBtn').addEventListener('click', confirmVipExitApprove);
 
     function showLiveTradingErr(e) {
       document.getElementById('liveTradingErr').textContent = e.message;

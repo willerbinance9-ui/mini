@@ -29,7 +29,9 @@ const {
   vipCalendarDaysSinceStart,
   vipInvestmentToApi,
   vipExitRequestToApi,
+  createAppNotification,
 } = require('./db');
+const { deliverUserAlert } = require('./depositNotifications');
 
 function newId() {
   return crypto.randomUUID();
@@ -227,17 +229,113 @@ async function listAdminVipExitRequests({ status = 'pending', limit = 200 } = {}
   };
 }
 
-async function approveVipExitRequest(requestId) {
+function parseChargeOptions(body = {}) {
+  return {
+    applyPenalty: body.applyPenalty !== false,
+    applyGasFees: body.applyGasFees !== false,
+    applyCommission: body.applyCommission !== false,
+    applyGasReward: body.applyGasReward !== false,
+    applyInvestmentExtraCredit: body.applyInvestmentExtraCredit !== false,
+  };
+}
+
+function computeApprovedTotals(req, chargeOptions) {
+  const revenueSelected = roundUsd(req.revenue_selected_usd);
+  const penalty = chargeOptions.applyPenalty ? roundUsd(req.penalty_usd) : 0;
+  const gasFees = chargeOptions.applyGasFees ? roundUsd(req.gas_fees_usd) : 0;
+  const commission = chargeOptions.applyCommission ? roundUsd(req.commission_usd) : 0;
+  const gasReward = chargeOptions.applyGasReward ? roundUsd(req.gas_reward_usd) : 0;
+  const extraCredit = chargeOptions.applyInvestmentExtraCredit
+    ? roundUsd(req.investment_extra_credit_usd)
+    : 0;
+  const principalReturn = req.mode === 'full_stop' ? roundUsd(req.principal_return_usd) : 0;
+  const netRevenue = roundUsd(Math.max(0, revenueSelected - penalty - gasFees - commission + gasReward));
+  const netTotal = roundUsd(netRevenue + principalReturn + extraCredit);
+  return {
+    revenueSelected,
+    penalty,
+    gasFees,
+    commission,
+    gasReward,
+    extraCredit,
+    principalReturn,
+    netRevenue,
+    netTotal,
+    chargeOptions,
+  };
+}
+
+function formatUsd(n) {
+  return '$' + Number(n || 0).toFixed(2);
+}
+
+function buildApprovalNotificationBody(req, applied) {
+  const parts = ['Your VIP exit request was approved and processed.'];
+  if (applied.revenueSelected > 0) {
+    parts.push(`Revenue: ${formatUsd(applied.revenueSelected)}.`);
+  }
+  const deductions = [];
+  if (applied.penalty > 0) deductions.push(`penalty ${formatUsd(applied.penalty)}`);
+  if (applied.gasFees > 0) deductions.push(`gas fees ${formatUsd(applied.gasFees)}`);
+  if (applied.commission > 0) deductions.push(`commission ${formatUsd(applied.commission)}`);
+  if (deductions.length) parts.push(`Deductions applied: ${deductions.join(', ')}.`);
+  const credits = [];
+  if (applied.gasReward > 0) credits.push(`gas reward ${formatUsd(applied.gasReward)}`);
+  if (applied.extraCredit > 0) credits.push(`investment credit ${formatUsd(applied.extraCredit)}`);
+  if (credits.length) parts.push(`Credits applied: ${credits.join(', ')}.`);
+  if (req.mode === 'full_stop' && applied.principalReturn > 0) {
+    parts.push(`Principal returned: ${formatUsd(applied.principalReturn)}.`);
+  }
+  parts.push(`Net payout: ${formatUsd(applied.netTotal)}.`);
+  if (req.destination === 'platform') {
+    parts.push('Credited to your cash wallet.');
+  } else {
+    parts.push('Will be sent to your TRC20 wallet.');
+  }
+  return parts.join(' ');
+}
+
+function buildRejectionNotificationBody(adminNote) {
+  const parts = ['Your VIP exit request was not approved.'];
+  if (adminNote) parts.push(String(adminNote).trim());
+  parts.push('Your VIP investment is unchanged. You may submit a new request when ready.');
+  return parts.join(' ');
+}
+
+async function notifyVipExitOutcome(userId, title, body) {
+  try {
+    await deliverUserAlert({ userId, title, body });
+  } catch (err) {
+    console.error('[vip-exit] notification failed:', err.message);
+    try {
+      await createAppNotification({ userId, title, body });
+    } catch (innerErr) {
+      console.error('[vip-exit] in-app notification fallback failed:', innerErr.message);
+    }
+  }
+}
+
+async function previewApproveVipExitRequest(requestId, chargeOptionsInput = {}) {
+  const req = await getVipExitRequestById(requestId);
+  if (!req) throw badRequest('Request not found');
+  if (req.status !== 'pending') throw badRequest('Request is not pending');
+  const chargeOptions = parseChargeOptions(chargeOptionsInput);
+  const applied = computeApprovedTotals(req, chargeOptions);
+  return { request: vipExitRequestToApi(req), applied };
+}
+
+async function approveVipExitRequest(requestId, chargeOptionsInput = {}) {
   const req = await getVipExitRequestById(requestId);
   if (!req) throw badRequest('Request not found');
   if (req.status !== 'pending') throw badRequest('Request is not pending');
 
+  const chargeOptions = parseChargeOptions(chargeOptionsInput);
+  const applied = computeApprovedTotals(req, chargeOptions);
+  const netTotal = applied.netTotal;
+  const revenueSelected = applied.revenueSelected;
+
   const inv = await getVipInvestmentById(req.investment_id);
   if (!inv) throw badRequest('Investment not found');
-
-  const netTotal = roundUsd(req.net_total_usd);
-  const netRevenue = roundUsd(req.net_revenue_usd);
-  const revenueSelected = roundUsd(req.revenue_selected_usd);
 
   if (req.destination === 'platform' && netTotal > 0) {
     const wallet = await ensureWalletForUser(req.user_id);
@@ -264,10 +362,23 @@ async function approveVipExitRequest(requestId) {
   await updateVipExitRequest(requestId, {
     status: 'completed',
     reviewedAt,
+    appliedPenaltyUsd: applied.penalty,
+    appliedGasFeesUsd: applied.gasFees,
+    appliedCommissionUsd: applied.commission,
+    appliedGasRewardUsd: applied.gasReward,
+    appliedInvestmentExtraCreditUsd: applied.extraCredit,
+    appliedNetRevenueUsd: applied.netRevenue,
+    appliedNetTotalUsd: applied.netTotal,
   });
 
+  await notifyVipExitOutcome(
+    req.user_id,
+    'VIP exit processed',
+    buildApprovalNotificationBody(req, applied)
+  );
+
   const updated = await getVipExitRequestById(requestId);
-  return { request: vipExitRequestToApi(updated) };
+  return { request: vipExitRequestToApi(updated), applied, payout: netTotal };
 }
 
 async function rejectVipExitRequest(requestId, note) {
@@ -275,12 +386,20 @@ async function rejectVipExitRequest(requestId, note) {
   if (!req) throw badRequest('Request not found');
   if (req.status !== 'pending') throw badRequest('Request is not pending');
 
+  const adminNote = note ? String(note).trim() : null;
   const reviewedAt = new Date().toISOString();
   const updated = await updateVipExitRequest(requestId, {
     status: 'rejected',
-    adminNote: note ? String(note).trim() : null,
+    adminNote,
     reviewedAt,
   });
+
+  await notifyVipExitOutcome(
+    req.user_id,
+    'VIP exit request declined',
+    buildRejectionNotificationBody(adminNote)
+  );
+
   return { request: vipExitRequestToApi(updated) };
 }
 
@@ -289,7 +408,10 @@ module.exports = {
   submitVipExitRequest,
   listUserVipExitRequests,
   listAdminVipExitRequests,
+  previewApproveVipExitRequest,
   approveVipExitRequest,
   rejectVipExitRequest,
+  computeApprovedTotals,
+  parseChargeOptions,
   VIP_EXIT_REVENUE_PERCENTS,
 };

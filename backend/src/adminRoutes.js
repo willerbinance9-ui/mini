@@ -59,6 +59,7 @@ const {
 } = require('./db');
 const {
   listAdminVipExitRequests,
+  previewApproveVipExitRequest,
   approveVipExitRequest,
   rejectVipExitRequest,
 } = require('./vipExitService');
@@ -1396,9 +1397,20 @@ function registerAdminRoutes(app) {
     }
   });
 
+  app.post('/admin/api/vip-farmers/exit-requests/:id/preview-approve', adminAuthMiddleware, async (req, res) => {
+    try {
+      const result = await previewApproveVipExitRequest(req.params.id, req.body || {});
+      return res.json(result);
+    } catch (e) {
+      if (e.statusCode === 400) return res.status(400).json({ message: e.message });
+      console.error('[admin/vip-farmers/exit-requests/preview-approve]', e);
+      return res.status(500).json({ message: e.message || 'Preview failed' });
+    }
+  });
+
   app.post('/admin/api/vip-farmers/exit-requests/:id/approve', adminAuthMiddleware, async (req, res) => {
     try {
-      const result = await approveVipExitRequest(req.params.id);
+      const result = await approveVipExitRequest(req.params.id, req.body || {});
       return res.json(result);
     } catch (e) {
       if (e.statusCode === 400) return res.status(400).json({ message: e.message });
