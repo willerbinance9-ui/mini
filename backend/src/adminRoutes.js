@@ -53,8 +53,15 @@ const {
   listVipAccrualsForInvestmentIds,
   VIP_DAILY_RATE,
   VIP_LOCK_DAYS,
+  VIP_LOCK_DAYS_CALENDAR,
+  VIP_ACCRUAL_MAX_WORKING_DAYS,
   vipInvestmentToApi,
 } = require('./db');
+const {
+  listAdminVipExitRequests,
+  approveVipExitRequest,
+  rejectVipExitRequest,
+} = require('./vipExitService');
 const { normalizeTargetUserId } = require('./notificationRoutes');
 const { approveWithdrawal, rejectWithdrawal } = require('./adminWithdrawals');
 const { releaseP2pEscrow, refundP2pEscrow } = require('./p2pEscrow');
@@ -1330,7 +1337,8 @@ function registerAdminRoutes(app) {
           totalAccruedUsd: Number(inv.totalAccruedUsd || 0),
           daysAccrued: Number(inv.daysAccrued || 0),
           daysLeft: inv.daysLeft,
-          lockDays: VIP_LOCK_DAYS,
+          lockDays: VIP_LOCK_DAYS_CALENDAR,
+          lockDaysWorking: VIP_ACCRUAL_MAX_WORKING_DAYS,
           startedAt: inv.startedAt,
           maturesAt: inv.maturesAt,
           matured: inv.matured,
@@ -1348,7 +1356,8 @@ function registerAdminRoutes(app) {
       };
       return res.json({
         dailyRate: VIP_DAILY_RATE,
-        lockDays: VIP_LOCK_DAYS,
+        lockDays: VIP_LOCK_DAYS_CALENDAR,
+        lockDaysWorking: VIP_ACCRUAL_MAX_WORKING_DAYS,
         planDate,
         compounding: false,
         members,
@@ -1363,6 +1372,61 @@ function registerAdminRoutes(app) {
       }
       console.error('[admin/vip-farmers]', e);
       return res.status(500).json({ message: e.message || 'Failed to load VIP members' });
+    }
+  });
+
+  app.get('/admin/api/vip-farmers/exit-requests', adminAuthMiddleware, async (req, res) => {
+    try {
+      const status = String(req.query.status || 'pending').trim();
+      const result = await listAdminVipExitRequests({
+        status,
+        limit: Number(req.query.limit) || 200,
+      });
+      return res.json(result);
+    } catch (e) {
+      if (isMissingTableError(e) || isSchemaError(e)) {
+        return res.status(503).json({
+          message:
+            'VIP exit schema missing. Run backend/sql/migrations/20260704_vip_exit_requests.sql in Supabase.',
+          schemaMissing: true,
+        });
+      }
+      console.error('[admin/vip-farmers/exit-requests]', e);
+      return res.status(500).json({ message: e.message || 'Failed to load VIP exit requests' });
+    }
+  });
+
+  app.post('/admin/api/vip-farmers/exit-requests/:id/approve', adminAuthMiddleware, async (req, res) => {
+    try {
+      const result = await approveVipExitRequest(req.params.id);
+      return res.json(result);
+    } catch (e) {
+      if (e.statusCode === 400) return res.status(400).json({ message: e.message });
+      if (isMissingTableError(e) || isSchemaError(e)) {
+        return res.status(503).json({
+          message:
+            'VIP exit schema missing. Run backend/sql/migrations/20260704_vip_exit_requests.sql in Supabase.',
+        });
+      }
+      console.error('[admin/vip-farmers/exit-requests/approve]', e);
+      return res.status(500).json({ message: e.message || 'Approve failed' });
+    }
+  });
+
+  app.post('/admin/api/vip-farmers/exit-requests/:id/reject', adminAuthMiddleware, async (req, res) => {
+    try {
+      const result = await rejectVipExitRequest(req.params.id, req.body?.note);
+      return res.json(result);
+    } catch (e) {
+      if (e.statusCode === 400) return res.status(400).json({ message: e.message });
+      if (isMissingTableError(e) || isSchemaError(e)) {
+        return res.status(503).json({
+          message:
+            'VIP exit schema missing. Run backend/sql/migrations/20260704_vip_exit_requests.sql in Supabase.',
+        });
+      }
+      console.error('[admin/vip-farmers/exit-requests/reject]', e);
+      return res.status(500).json({ message: e.message || 'Reject failed' });
     }
   });
 

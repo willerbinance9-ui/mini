@@ -13,9 +13,13 @@ const {
   insertVipAccrual,
   VIP_DAILY_RATE,
   VIP_LOCK_DAYS,
+  VIP_LOCK_DAYS_CALENDAR,
+  VIP_ACCRUAL_MAX_WORKING_DAYS,
   VIP_MIN_INVEST_USD,
   VIP_EARLY_PENALTY_RATE,
   vipInvestmentToApi,
+  getPendingVipExitRequestForUser,
+  vipExitRequestToApi,
   utcTodayYmd,
 } = require('./db');
 const {
@@ -51,13 +55,18 @@ async function getVipSummary(userId) {
   const wallet = await ensureWalletForUser(userId);
   const cash = roundUsd(wallet?.balance);
   const inv = await getActiveVipInvestmentForUser(userId);
+  const pendingExit = await getPendingVipExitRequestForUser(userId);
   return {
     cashWalletUsd: cash,
     minInvestUsd: VIP_MIN_INVEST_USD,
     dailyRate: VIP_DAILY_RATE,
-    lockDays: VIP_LOCK_DAYS,
+    lockDays: VIP_LOCK_DAYS_CALENDAR,
+    lockDaysCalendar: VIP_LOCK_DAYS_CALENDAR,
+    lockDaysWorking: VIP_ACCRUAL_MAX_WORKING_DAYS,
     earlyPenaltyRate: VIP_EARLY_PENALTY_RATE,
+    exitPenaltyRate: VIP_EARLY_PENALTY_RATE,
     investment: vipInvestmentToApi(inv),
+    pendingExitRequest: pendingExit ? vipExitRequestToApi(pendingExit) : null,
   };
 }
 
@@ -85,7 +94,7 @@ async function investVip(userId, amount) {
   }
 
   const now = new Date().toISOString();
-  const maturesAt = addDaysUtc(now, VIP_LOCK_DAYS);
+  const maturesAt = addDaysUtc(now, VIP_LOCK_DAYS_CALENDAR);
   await setWalletBalance(userId, roundUsd(cash - amt));
   const row = await createVipInvestment({
     userId,
@@ -121,7 +130,7 @@ async function addCapitalVip(userId, amount) {
   }
 
   const now = new Date().toISOString();
-  const maturesAt = addDaysUtc(now, VIP_LOCK_DAYS);
+  const maturesAt = addDaysUtc(now, VIP_LOCK_DAYS_CALENDAR);
   const newPrincipal = roundUsd(Number(inv.principal_usd) + amt);
   await setWalletBalance(userId, roundUsd(cash - amt));
   const row = await updateVipInvestment(inv.id, {
@@ -141,76 +150,15 @@ async function addCapitalVip(userId, amount) {
 }
 
 async function withdrawVipAtMaturity(userId) {
-  const inv = await getActiveVipInvestmentForUser(userId);
-  if (!inv) {
-    const err = new Error('No active VIP investment');
-    err.statusCode = 400;
-    throw err;
-  }
-  if (Date.now() < new Date(inv.matures_at).getTime()) {
-    const err = new Error('Investment is still locked until maturity date');
-    err.statusCode = 400;
-    throw err;
-  }
-
-  const principal = roundUsd(inv.principal_usd);
-  const wallet = await ensureWalletForUser(userId);
-  const cash = roundUsd(wallet?.balance);
-  const nextCash = roundUsd(cash + principal);
-  await setWalletBalance(userId, nextCash);
-  await createTransaction({
-    userId,
-    type: 'deposit',
-    amount: principal,
-    status: 'completed',
-  });
-  await updateVipInvestment(inv.id, { status: 'closed' });
-
-  return {
-    principalReturned: principal,
-    cashWalletUsd: nextCash,
-    investment: vipInvestmentToApi({ ...inv, status: 'closed' }),
-  };
+  const err = new Error('Use the VIP exit request flow in the app to withdraw.');
+  err.statusCode = 400;
+  throw err;
 }
 
 async function earlyWithdrawVip(userId) {
-  const inv = await getActiveVipInvestmentForUser(userId);
-  if (!inv) {
-    const err = new Error('No active VIP investment');
-    err.statusCode = 400;
-    throw err;
-  }
-  if (Date.now() >= new Date(inv.matures_at).getTime()) {
-    const err = new Error('Use normal withdraw after maturity');
-    err.statusCode = 400;
-    throw err;
-  }
-
-  const available = roundUsd(inv.principal_usd);
-  const penalty = roundUsd(available * VIP_EARLY_PENALTY_RATE);
-  const payout = roundUsd(available - penalty);
-
-  const wallet = await ensureWalletForUser(userId);
-  const cash = roundUsd(wallet?.balance);
-  const nextCash = roundUsd(cash + payout);
-  await setWalletBalance(userId, nextCash);
-  if (payout > 0) {
-    await createTransaction({
-      userId,
-      type: 'deposit',
-      amount: payout,
-      status: 'completed',
-    });
-  }
-  await updateVipInvestment(inv.id, { status: 'early_withdrawn' });
-
-  return {
-    available,
-    penalty,
-    payout,
-    cashWalletUsd: nextCash,
-    investment: vipInvestmentToApi({ ...inv, status: 'early_withdrawn' }),
-  };
+  const err = new Error('Use the VIP exit request flow in the app to withdraw.');
+  err.statusCode = 400;
+  throw err;
 }
 
 async function runVipDailyAccrual(planDate = utcTodayYmd()) {
@@ -230,7 +178,7 @@ async function runVipDailyAccrual(planDate = utcTodayYmd()) {
   let skipped = 0;
 
   for (const inv of rows) {
-    if (Number(inv.days_accrued) >= VIP_LOCK_DAYS) {
+    if (Number(inv.days_accrued) >= VIP_ACCRUAL_MAX_WORKING_DAYS) {
       skipped += 1;
       continue;
     }

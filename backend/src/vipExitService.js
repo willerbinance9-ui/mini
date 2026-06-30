@@ -1,0 +1,295 @@
+const crypto = require('crypto');
+const {
+  getActiveVipInvestmentForUser,
+  getVipInvestmentById,
+  updateVipInvestment,
+  ensureWalletForUser,
+  setWalletBalance,
+  createTransaction,
+  insertVipExitRequest,
+  getVipExitRequestById,
+  updateVipExitRequest,
+  listVipExitRequestsForUser,
+  getPendingVipExitRequestForUser,
+  listVipExitRequestsAdmin,
+  getUsersByIds,
+  VIP_EXIT_REVENUE_PERCENTS,
+  VIP_EXIT_PENALTY_RATE,
+  VIP_EXIT_COMMISSION_RATE,
+  VIP_GAS_RATE_PER_CHARGE,
+  VIP_GAS_CHARGES_PER_DAY,
+  VIP_GAS_REWARD_RATE,
+  VIP_GAS_DEFAULT_WORKING_DAYS,
+  VIP_INVESTMENT_EXTRA_CREDIT_USD,
+  VIP_INVESTMENT_EXTRA_CREDIT_MIN_PRINCIPAL_USD,
+  VIP_INVESTMENT_EXTRA_CREDIT_MIN_WORKING_DAYS,
+  VIP_ACCRUAL_MAX_WORKING_DAYS,
+  VIP_LOCK_DAYS_CALENDAR,
+  vipPenaltyFreeToday,
+  vipCalendarDaysSinceStart,
+  vipInvestmentToApi,
+  vipExitRequestToApi,
+} = require('./db');
+
+function newId() {
+  return crypto.randomUUID();
+}
+
+function roundUsd(n) {
+  return Math.round(Number(n || 0) * 100) / 100;
+}
+
+function badRequest(message) {
+  const err = new Error(message);
+  err.statusCode = 400;
+  return err;
+}
+
+function isValidTrc20Address(addr) {
+  const s = String(addr || '').trim();
+  return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(s);
+}
+
+function normalizePayload(body = {}) {
+  const mode = String(body.mode || '').trim().toLowerCase();
+  const revenuePercent = Number(body.revenuePercent ?? body.revenue_percent);
+  const destination = String(body.destination || '').trim().toLowerCase();
+  const walletAddress = body.walletAddress != null ? String(body.walletAddress).trim() : '';
+  return { mode, revenuePercent, destination, walletAddress };
+}
+
+function validatePayload({ mode, revenuePercent, destination, walletAddress }) {
+  if (!['full_stop', 'partial_continue'].includes(mode)) {
+    throw badRequest('mode must be full_stop or partial_continue');
+  }
+  if (!VIP_EXIT_REVENUE_PERCENTS.includes(revenuePercent)) {
+    throw badRequest('revenuePercent must be one of 50, 60, 70, 80, 90, 100');
+  }
+  if (!['platform', 'direct_wallet'].includes(destination)) {
+    throw badRequest('destination must be platform or direct_wallet');
+  }
+  if (destination === 'direct_wallet' && !isValidTrc20Address(walletAddress)) {
+    throw badRequest('Enter a valid TRC20 wallet address');
+  }
+}
+
+function qualifiesForInvestmentExtraCredit(principalUsd, workingDays) {
+  return (
+    Number(principalUsd) > VIP_INVESTMENT_EXTRA_CREDIT_MIN_PRINCIPAL_USD &&
+    Number(workingDays) > VIP_INVESTMENT_EXTRA_CREDIT_MIN_WORKING_DAYS
+  );
+}
+
+function computeBreakdown(inv, { mode, revenuePercent }) {
+  const principal = roundUsd(inv.principal_usd);
+  const workingDays = Number(inv.days_accrued || 0);
+  const calendarDays = vipCalendarDaysSinceStart(inv.started_at);
+  const penaltyFree = vipPenaltyFreeToday(inv);
+  const revenueWithdrawn = roundUsd(inv.revenue_withdrawn_usd || 0);
+  const revenueBase = roundUsd(Math.max(0, Number(inv.total_accrued_usd || 0) - revenueWithdrawn));
+  const revenueSelected = roundUsd((revenueBase * revenuePercent) / 100);
+
+  if (revenueSelected <= 0 && mode === 'partial_continue') {
+    throw badRequest('No revenue available to withdraw');
+  }
+
+  const penalty = penaltyFree ? 0 : roundUsd(revenueSelected * VIP_EXIT_PENALTY_RATE);
+  const gasWorkingDays = workingDays > 0 ? workingDays : VIP_GAS_DEFAULT_WORKING_DAYS;
+  const gasFees = roundUsd(
+    principal * VIP_GAS_RATE_PER_CHARGE * VIP_GAS_CHARGES_PER_DAY * gasWorkingDays
+  );
+  const commission = roundUsd(revenueSelected * VIP_EXIT_COMMISSION_RATE);
+  const gasReward = roundUsd(gasFees * VIP_GAS_REWARD_RATE);
+  const netRevenue = roundUsd(
+    Math.max(0, revenueSelected - penalty - gasFees - commission + gasReward)
+  );
+  const principalReturn = mode === 'full_stop' ? principal : 0;
+  const investmentExtraCreditUsd = qualifiesForInvestmentExtraCredit(principal, workingDays)
+    ? VIP_INVESTMENT_EXTRA_CREDIT_USD
+    : 0;
+  const netTotal = roundUsd(netRevenue + principalReturn + investmentExtraCreditUsd);
+
+  return {
+    principalUsd: principal,
+    revenueBaseUsd: revenueBase,
+    revenueSelectedUsd: revenueSelected,
+    penaltyUsd: penalty,
+    gasFeesUsd: gasFees,
+    commissionUsd: commission,
+    gasRewardUsd: gasReward,
+    netRevenueUsd: netRevenue,
+    principalReturnUsd: principalReturn,
+    investmentExtraCreditUsd,
+    investmentExtraCreditEligible: investmentExtraCreditUsd > 0,
+    netTotalUsd: netTotal,
+    workingDays,
+    calendarDays,
+    penaltyFree,
+    gasWorkingDays,
+    lockDaysWorking: VIP_ACCRUAL_MAX_WORKING_DAYS,
+    lockDaysCalendar: VIP_LOCK_DAYS_CALENDAR,
+  };
+}
+
+function investmentExtraCreditDescription(breakdown) {
+  if (breakdown.investmentExtraCreditUsd > 0) {
+    return `You earn ${fmtUsdLabel(breakdown.investmentExtraCreditUsd)} investment extra credit — a bonus for investing with us (principal over ${fmtUsdLabel(VIP_INVESTMENT_EXTRA_CREDIT_MIN_PRINCIPAL_USD)} and more than ${VIP_INVESTMENT_EXTRA_CREDIT_MIN_WORKING_DAYS} working days). This is not part of your locked principal and is included in your total payout.`;
+  }
+  return `Investment extra credit of ${fmtUsdLabel(VIP_INVESTMENT_EXTRA_CREDIT_USD)} applies when your initial investment is over ${fmtUsdLabel(VIP_INVESTMENT_EXTRA_CREDIT_MIN_PRINCIPAL_USD)} and you have more than ${VIP_INVESTMENT_EXTRA_CREDIT_MIN_WORKING_DAYS} working accrual days. You do not qualify on this exit.`;
+}
+
+function quoteToApi(breakdown, inv, extras = {}) {
+  return {
+    investment: vipInvestmentToApi(inv),
+    mode: extras.mode,
+    revenuePercent: extras.revenuePercent,
+    destination: extras.destination,
+    walletAddress: extras.walletAddress || null,
+    ...breakdown,
+    gasFeeDescription:
+      'We charge 0.0396% forty times per working day, reflecting the $2.30 TRC20 network cost of returning crypto to your wallet daily.',
+    commissionDescription: '30% commission on the revenue amount you withdraw.',
+    gasRewardDescription: '30% reward on gas fees charged during your investment period.',
+    investmentExtraCreditDescription: investmentExtraCreditDescription(breakdown),
+    penaltyDescription: breakdown.penaltyFree
+      ? 'No penalty today — you are on a penalty-free exit day (day 22 working or day 38 calendar).'
+      : `A 30% penalty on withdrawn revenue may apply because today is not day ${VIP_ACCRUAL_MAX_WORKING_DAYS} (working) or day ${VIP_LOCK_DAYS_CALENDAR} (calendar). Penalty fees may be lifted when your request is reviewed.`,
+    thankYouMessage: 'Thank you for investing with us.',
+  };
+}
+
+function fmtUsdLabel(n) {
+  return '$' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+async function computeVipExitQuote(userId, body) {
+  const payload = normalizePayload(body);
+  validatePayload(payload);
+
+  const inv = await getActiveVipInvestmentForUser(userId);
+  if (!inv) throw badRequest('No active VIP investment');
+
+  const pending = await getPendingVipExitRequestForUser(userId);
+  if (pending) throw badRequest('You already have a withdrawal request being processed');
+
+  const breakdown = computeBreakdown(inv, payload);
+  return quoteToApi(breakdown, inv, payload);
+}
+
+async function submitVipExitRequest(userId, body) {
+  const quote = await computeVipExitQuote(userId, body);
+  const inv = await getActiveVipInvestmentForUser(userId);
+  if (!inv) throw badRequest('No active VIP investment');
+
+  const row = await insertVipExitRequest({
+    id: newId(),
+    user_id: userId,
+    investment_id: inv.id,
+    mode: quote.mode,
+    revenue_percent: quote.revenuePercent,
+    destination: quote.destination,
+    wallet_address: quote.destination === 'direct_wallet' ? quote.walletAddress : null,
+    principal_usd: quote.principalUsd,
+    revenue_base_usd: quote.revenueBaseUsd,
+    revenue_selected_usd: quote.revenueSelectedUsd,
+    penalty_usd: quote.penaltyUsd,
+    gas_fees_usd: quote.gasFeesUsd,
+    commission_usd: quote.commissionUsd,
+    gas_reward_usd: quote.gasRewardUsd,
+    net_revenue_usd: quote.netRevenueUsd,
+    principal_return_usd: quote.principalReturnUsd,
+    net_total_usd: quote.netTotalUsd,
+    investment_extra_credit_usd: quote.investmentExtraCreditUsd,
+    working_days: quote.workingDays,
+    calendar_days: quote.calendarDays,
+    penalty_free: quote.penaltyFree,
+    status: 'pending',
+  });
+
+  return {
+    request: vipExitRequestToApi(row),
+    quote,
+  };
+}
+
+async function listUserVipExitRequests(userId, limit = 20) {
+  const rows = await listVipExitRequestsForUser(userId, limit);
+  return { requests: rows.map((r) => vipExitRequestToApi(r)) };
+}
+
+async function listAdminVipExitRequests({ status = 'pending', limit = 200 } = {}) {
+  const rows = await listVipExitRequestsAdmin({ status, limit });
+  const userIds = [...new Set(rows.map((r) => r.user_id))];
+  const users = await getUsersByIds(userIds);
+  const emailById = new Map(users.map((u) => [u.id, u.email]));
+  return {
+    requests: rows.map((r) => vipExitRequestToApi(r, emailById.get(r.user_id))),
+  };
+}
+
+async function approveVipExitRequest(requestId) {
+  const req = await getVipExitRequestById(requestId);
+  if (!req) throw badRequest('Request not found');
+  if (req.status !== 'pending') throw badRequest('Request is not pending');
+
+  const inv = await getVipInvestmentById(req.investment_id);
+  if (!inv) throw badRequest('Investment not found');
+
+  const netTotal = roundUsd(req.net_total_usd);
+  const netRevenue = roundUsd(req.net_revenue_usd);
+  const revenueSelected = roundUsd(req.revenue_selected_usd);
+
+  if (req.destination === 'platform' && netTotal > 0) {
+    const wallet = await ensureWalletForUser(req.user_id);
+    const cash = roundUsd(wallet?.balance);
+    const nextCash = roundUsd(cash + netTotal);
+    await setWalletBalance(req.user_id, nextCash);
+    await createTransaction({
+      userId: req.user_id,
+      type: 'deposit',
+      amount: netTotal,
+      status: 'completed',
+    });
+  }
+
+  const newRevenueWithdrawn = roundUsd(Number(inv.revenue_withdrawn_usd || 0) + revenueSelected);
+  const invPatch = { revenueWithdrawnUsd: newRevenueWithdrawn };
+
+  if (req.mode === 'full_stop') {
+    invPatch.status = req.penalty_free ? 'closed' : 'early_withdrawn';
+  }
+
+  await updateVipInvestment(inv.id, invPatch);
+  const reviewedAt = new Date().toISOString();
+  await updateVipExitRequest(requestId, {
+    status: 'completed',
+    reviewedAt,
+  });
+
+  const updated = await getVipExitRequestById(requestId);
+  return { request: vipExitRequestToApi(updated) };
+}
+
+async function rejectVipExitRequest(requestId, note) {
+  const req = await getVipExitRequestById(requestId);
+  if (!req) throw badRequest('Request not found');
+  if (req.status !== 'pending') throw badRequest('Request is not pending');
+
+  const reviewedAt = new Date().toISOString();
+  const updated = await updateVipExitRequest(requestId, {
+    status: 'rejected',
+    adminNote: note ? String(note).trim() : null,
+    reviewedAt,
+  });
+  return { request: vipExitRequestToApi(updated) };
+}
+
+module.exports = {
+  computeVipExitQuote,
+  submitVipExitRequest,
+  listUserVipExitRequests,
+  listAdminVipExitRequests,
+  approveVipExitRequest,
+  rejectVipExitRequest,
+  VIP_EXIT_REVENUE_PERCENTS,
+};

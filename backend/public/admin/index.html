@@ -1374,7 +1374,7 @@
           <div class="card">
             <h3 style="margin:0 0 8px;font-size:1rem;">VIP Farmers members</h3>
             <p class="hint" style="margin-bottom:12px;">
-              Daily income is <strong>6% of the original deposit (principal)</strong> — no compounding. Payouts credit the cash wallet on UTC weekdays only (weekends skipped), up to 30 days per lock.
+              Daily income is <strong>6% of the original deposit (principal)</strong> — no compounding. Payouts credit the cash wallet on UTC weekdays only (weekends skipped), up to 22 working days per lock. Calendar lock is 38 days.
             </p>
             <div class="row" style="align-items:flex-end;margin-bottom:12px;">
               <div>
@@ -1412,6 +1412,32 @@
               </table>
             </div>
             <p id="vipErr" class="err hidden"></p>
+          </div>
+          <div class="card" style="margin-top:16px;">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Pending VIP exit requests</h3>
+            <p class="hint" style="margin-bottom:12px;">
+              Revenue and principal exit requests from the mobile app. Approve to credit platform wallet or mark direct TRC20 payout sent.
+            </p>
+            <p id="vipExitStats" class="hint"></p>
+            <div id="vipExitLoading" class="loading hidden">Loading exit requests…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Member</th>
+                    <th>Mode</th>
+                    <th>Revenue %</th>
+                    <th>Destination</th>
+                    <th>Net total</th>
+                    <th>Penalty</th>
+                    <th>Submitted</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="vipExitRows"></tbody>
+              </table>
+            </div>
+            <p id="vipExitErr" class="err hidden"></p>
           </div>
         </div>
 
@@ -2092,6 +2118,7 @@
     let viewingTicketId = null;
     let pendingWithdrawals = [];
     let pendingDropPayouts = [];
+    let pendingVipExitRequests = [];
     let p2pTrades = [];
     let aiPlan = null;
     let aiAllocations = [];
@@ -5102,6 +5129,7 @@
           '% on principal · ' +
           (data.compounding === false ? 'no compounding' : '');
         renderVipMembersTable();
+        await loadVipExitRequests();
       } catch (e) {
         vipMembers = [];
         renderVipSummary(null);
@@ -5109,6 +5137,97 @@
         showVipErr(e);
       } finally {
         document.getElementById('vipLoading').classList.add('hidden');
+      }
+    }
+
+    function showVipExitErr(e) {
+      document.getElementById('vipExitErr').textContent = e.message;
+      document.getElementById('vipExitErr').classList.remove('hidden');
+    }
+
+    function renderVipExitRequestsTable() {
+      const tbody = document.getElementById('vipExitRows');
+      tbody.innerHTML = '';
+      if (!pendingVipExitRequests.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="color:var(--muted);">No pending VIP exit requests</td></tr>';
+      }
+      pendingVipExitRequests.forEach((r) => {
+        const tr = document.createElement('tr');
+        const modeLabel = r.mode === 'full_stop' ? 'Stop all' : 'Partial';
+        const dest =
+          r.destination === 'direct_wallet'
+            ? 'TRC20<br><span style="font-size:0.72rem;color:var(--muted);">' + escapeHtml(r.walletAddress || '—') + '</span>'
+            : 'Platform';
+        const actionCell =
+          '<button type="button" class="btn-primary" data-approve-vip-exit="' + r.id + '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Approve</button>' +
+          '<button type="button" class="btn-danger" data-reject-vip-exit="' + r.id + '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Reject</button>';
+        tr.innerHTML =
+          '<td>' + escapeHtml(r.userEmail || '—') + '</td>' +
+          '<td>' + escapeHtml(modeLabel) + '</td>' +
+          '<td>' + Number(r.revenuePercent) + '%</td>' +
+          '<td>' + dest + '</td>' +
+          '<td><strong>' + fmtMoney(r.netTotalUsd || 0) + '</strong><br><span style="font-size:0.72rem;color:var(--muted);">Rev ' + fmtMoney(r.netRevenueUsd || 0) + (r.principalReturnUsd > 0 ? ' · Prin ' + fmtMoney(r.principalReturnUsd) : '') + (r.investmentExtraCreditUsd > 0 ? ' · Credit ' + fmtMoney(r.investmentExtraCreditUsd) : '') + '</span></td>' +
+          '<td>' + fmtMoney(r.penaltyUsd || 0) + (r.penaltyFree ? ' <span class="pill">free</span>' : '') + '</td>' +
+          '<td>' + new Date(r.createdAt).toLocaleString() + '</td>' +
+          '<td style="white-space:nowrap;">' + actionCell + '</td>';
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-approve-vip-exit]').forEach((btn) => {
+        btn.onclick = () => actOnVipExitRequest(btn.getAttribute('data-approve-vip-exit'), 'approve', btn);
+      });
+      tbody.querySelectorAll('button[data-reject-vip-exit]').forEach((btn) => {
+        btn.onclick = () => actOnVipExitRequest(btn.getAttribute('data-reject-vip-exit'), 'reject', btn);
+      });
+      document.getElementById('vipExitStats').textContent =
+        pendingVipExitRequests.length + ' VIP exit request(s) awaiting action';
+    }
+
+    async function loadVipExitRequests() {
+      document.getElementById('vipExitErr').classList.add('hidden');
+      document.getElementById('vipExitLoading').classList.remove('hidden');
+      try {
+        const data = await api('/admin/api/vip-farmers/exit-requests?status=pending');
+        pendingVipExitRequests = data.requests || [];
+        renderVipExitRequestsTable();
+      } catch (e) {
+        pendingVipExitRequests = [];
+        renderVipExitRequestsTable();
+        showVipExitErr(e);
+      } finally {
+        document.getElementById('vipExitLoading').classList.add('hidden');
+      }
+    }
+
+    async function actOnVipExitRequest(id, action, btnEl) {
+      if (!id) return;
+      if (action === 'reject') {
+        const note = prompt('Rejection note (optional):', '');
+        if (note === null) return;
+        btnEl.disabled = true;
+        try {
+          await api('/admin/api/vip-farmers/exit-requests/' + id + '/reject', {
+            method: 'POST',
+            body: JSON.stringify({ note: note || undefined }),
+          });
+          await loadVipExitRequests();
+          await loadVipFarmers();
+        } catch (e) {
+          alert(e.message);
+        } finally {
+          btnEl.disabled = false;
+        }
+        return;
+      }
+      if (!confirm('Approve this VIP exit request and apply payout?')) return;
+      btnEl.disabled = true;
+      try {
+        await api('/admin/api/vip-farmers/exit-requests/' + id + '/approve', { method: 'POST' });
+        await loadVipExitRequests();
+        await loadVipFarmers();
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        btnEl.disabled = false;
       }
     }
 

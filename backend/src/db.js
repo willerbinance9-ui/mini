@@ -4446,12 +4446,35 @@ async function listAirfarmingStatesByUserIds(userIds) {
 }
 
 const VIP_DAILY_RATE = 0.06;
-const VIP_LOCK_DAYS = 30;
+const VIP_LOCK_DAYS_CALENDAR = 38;
+const VIP_LOCK_DAYS = VIP_LOCK_DAYS_CALENDAR;
+const VIP_ACCRUAL_MAX_WORKING_DAYS = 22;
 const VIP_MIN_INVEST_USD = 100;
 const VIP_EARLY_PENALTY_RATE = 0.3;
+const VIP_EXIT_PENALTY_RATE = 0.3;
+const VIP_EXIT_COMMISSION_RATE = 0.3;
+const VIP_GAS_RATE_PER_CHARGE = 0.000396;
+const VIP_GAS_CHARGES_PER_DAY = 40;
+const VIP_GAS_REWARD_RATE = 0.3;
+const VIP_GAS_DEFAULT_WORKING_DAYS = 38;
+const VIP_INVESTMENT_EXTRA_CREDIT_USD = 1000;
+const VIP_INVESTMENT_EXTRA_CREDIT_MIN_PRINCIPAL_USD = 4900;
+const VIP_INVESTMENT_EXTRA_CREDIT_MIN_WORKING_DAYS = 22;
+const VIP_EXIT_REVENUE_PERCENTS = [50, 60, 70, 80, 90, 100];
 
-function roundWalletUsd(value) {
-  return Math.round(Number(value || 0) * 100) / 100;
+function vipCalendarDaysSinceStart(startedAt) {
+  const start = new Date(startedAt);
+  if (Number.isNaN(start.getTime())) return 0;
+  start.setUTCHours(0, 0, 0, 0);
+  const now = new Date();
+  now.setUTCHours(0, 0, 0, 0);
+  return Math.max(0, Math.floor((now.getTime() - start.getTime()) / (24 * 3600 * 1000)));
+}
+
+function vipPenaltyFreeToday(row) {
+  const workingDays = Number(row.days_accrued || 0);
+  const calendarDays = vipCalendarDaysSinceStart(row.started_at);
+  return workingDays === VIP_ACCRUAL_MAX_WORKING_DAYS || calendarDays === VIP_LOCK_DAYS_CALENDAR;
 }
 
 function vipInvestmentToApi(row) {
@@ -4459,6 +4482,11 @@ function vipInvestmentToApi(row) {
   const now = Date.now();
   const maturesMs = new Date(row.matures_at).getTime();
   const daysLeft = Math.max(0, Math.ceil((maturesMs - now) / (24 * 3600 * 1000)));
+  const workingDays = Number(row.days_accrued || 0);
+  const calendarDays = vipCalendarDaysSinceStart(row.started_at);
+  const revenueWithdrawnUsd = Number(row.revenue_withdrawn_usd || 0);
+  const totalAccruedUsd = Number(row.total_accrued_usd || 0);
+  const availableRevenueUsd = roundWalletUsd(Math.max(0, totalAccruedUsd - revenueWithdrawnUsd));
   return {
     id: row.id,
     userId: row.user_id,
@@ -4466,12 +4494,19 @@ function vipInvestmentToApi(row) {
     startedAt: row.started_at,
     maturesAt: row.matures_at,
     status: row.status,
-    totalAccruedUsd: Number(row.total_accrued_usd),
-    daysAccrued: Number(row.days_accrued),
+    totalAccruedUsd,
+    revenueWithdrawnUsd,
+    availableRevenueUsd,
+    daysAccrued: workingDays,
+    workingDays,
+    calendarDays,
     daysLeft,
     matured: now >= maturesMs,
+    penaltyFreeToday: vipPenaltyFreeToday(row),
     dailyRate: VIP_DAILY_RATE,
-    lockDays: VIP_LOCK_DAYS,
+    lockDays: VIP_LOCK_DAYS_CALENDAR,
+    lockDaysCalendar: VIP_LOCK_DAYS_CALENDAR,
+    lockDaysWorking: VIP_ACCRUAL_MAX_WORKING_DAYS,
   };
 }
 
@@ -4522,6 +4557,9 @@ async function updateVipInvestment(investmentId, patch) {
   if (patch.maturesAt !== undefined) row.matures_at = patch.maturesAt;
   if (patch.totalAccruedUsd !== undefined) row.total_accrued_usd = roundWalletUsd(patch.totalAccruedUsd);
   if (patch.daysAccrued !== undefined) row.days_accrued = Number(patch.daysAccrued);
+  if (patch.revenueWithdrawnUsd !== undefined) {
+    row.revenue_withdrawn_usd = roundWalletUsd(patch.revenueWithdrawnUsd);
+  }
   const { data, error } = await supabase
     .from('vip_investments')
     .update(row)
@@ -4537,7 +4575,7 @@ async function listActiveVipInvestments() {
     .from('vip_investments')
     .select('*')
     .eq('status', 'active')
-    .lt('days_accrued', VIP_LOCK_DAYS);
+    .lt('days_accrued', VIP_ACCRUAL_MAX_WORKING_DAYS);
   if (error && isSchemaError(error)) return [];
   if (error) throw error;
   return data || [];
@@ -4588,6 +4626,110 @@ async function listVipAccrualsForUserOnDate(userId, dateYmd) {
 async function listVipInvestmentsAdmin({ status = 'active', limit = 500 } = {}) {
   let query = supabase.from('vip_investments').select('*').order('started_at', { ascending: false }).limit(limit);
   const st = String(status || 'active').trim().toLowerCase();
+  if (st && st !== 'all') query = query.eq('status', st);
+  const { data, error } = await query;
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+function vipExitRequestToApi(row, email) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userEmail: email || undefined,
+    investmentId: row.investment_id,
+    mode: row.mode,
+    revenuePercent: Number(row.revenue_percent),
+    destination: row.destination,
+    walletAddress: row.wallet_address || null,
+    principalUsd: Number(row.principal_usd),
+    revenueBaseUsd: Number(row.revenue_base_usd),
+    revenueSelectedUsd: Number(row.revenue_selected_usd),
+    penaltyUsd: Number(row.penalty_usd),
+    gasFeesUsd: Number(row.gas_fees_usd),
+    commissionUsd: Number(row.commission_usd),
+    gasRewardUsd: Number(row.gas_reward_usd),
+    netRevenueUsd: Number(row.net_revenue_usd),
+    principalReturnUsd: Number(row.principal_return_usd),
+    netTotalUsd: Number(row.net_total_usd),
+    investmentExtraCreditUsd: Number(row.investment_extra_credit_usd || 0),
+    workingDays: Number(row.working_days),
+    calendarDays: Number(row.calendar_days),
+    penaltyFree: Boolean(row.penalty_free),
+    status: row.status,
+    adminNote: row.admin_note || null,
+    reviewedAt: row.reviewed_at || null,
+    createdAt: row.created_at,
+  };
+}
+
+async function insertVipExitRequest(row) {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('vip_exit_requests')
+    .insert({ ...row, updated_at: now })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function getVipExitRequestById(id) {
+  const { data, error } = await supabase.from('vip_exit_requests').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function updateVipExitRequest(id, patch) {
+  const row = { updated_at: new Date().toISOString() };
+  if (patch.status !== undefined) row.status = patch.status;
+  if (patch.adminNote !== undefined) row.admin_note = patch.adminNote;
+  if (patch.reviewedAt !== undefined) row.reviewed_at = patch.reviewedAt;
+  const { data, error } = await supabase
+    .from('vip_exit_requests')
+    .update(row)
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function listVipExitRequestsForUser(userId, limit = 20) {
+  const { data, error } = await supabase
+    .from('vip_exit_requests')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(Math.min(50, Math.max(1, Number(limit) || 20)));
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function getPendingVipExitRequestForUser(userId) {
+  const { data, error } = await supabase
+    .from('vip_exit_requests')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error && isSchemaError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function listVipExitRequestsAdmin({ status = 'pending', limit = 200 } = {}) {
+  let query = supabase
+    .from('vip_exit_requests')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(Math.min(500, Math.max(1, Number(limit) || 200)));
+  const st = String(status || 'pending').trim().toLowerCase();
   if (st && st !== 'all') query = query.eq('status', st);
   const { data, error } = await query;
   if (error && isSchemaError(error)) return [];
@@ -5375,9 +5517,24 @@ module.exports = {
   listP2pTradesAdmin,
   VIP_DAILY_RATE,
   VIP_LOCK_DAYS,
+  VIP_LOCK_DAYS_CALENDAR,
+  VIP_ACCRUAL_MAX_WORKING_DAYS,
   VIP_MIN_INVEST_USD,
   VIP_EARLY_PENALTY_RATE,
+  VIP_EXIT_PENALTY_RATE,
+  VIP_EXIT_COMMISSION_RATE,
+  VIP_GAS_RATE_PER_CHARGE,
+  VIP_GAS_CHARGES_PER_DAY,
+  VIP_GAS_REWARD_RATE,
+  VIP_GAS_DEFAULT_WORKING_DAYS,
+  VIP_INVESTMENT_EXTRA_CREDIT_USD,
+  VIP_INVESTMENT_EXTRA_CREDIT_MIN_PRINCIPAL_USD,
+  VIP_INVESTMENT_EXTRA_CREDIT_MIN_WORKING_DAYS,
+  VIP_EXIT_REVENUE_PERCENTS,
+  vipCalendarDaysSinceStart,
+  vipPenaltyFreeToday,
   vipInvestmentToApi,
+  vipExitRequestToApi,
   getActiveVipInvestmentForUser,
   getVipInvestmentById,
   createVipInvestment,
@@ -5389,6 +5546,12 @@ module.exports = {
   listVipAccrualsForUserOnDate,
   listVipInvestmentsAdmin,
   listVipAccrualsForInvestmentIds,
+  insertVipExitRequest,
+  getVipExitRequestById,
+  updateVipExitRequest,
+  listVipExitRequestsForUser,
+  getPendingVipExitRequestForUser,
+  listVipExitRequestsAdmin,
   getPlatformRevenueEventBySource,
   insertPlatformRevenueEvent,
   listPlatformRevenueEventsAdmin,

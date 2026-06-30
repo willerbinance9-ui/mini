@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Card } from '../components/Card';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { VipExitWizard } from '../components/VipExitWizard';
 import { vipFarmerService, type VipSummary } from '../services/vipFarmerService';
 import { palette } from '../theme/colors';
 
@@ -15,6 +16,7 @@ export function VipFarmersTradeScreen() {
   const [addAmount, setAddAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [exitWizardOpen, setExitWizardOpen] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -49,30 +51,13 @@ export function VipFarmersTradeScreen() {
     }
   };
 
-  const onWithdraw = async () => {
-    Alert.alert('Withdraw principal', 'Return locked principal to cash wallet?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Withdraw',
-        onPress: async () => {
-          try {
-            const r = await vipFarmerService.withdraw();
-            await load();
-            Alert.alert('Done', `Returned ${fmtUsd(r.principalReturned)} to cash.`);
-          } catch (e: any) {
-            Alert.alert('VIP Farmers', e?.message || 'Withdraw failed');
-          }
-        },
-      },
-    ]);
-  };
-
   const onAddCapital = async () => {
     const n = Number(addAmount);
     if (!n || n <= 0) return Alert.alert('Amount', 'Enter a valid amount');
+    const lockDays = summary?.lockDaysCalendar ?? summary?.lockDays ?? 38;
     Alert.alert(
       'Add capital',
-      'Adding funds increases your principal and restarts the 30-day lock from today. Daily accrual resets to day 0.',
+      `Adding funds increases your principal and restarts the ${lockDays}-day lock from today. Daily accrual resets to day 0.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -95,129 +80,141 @@ export function VipFarmersTradeScreen() {
     );
   };
 
-  const onEarlyWithdraw = async () => {
-    const pct = Math.round((summary?.earlyPenaltyRate ?? 0.3) * 100);
-    Alert.alert(
-      'Early exit',
-      `30-day lock applies. Early exit forfeits ${pct}% of your locked principal. Daily payouts already received stay in cash.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Exit early',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const r = await vipFarmerService.earlyWithdraw();
-              await load();
-              Alert.alert(
-                'Early exit',
-                `Penalty ${fmtUsd(r.penalty)}. Credited ${fmtUsd(r.payout)} to cash.`
-              );
-            } catch (e: any) {
-              Alert.alert('VIP Farmers', e?.message || 'Early withdraw failed');
-            }
-          },
-        },
-      ]
-    );
+  const openExitWizard = () => {
+    if (summary?.pendingExitRequest) {
+      Alert.alert(
+        'Request in progress',
+        'You already have a withdrawal request being processed. Please wait for it to complete.'
+      );
+      return;
+    }
+    setExitWizardOpen(true);
   };
 
   const inv = summary?.investment;
+  const lockCal = summary?.lockDaysCalendar ?? summary?.lockDays ?? 38;
+  const lockWork = summary?.lockDaysWorking ?? 22;
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ padding: 16 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
-    >
-      <Text style={styles.sub}>
-        30-day lock · {(summary?.dailyRate ?? 0.06) * 100}% daily on principal paid to cash · Min{' '}
-        {fmtUsd(summary?.minInvestUsd ?? 100)}
-      </Text>
+    <>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ padding: 16 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
+      >
+        <Text style={styles.sub}>
+          {lockCal}-day calendar lock · {lockWork} working days · {(summary?.dailyRate ?? 0.06) * 100}% daily on
+          principal paid to cash · Min {fmtUsd(summary?.minInvestUsd ?? 100)}
+        </Text>
 
-      {error ? (
-        <Card>
-          <Text style={styles.err}>{error}</Text>
-        </Card>
-      ) : null}
-
-      {summary ? (
-        <>
+        {error ? (
           <Card>
-            <Text style={styles.label}>Cash wallet</Text>
-            <Text style={styles.big}>{fmtUsd(summary.cashWalletUsd)}</Text>
+            <Text style={styles.err}>{error}</Text>
           </Card>
+        ) : null}
 
-          {inv ? (
+        {summary ? (
+          <>
             <Card>
-              <Text style={styles.label}>Active investment</Text>
-              <Text style={styles.big}>{fmtUsd(inv.principalUsd)}</Text>
-              <Text style={styles.meta}>Earned so far: {fmtUsd(inv.totalAccruedUsd)}</Text>
-              <Text style={styles.meta}>
-                Days {inv.daysAccrued}/{inv.lockDays} · {inv.daysLeft} day{inv.daysLeft === 1 ? '' : 's'} left
-              </Text>
-              <Text style={styles.meta}>Matures {new Date(inv.maturesAt).toLocaleString()}</Text>
-              {!inv.matured ? (
-                <>
-                  <Text style={[styles.disclaimer, { marginTop: 10 }]}>
-                    Add capital from cash to grow principal. This restarts the 30-day lock from today.
-                  </Text>
-                  <TextInput
-                    style={[styles.input, { marginTop: 8 }]}
-                    value={addAmount}
-                    onChangeText={setAddAmount}
-                    placeholder={`Min ${fmtUsd(summary.minInvestUsd)}`}
-                    placeholderTextColor={palette.textSecondary}
-                    keyboardType='numeric'
-                  />
-                  <PrimaryButton label='Add capital' onPress={() => void onAddCapital()} style={{ marginTop: 8 }} />
-                </>
-              ) : null}
-              {inv.matured ? (
-                <PrimaryButton label='Withdraw principal' onPress={() => void onWithdraw()} style={{ marginTop: 12 }} />
-              ) : (
+              <Text style={styles.label}>Cash wallet</Text>
+              <Text style={styles.big}>{fmtUsd(summary.cashWalletUsd)}</Text>
+            </Card>
+
+            {summary.pendingExitRequest ? (
+              <Card>
+                <Text style={styles.pendingTitle}>Withdrawal in progress</Text>
+                <Text style={styles.meta}>
+                  Your withdrawal request is being processed.
+                </Text>
+              </Card>
+            ) : null}
+
+            {inv ? (
+              <Card>
+                <Text style={styles.label}>Active investment</Text>
+                <Text style={styles.big}>{fmtUsd(inv.principalUsd)}</Text>
+                <Text style={styles.meta}>Earned so far: {fmtUsd(inv.totalAccruedUsd)}</Text>
+                <Text style={styles.meta}>
+                  Available revenue: {fmtUsd(inv.availableRevenueUsd ?? inv.totalAccruedUsd)}
+                </Text>
+                <Text style={styles.meta}>
+                  Working days {inv.workingDays ?? inv.daysAccrued}/{lockWork} · Calendar day{' '}
+                  {inv.calendarDays ?? 0}/{lockCal}
+                </Text>
+                <Text style={styles.meta}>
+                  {inv.penaltyFreeToday
+                    ? 'Penalty-free exit day'
+                    : `Exit penalty applies unless day ${lockWork} (working) or day ${lockCal} (calendar)`}
+                </Text>
+                <Text style={styles.meta}>Matures {new Date(inv.maturesAt).toLocaleString()}</Text>
+                <Text style={[styles.disclaimer, { marginTop: 10 }]}>
+                  Add capital from cash to grow principal. This restarts the {lockCal}-day lock from today.
+                </Text>
+                <TextInput
+                  style={[styles.input, { marginTop: 8 }]}
+                  value={addAmount}
+                  onChangeText={setAddAmount}
+                  placeholder={`Min ${fmtUsd(summary.minInvestUsd)}`}
+                  placeholderTextColor={palette.textSecondary}
+                  keyboardType='numeric'
+                />
+                <PrimaryButton label='Add capital' onPress={() => void onAddCapital()} style={{ marginTop: 8 }} />
                 <PrimaryButton
-                  label='Early exit (30% penalty)'
-                  onPress={() => void onEarlyWithdraw()}
+                  label='Withdraw / end investment'
+                  onPress={openExitWizard}
                   variant='danger'
                   style={{ marginTop: 12 }}
+                  disabled={Boolean(summary.pendingExitRequest)}
                 />
-              )}
-            </Card>
-          ) : (
-            <Card>
-              <Text style={styles.label}>Invest from cash</Text>
-              <TextInput
-                style={styles.input}
-                value={amount}
-                onChangeText={setAmount}
-                placeholder='Amount USD'
-                placeholderTextColor={palette.textSecondary}
-                keyboardType='numeric'
-              />
-              <Text style={styles.disclaimer}>
-                Funds are locked for 30 UTC days. No withdrawal before maturity except early exit with penalty.
-              </Text>
-              <PrimaryButton label='Start VIP lock' onPress={() => void onInvest()} style={{ marginTop: 8 }} />
-            </Card>
-          )}
-        </>
-      ) : !error ? (
-        <Card>
-          <Text style={styles.meta}>Loading…</Text>
-        </Card>
+              </Card>
+            ) : (
+              <Card>
+                <Text style={styles.label}>Invest from cash</Text>
+                <TextInput
+                  style={styles.input}
+                  value={amount}
+                  onChangeText={setAmount}
+                  placeholder='Amount USD'
+                  placeholderTextColor={palette.textSecondary}
+                  keyboardType='numeric'
+                />
+                <Text style={styles.disclaimer}>
+                  Funds are locked for {lockCal} calendar days ({lockWork} working payout days). Use the exit wizard to
+                  withdraw revenue or end your investment.
+                </Text>
+                <PrimaryButton label='Start VIP lock' onPress={() => void onInvest()} style={{ marginTop: 8 }} />
+              </Card>
+            )}
+          </>
+        ) : !error ? (
+          <Card>
+            <Text style={styles.meta}>Loading…</Text>
+          </Card>
+        ) : null}
+      </ScrollView>
+
+      {summary && inv ? (
+        <VipExitWizard
+          visible={exitWizardOpen}
+          summary={summary}
+          onClose={() => setExitWizardOpen(false)}
+          onComplete={() => {
+            setExitWizardOpen(false);
+            void load();
+          }}
+        />
       ) : null}
-    </ScrollView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.background },
-  title: { color: palette.textPrimary, fontSize: 24, fontWeight: '800', marginBottom: 4 },
   sub: { color: palette.textSecondary, marginBottom: 12, lineHeight: 18 },
   label: { color: palette.textSecondary, marginBottom: 6 },
   big: { color: palette.primary, fontSize: 28, fontWeight: '800' },
   meta: { color: palette.textSecondary, marginTop: 4, fontSize: 13 },
+  pendingTitle: { color: palette.primary, fontWeight: '700', marginBottom: 4 },
   input: {
     backgroundColor: palette.surfaceElevated,
     borderWidth: 1,

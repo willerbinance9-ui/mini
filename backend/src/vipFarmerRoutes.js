@@ -7,6 +7,11 @@ const {
   earlyWithdrawVip,
   runVipDailyAccrual,
 } = require('./vipFarmerService');
+const {
+  computeVipExitQuote,
+  submitVipExitRequest,
+  listUserVipExitRequests,
+} = require('./vipExitService');
 
 function requireCronSecret(req) {
   const expected = process.env.INTERNAL_CRON_SECRET;
@@ -18,6 +23,8 @@ function requireCronSecret(req) {
 function registerVipFarmerRoutes(app, { authMiddleware }) {
   const schemaMsg =
     'VIP Farmers schema missing. Run backend/sql/migrations/20260605_vip_farmers.sql in Supabase.';
+  const exitSchemaMsg =
+    'VIP exit schema missing. Run backend/sql/migrations/20260704_vip_exit_requests.sql in Supabase.';
 
   app.get('/vip-farmers/summary', authMiddleware, async (req, res) => {
     try {
@@ -69,6 +76,38 @@ function registerVipFarmerRoutes(app, { authMiddleware }) {
       if (e.statusCode === 400) return res.status(400).json({ message: e.message });
       if (isMissingTableError(e)) return res.status(503).json({ message: schemaMsg });
       return res.status(500).json({ message: e.message || 'Early withdraw failed' });
+    }
+  });
+
+  app.post('/vip-farmers/exit/preview', authMiddleware, async (req, res) => {
+    try {
+      const quote = await computeVipExitQuote(req.userId, req.body || {});
+      return res.json(quote);
+    } catch (e) {
+      if (e.statusCode === 400) return res.status(400).json({ message: e.message });
+      if (isMissingTableError(e)) return res.status(503).json({ message: exitSchemaMsg });
+      return res.status(500).json({ message: e.message || 'Exit preview failed' });
+    }
+  });
+
+  app.post('/vip-farmers/exit/request', authMiddleware, async (req, res) => {
+    try {
+      const result = await submitVipExitRequest(req.userId, req.body || {});
+      return res.status(201).json(result);
+    } catch (e) {
+      if (e.statusCode === 400) return res.status(400).json({ message: e.message });
+      if (isMissingTableError(e)) return res.status(503).json({ message: exitSchemaMsg });
+      return res.status(500).json({ message: e.message || 'Exit request failed' });
+    }
+  });
+
+  app.get('/vip-farmers/exit/requests', authMiddleware, async (req, res) => {
+    try {
+      const result = await listUserVipExitRequests(req.userId, req.query.limit);
+      return res.json(result);
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: exitSchemaMsg });
+      return res.status(500).json({ message: e.message || 'Failed to load exit requests' });
     }
   });
 
