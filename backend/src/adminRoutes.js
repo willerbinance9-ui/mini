@@ -68,6 +68,7 @@ const {
   approveVipLoan,
   rejectVipLoan,
 } = require('./vipLoanService');
+const { listAdminVipReinvestments } = require('./vipFarmerService');
 const { normalizeTargetUserId } = require('./notificationRoutes');
 const { approveWithdrawal, rejectWithdrawal } = require('./adminWithdrawals');
 const { releaseP2pEscrow, refundP2pEscrow } = require('./p2pEscrow');
@@ -1492,6 +1493,24 @@ function registerAdminRoutes(app) {
       }
       console.error('[admin/vip-farmers/loans/reject]', e);
       return res.status(500).json({ message: e.message || 'Reject failed' });
+    }
+  });
+
+  const vipReinvestSchemaMsg =
+    'VIP reinvest schema missing. Run backend/sql/migrations/20260708_vip_reinvest_events.sql in Supabase.';
+
+  app.get('/admin/api/vip-farmers/reinvestments', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const result = await listAdminVipReinvestments({
+        limit: Number(req.query.limit) || 200,
+      });
+      return res.json(result);
+    } catch (e) {
+      if (isMissingTableError(e) || isSchemaError(e)) {
+        return res.status(503).json({ message: vipReinvestSchemaMsg, schemaMissing: true });
+      }
+      console.error('[admin/vip-farmers/reinvestments]', e);
+      return res.status(500).json({ message: e.message || 'Failed to load reinvestments' });
     }
   });
 

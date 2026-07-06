@@ -340,6 +340,8 @@
     }
     .pill-paused { background: rgba(248, 113, 113, 0.15); color: var(--danger); }
     .pill-ok { background: rgba(74, 222, 128, 0.15); color: var(--ok); }
+    .pill-warn { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .pill-danger { background: rgba(248, 113, 113, 0.15); color: #f87171; }
     .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
     .stat { background: var(--bg); border-radius: 10px; padding: 12px; border: 1px solid var(--border); }
     .stat .val { font-size: 1.15rem; font-weight: 700; color: var(--accent); }
@@ -1440,10 +1442,25 @@
             <p id="vipExitErr" class="err hidden"></p>
           </div>
           <div id="vipLoanRequestsCard" class="card superadmin-only" style="margin-top:16px;">
-            <h3 style="margin:0 0 8px;font-size:1rem;">Pending VIP loan requests</h3>
+            <h3 style="margin:0 0 8px;font-size:1rem;">VIP loan management</h3>
             <p class="hint" style="margin-bottom:12px;">
-              Superadmin only. Approve to credit the member's cash wallet (after 30% commission). Withdrawals stay locked until the loan is fully repaid.
+              Superadmin only. Approve pending loans to credit cash (after 30% commission). Active loans lock member withdrawals until repaid.
             </p>
+            <div class="row" style="align-items:flex-end;margin-bottom:12px;">
+              <div>
+                <label>Loan status</label>
+                <select id="vipLoanStatusFilter">
+                  <option value="pending" selected>Pending approval</option>
+                  <option value="active">Active (outstanding)</option>
+                  <option value="repaid">Repaid</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="all">All</option>
+                </select>
+              </div>
+              <div style="flex:0;">
+                <button type="button" class="btn-primary" id="refreshVipLoansBtn" style="width:auto;margin-bottom:16px;">Refresh loans</button>
+              </div>
+            </div>
             <p id="vipLoanStats" class="hint"></p>
             <div id="vipLoanLoading" class="loading hidden">Loading loan requests…</div>
             <div style="overflow-x:auto;">
@@ -1451,7 +1468,9 @@
                 <thead>
                   <tr>
                     <th>Member</th>
+                    <th>Status</th>
                     <th>Requested</th>
+                    <th>Outstanding</th>
                     <th>Commission</th>
                     <th>Disburse</th>
                     <th>Last month earnings</th>
@@ -1463,6 +1482,30 @@
               </table>
             </div>
             <p id="vipLoanErr" class="err hidden"></p>
+          </div>
+          <div id="vipReinvestCard" class="card superadmin-only" style="margin-top:16px;">
+            <h3 style="margin:0 0 8px;font-size:1rem;">VIP reinvestments</h3>
+            <p class="hint" style="margin-bottom:12px;">
+              Superadmin only. Members who compounded earned revenue back into their VIP principal without withdrawing or stopping.
+            </p>
+            <p id="vipReinvestStats" class="hint"></p>
+            <div id="vipReinvestLoading" class="loading hidden">Loading reinvestments…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Member</th>
+                    <th>Reinvested</th>
+                    <th>Previous principal</th>
+                    <th>New principal</th>
+                    <th>Lock reset</th>
+                    <th>When</th>
+                  </tr>
+                </thead>
+                <tbody id="vipReinvestRows"></tbody>
+              </table>
+            </div>
+            <p id="vipReinvestErr" class="err hidden"></p>
           </div>
         </div>
 
@@ -2179,6 +2222,7 @@
     let pendingVipExitRequests = [];
     let vipExitApproveTarget = null;
     let pendingVipLoans = [];
+    let vipReinvestEvents = [];
     let p2pTrades = [];
     let aiPlan = null;
     let aiAllocations = [];
@@ -5191,6 +5235,7 @@
         renderVipMembersTable();
         await loadVipExitRequests();
         await loadVipLoans();
+        await loadVipReinvestments();
       } catch (e) {
         vipMembers = [];
         renderVipSummary(null);
@@ -5452,22 +5497,46 @@
 
     function renderVipLoansTable() {
       const tbody = document.getElementById('vipLoanRows');
+      const filter = document.getElementById('vipLoanStatusFilter')?.value || 'pending';
       tbody.innerHTML = '';
       if (!pendingVipLoans.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted);">No pending VIP loan requests</td></tr>';
+        tbody.innerHTML =
+          '<tr><td colspan="9" style="color:var(--muted);">No VIP loans for this filter</td></tr>';
       }
       pendingVipLoans.forEach((loan) => {
         const tr = document.createElement('tr');
-        const actionCell =
-          '<button type="button" class="btn-primary" data-approve-vip-loan="' +
-          loan.id +
-          '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Approve</button>' +
-          '<button type="button" class="btn-danger" data-reject-vip-loan="' +
-          loan.id +
-          '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Reject</button>';
+        const status = String(loan.status || 'pending');
+        const statusPill =
+          status === 'pending'
+            ? '<span class="pill pill-warn">pending</span>'
+            : status === 'active'
+              ? '<span class="pill pill-ok">active</span>'
+              : status === 'repaid'
+                ? '<span class="pill">repaid</span>'
+                : '<span class="pill pill-danger">rejected</span>';
+        let actionCell = '—';
+        if (status === 'pending') {
+          actionCell =
+            '<button type="button" class="btn-primary" data-approve-vip-loan="' +
+            loan.id +
+            '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Approve</button>' +
+            '<button type="button" class="btn-danger" data-reject-vip-loan="' +
+            loan.id +
+            '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Reject</button>';
+        } else if (status === 'active') {
+          actionCell =
+            '<span style="font-size:0.75rem;color:var(--muted);">Repaid: ' +
+            fmtMoney(loan.repaidUsd || 0) +
+            '</span>';
+        } else if (loan.adminNote) {
+          actionCell =
+            '<span style="font-size:0.72rem;color:var(--muted);">' + escapeHtml(loan.adminNote) + '</span>';
+        }
         tr.innerHTML =
           '<td>' + escapeHtml(loan.userEmail || '—') + '</td>' +
+          '<td>' + statusPill + '</td>' +
           '<td><strong>' + fmtMoney(loan.amountUsd || 0) + '</strong></td>' +
+          '<td>' + (status === 'active' || status === 'repaid' ? fmtMoney(loan.outstandingUsd || 0) : '—') + '</td>' +
           '<td>' + fmtMoney(loan.commissionUsd || 0) + ' (' + Math.round((loan.commissionRate || 0.3) * 100) + '%)</td>' +
           '<td>' + fmtMoney(loan.disbursedUsd || 0) + '</td>' +
           '<td>' + fmtMoney(loan.lastMonthEarningsUsd || 0) + '</td>' +
@@ -5481,8 +5550,13 @@
       tbody.querySelectorAll('button[data-reject-vip-loan]').forEach((btn) => {
         btn.onclick = () => actOnVipLoan(btn.getAttribute('data-reject-vip-loan'), 'reject', btn);
       });
+      const pendingCount = pendingVipLoans.filter((l) => l.status === 'pending').length;
       document.getElementById('vipLoanStats').textContent =
-        pendingVipLoans.length + ' VIP loan request(s) awaiting action';
+        pendingVipLoans.length +
+        ' loan(s) shown · ' +
+        pendingCount +
+        ' pending approval' +
+        (filter !== 'pending' ? ' · filter: ' + filter : '');
     }
 
     async function loadVipLoans() {
@@ -5490,7 +5564,8 @@
       document.getElementById('vipLoanErr').classList.add('hidden');
       document.getElementById('vipLoanLoading').classList.remove('hidden');
       try {
-        const data = await api('/admin/api/vip-farmers/loans?status=pending');
+        const status = document.getElementById('vipLoanStatusFilter')?.value || 'pending';
+        const data = await api('/admin/api/vip-farmers/loans?status=' + encodeURIComponent(status));
         pendingVipLoans = data.loans || [];
         renderVipLoansTable();
       } catch (e) {
@@ -5534,6 +5609,53 @@
         alert(e.message);
       } finally {
         btnEl.disabled = false;
+      }
+    }
+
+    function showVipReinvestErr(e) {
+      document.getElementById('vipReinvestErr').textContent = e.message;
+      document.getElementById('vipReinvestErr').classList.remove('hidden');
+    }
+
+    function renderVipReinvestTable() {
+      const tbody = document.getElementById('vipReinvestRows');
+      tbody.innerHTML = '';
+      if (!vipReinvestEvents.length) {
+        tbody.innerHTML =
+          '<tr><td colspan="6" style="color:var(--muted);">No reinvestments recorded yet</td></tr>';
+      }
+      vipReinvestEvents.forEach((ev) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + escapeHtml(ev.userEmail || '—') + '</td>' +
+          '<td><strong>' + fmtMoney(ev.amountUsd || 0) + '</strong></td>' +
+          '<td>' + fmtMoney(ev.previousPrincipalUsd || 0) + '</td>' +
+          '<td>' + fmtMoney(ev.newPrincipalUsd || 0) + '</td>' +
+          '<td>' + (ev.lockReset ? 'Yes' : 'No') + '</td>' +
+          '<td>' + new Date(ev.createdAt).toLocaleString() + '</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadVipReinvestments() {
+      if (adminRole !== 'superadmin') return;
+      document.getElementById('vipReinvestErr').classList.add('hidden');
+      document.getElementById('vipReinvestLoading').classList.remove('hidden');
+      try {
+        const data = await api('/admin/api/vip-farmers/reinvestments?limit=200');
+        vipReinvestEvents = data.events || [];
+        renderVipReinvestTable();
+        document.getElementById('vipReinvestStats').textContent =
+          (data.count || 0) +
+          ' reinvestment(s) · total ' +
+          fmtMoney(data.totalReinvestedUsd || 0) +
+          ' compounded into VIP principal';
+      } catch (e) {
+        vipReinvestEvents = [];
+        renderVipReinvestTable();
+        showVipReinvestErr(e);
+      } finally {
+        document.getElementById('vipReinvestLoading').classList.add('hidden');
       }
     }
 
@@ -6266,6 +6388,8 @@
       if (e.key === 'Enter') loadLevels().catch(showLevelsErr);
     });
     document.getElementById('vipStatusFilter').onchange = () => loadVipFarmers().catch(showVipErr);
+    document.getElementById('vipLoanStatusFilter').onchange = () => loadVipLoans().catch(showVipLoanErr);
+    document.getElementById('refreshVipLoansBtn').onclick = () => loadVipLoans().catch(showVipLoanErr);
     async function sendAdminNotification() {
       if (adminRole !== 'superadmin') return;
       document.getElementById('notifyErr').classList.add('hidden');

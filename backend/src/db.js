@@ -4956,6 +4956,38 @@ async function sumUserDepositsUsdBetween(userId, startIso, endIso) {
   return roundWalletUsd(total);
 }
 
+function vipReinvestEventToApi(row, email) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userEmail: email || undefined,
+    investmentId: row.investment_id,
+    amountUsd: Number(row.amount_usd),
+    previousPrincipalUsd: Number(row.previous_principal_usd || 0),
+    newPrincipalUsd: Number(row.new_principal_usd || 0),
+    lockReset: Boolean(row.lock_reset),
+    createdAt: row.created_at,
+  };
+}
+
+async function insertVipReinvestEvent(row) {
+  const { data, error } = await supabase.from('vip_reinvest_events').insert(row).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+async function listVipReinvestEventsAdmin({ limit = 200 } = {}) {
+  const { data, error } = await supabase
+    .from('vip_reinvest_events')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(Math.min(500, Math.max(1, Number(limit) || 200)));
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
 async function getPlatformRevenueEventBySource(eventType, sourceId) {
   const { data, error } = await supabase
     .from('platform_revenue_events')
@@ -5777,6 +5809,9 @@ module.exports = {
   insertVipLoanFundTransfer,
   sumActiveLoanTaintForRecipient,
   sumUserDepositsUsdBetween,
+  vipReinvestEventToApi,
+  insertVipReinvestEvent,
+  listVipReinvestEventsAdmin,
   getPlatformRevenueEventBySource,
   insertPlatformRevenueEvent,
   listPlatformRevenueEventsAdmin,

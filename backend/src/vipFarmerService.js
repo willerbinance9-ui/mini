@@ -19,6 +19,10 @@ const {
   VIP_EARLY_PENALTY_RATE,
   vipInvestmentToApi,
   getPendingVipExitRequestForUser,
+  insertVipReinvestEvent,
+  listVipReinvestEventsAdmin,
+  vipReinvestEventToApi,
+  getUsersByIds,
   vipExitRequestToApi,
   utcTodayYmd,
 } = require('./db');
@@ -189,9 +193,10 @@ async function reinvestVipEarnings(userId, amount) {
     throw err;
   }
 
+  const previousPrincipal = roundUsd(inv.principal_usd);
   const now = new Date().toISOString();
   const maturesAt = addDaysUtc(now, VIP_LOCK_DAYS_CALENDAR);
-  const newPrincipal = roundUsd(Number(inv.principal_usd) + amt);
+  const newPrincipal = roundUsd(previousPrincipal + amt);
   const newRevenueWithdrawn = roundUsd(revenueWithdrawn + amt);
 
   await setWalletBalance(userId, roundUsd(cash - amt));
@@ -203,6 +208,21 @@ async function reinvestVipEarnings(userId, amount) {
     daysAccrued: 0,
     status: 'active',
   });
+
+  try {
+    await insertVipReinvestEvent({
+      id: newId(),
+      user_id: userId,
+      investment_id: inv.id,
+      amount_usd: amt,
+      previous_principal_usd: previousPrincipal,
+      new_principal_usd: newPrincipal,
+      lock_reset: true,
+      created_at: now,
+    });
+  } catch (e) {
+    console.error('[vip-farmers/reinvest] audit log failed:', e.message);
+  }
 
   return {
     investment: vipInvestmentToApi(row),
@@ -304,11 +324,26 @@ async function runVipDailyAccrual(planDate = utcTodayYmd()) {
   return { ok: true, planDate, investmentsChecked: rows.length, accrualsApplied: applied, skipped };
 }
 
+async function listAdminVipReinvestments({ limit = 200 } = {}) {
+  const rows = await listVipReinvestEventsAdmin({ limit });
+  const userIds = [...new Set(rows.map((r) => r.user_id))];
+  const users = await getUsersByIds(userIds);
+  const emailById = new Map(users.map((u) => [u.id, u.email]));
+  const events = rows.map((r) => vipReinvestEventToApi(r, emailById.get(r.user_id)));
+  const totalReinvestedUsd = events.reduce((s, e) => s + Number(e.amountUsd || 0), 0);
+  return {
+    events,
+    count: events.length,
+    totalReinvestedUsd: Math.round(totalReinvestedUsd * 100) / 100,
+  };
+}
+
 module.exports = {
   getVipSummary,
   investVip,
   addCapitalVip,
   reinvestVipEarnings,
+  listAdminVipReinvestments,
   withdrawVipAtMaturity,
   earlyWithdrawVip,
   runVipDailyAccrual,
