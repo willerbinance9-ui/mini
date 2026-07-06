@@ -20,11 +20,12 @@ export interface TotpStatus {
 }
 
 export const authService = {
-  register: (email: string, password: string) => api.post<AuthResponse>('/auth/register', { email, password }),
+  register: (email: string, password: string) =>
+    api.post<AuthResponse>('/auth/register', { email: email.trim().toLowerCase(), password }),
 
   login: async (email: string, password: string): Promise<LoginResult> => {
     const data = await api.post<AuthResponse | { requiresTotp?: boolean; preAuthToken?: string }>('/auth/login', {
-      email,
+      email: email.trim().toLowerCase(),
       password,
     });
     if (data && typeof data === 'object' && 'requiresTotp' in data && data.requiresTotp && data.preAuthToken) {

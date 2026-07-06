@@ -44,15 +44,16 @@ export function AuthScreen() {
 
   const submit = async () => {
     try {
-      if (!email || password.length < 6) {
+      const trimmedEmail = email.trim().toLowerCase();
+      if (!trimmedEmail || password.length < 6) {
         Alert.alert('Validation', 'Enter valid credentials (min 6-char password).');
         return;
       }
       if (mode === 'register') {
-        await register(email, password);
+        await register(trimmedEmail, password);
         return;
       }
-      const result = await login(email, password);
+      const result = await login(trimmedEmail, password);
       if (result.kind === 'needs_totp') {
         setTotpPreAuthToken(result.preAuthToken);
         setTotpCode('');

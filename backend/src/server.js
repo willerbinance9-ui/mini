@@ -269,9 +269,16 @@ app.get('/health/db', async (_, res) => {
   }
 });
 
+function normalizeAuthEmail(email) {
+  return String(email || '')
+    .trim()
+    .toLowerCase();
+}
+
 app.post('/auth/register', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = normalizeAuthEmail(req.body?.email);
+    const { password } = req.body;
     if (!email || !password || password.length < 6) return res.status(400).json({ message: 'Invalid credentials' });
     const existing = await getUserByEmail(email);
     if (existing) return res.status(400).json({ message: 'Email already in use' });
@@ -292,7 +299,8 @@ app.post('/auth/register', async (req, res) => {
 
 app.post('/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = normalizeAuthEmail(req.body?.email);
+    const { password } = req.body;
     const user = await getUserByEmail(email);
     if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.status(401).json({ message: 'Invalid email or password' });

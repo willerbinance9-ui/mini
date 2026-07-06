@@ -64,14 +64,17 @@ function randomTransferCode() {
 }
 
 async function getUserByEmail(email) {
+  const normalized = String(email || '')
+    .trim()
+    .toLowerCase();
   const { data, error } = await supabase
     .from('users')
     .select('*')
-    .eq('email', email)
+    .eq('email', normalized)
     .is('partner_id', null)
     .maybeSingle();
   if (error && isMissingColumnError(error, 'partner_id')) {
-    const fallback = await supabase.from('users').select('*').eq('email', email).maybeSingle();
+    const fallback = await supabase.from('users').select('*').eq('email', normalized).maybeSingle();
     if (fallback.error) throw fallback.error;
     return fallback.data;
   }
