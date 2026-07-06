@@ -63,6 +63,11 @@ const {
   approveVipExitRequest,
   rejectVipExitRequest,
 } = require('./vipExitService');
+const {
+  listAdminVipLoans,
+  approveVipLoan,
+  rejectVipLoan,
+} = require('./vipLoanService');
 const { normalizeTargetUserId } = require('./notificationRoutes');
 const { approveWithdrawal, rejectWithdrawal } = require('./adminWithdrawals');
 const { releaseP2pEscrow, refundP2pEscrow } = require('./p2pEscrow');
@@ -1438,6 +1443,54 @@ function registerAdminRoutes(app) {
         });
       }
       console.error('[admin/vip-farmers/exit-requests/reject]', e);
+      return res.status(500).json({ message: e.message || 'Reject failed' });
+    }
+  });
+
+  const vipLoanSchemaMsg =
+    'VIP loans schema missing. Run backend/sql/migrations/20260707_vip_loans.sql in Supabase.';
+
+  app.get('/admin/api/vip-farmers/loans', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const status = String(req.query.status || 'pending').trim();
+      const result = await listAdminVipLoans({
+        status,
+        limit: Number(req.query.limit) || 200,
+      });
+      return res.json(result);
+    } catch (e) {
+      if (isMissingTableError(e) || isSchemaError(e)) {
+        return res.status(503).json({ message: vipLoanSchemaMsg, schemaMissing: true });
+      }
+      console.error('[admin/vip-farmers/loans]', e);
+      return res.status(500).json({ message: e.message || 'Failed to load VIP loans' });
+    }
+  });
+
+  app.post('/admin/api/vip-farmers/loans/:id/approve', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const result = await approveVipLoan(req.params.id);
+      return res.json(result);
+    } catch (e) {
+      if (e.statusCode === 400) return res.status(400).json({ message: e.message });
+      if (isMissingTableError(e) || isSchemaError(e)) {
+        return res.status(503).json({ message: vipLoanSchemaMsg });
+      }
+      console.error('[admin/vip-farmers/loans/approve]', e);
+      return res.status(500).json({ message: e.message || 'Approve failed' });
+    }
+  });
+
+  app.post('/admin/api/vip-farmers/loans/:id/reject', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const result = await rejectVipLoan(req.params.id, req.body?.note);
+      return res.json(result);
+    } catch (e) {
+      if (e.statusCode === 400) return res.status(400).json({ message: e.message });
+      if (isMissingTableError(e) || isSchemaError(e)) {
+        return res.status(503).json({ message: vipLoanSchemaMsg });
+      }
+      console.error('[admin/vip-farmers/loans/reject]', e);
       return res.status(500).json({ message: e.message || 'Reject failed' });
     }
   });

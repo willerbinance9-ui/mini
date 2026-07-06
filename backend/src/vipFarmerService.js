@@ -149,6 +149,70 @@ async function addCapitalVip(userId, amount) {
   };
 }
 
+/** Reinvest available VIP earnings into principal without stopping or withdrawing. */
+async function reinvestVipEarnings(userId, amount) {
+  const inv = await getActiveVipInvestmentForUser(userId);
+  if (!inv) {
+    const err = new Error('No active VIP investment');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const pendingExit = await getPendingVipExitRequestForUser(userId);
+  if (pendingExit) {
+    const err = new Error('You have a withdrawal request in progress. Wait for it to complete before reinvesting.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const revenueWithdrawn = roundUsd(inv.revenue_withdrawn_usd || 0);
+  const totalAccrued = roundUsd(inv.total_accrued_usd || 0);
+  const availableRevenue = roundUsd(Math.max(0, totalAccrued - revenueWithdrawn));
+
+  const amt = amount != null && amount !== '' ? roundUsd(amount) : availableRevenue;
+  if (!Number.isFinite(amt) || amt <= 0) {
+    const err = new Error('No earnings available to reinvest');
+    err.statusCode = 400;
+    throw err;
+  }
+  if (amt > availableRevenue) {
+    const err = new Error(`Maximum reinvest is $${availableRevenue.toFixed(2)} (available revenue)`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const wallet = await ensureWalletForUser(userId);
+  const cash = roundUsd(wallet?.balance);
+  if (cash < amt) {
+    const err = new Error('Insufficient cash wallet balance for reinvestment');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const now = new Date().toISOString();
+  const maturesAt = addDaysUtc(now, VIP_LOCK_DAYS_CALENDAR);
+  const newPrincipal = roundUsd(Number(inv.principal_usd) + amt);
+  const newRevenueWithdrawn = roundUsd(revenueWithdrawn + amt);
+
+  await setWalletBalance(userId, roundUsd(cash - amt));
+  const row = await updateVipInvestment(inv.id, {
+    principalUsd: newPrincipal,
+    revenueWithdrawnUsd: newRevenueWithdrawn,
+    startedAt: now,
+    maturesAt,
+    daysAccrued: 0,
+    status: 'active',
+  });
+
+  return {
+    investment: vipInvestmentToApi(row),
+    cashWalletUsd: roundUsd(cash - amt),
+    reinvestedUsd: amt,
+    lockReset: true,
+    message: `Reinvested $${amt.toFixed(2)} into your VIP principal. Lock restarted from today.`,
+  };
+}
+
 async function withdrawVipAtMaturity(userId) {
   const err = new Error('Use the VIP exit request flow in the app to withdraw.');
   err.statusCode = 400;
@@ -244,6 +308,7 @@ module.exports = {
   getVipSummary,
   investVip,
   addCapitalVip,
+  reinvestVipEarnings,
   withdrawVipAtMaturity,
   earlyWithdrawVip,
   runVipDailyAccrual,

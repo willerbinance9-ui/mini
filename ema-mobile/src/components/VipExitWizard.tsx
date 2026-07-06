@@ -116,7 +116,7 @@ function ExitAdjustmentsReview({ quote }: { quote: VipExitQuote }) {
 export function VipExitWizard({ visible, summary, onClose, onComplete }: Props) {
   const inv = summary.investment;
   const [step, setStep] = useState<Step>(1);
-  const [mode, setMode] = useState<VipExitMode>('full_stop');
+  const [mode, setMode] = useState<VipExitMode | 'reinvest'>('full_stop');
   const [revenuePercent, setRevenuePercent] = useState<number>(100);
   const [destination, setDestination] = useState<VipExitDestination>('platform');
   const [walletAddress, setWalletAddress] = useState('');
@@ -124,6 +124,7 @@ export function VipExitWizard({ visible, summary, onClose, onComplete }: Props) 
   const [loadingQuote, setLoadingQuote] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [reinvestDone, setReinvestDone] = useState<{ reinvestedUsd: number; newPrincipalUsd: number } | null>(null);
 
   const reset = useCallback(() => {
     setStep(1);
@@ -133,6 +134,7 @@ export function VipExitWizard({ visible, summary, onClose, onComplete }: Props) 
     setWalletAddress('');
     setQuote(null);
     setDone(false);
+    setReinvestDone(null);
   }, []);
 
   useEffect(() => {
@@ -140,7 +142,7 @@ export function VipExitWizard({ visible, summary, onClose, onComplete }: Props) 
   }, [visible, reset]);
 
   const fetchQuote = useCallback(async () => {
-    if (!inv) return null;
+    if (!inv || mode === 'reinvest') return null;
     setLoadingQuote(true);
     try {
       const q = await vipFarmerService.previewExit({
@@ -171,6 +173,12 @@ export function VipExitWizard({ visible, summary, onClose, onComplete }: Props) 
   const onFinish = async () => {
     setSubmitting(true);
     try {
+      if (mode === 'reinvest') {
+        const r = await vipFarmerService.reinvest();
+        setReinvestDone({ reinvestedUsd: r.reinvestedUsd, newPrincipalUsd: r.investment.principalUsd });
+        setDone(true);
+        return;
+      }
       await vipFarmerService.submitExitRequest({
         mode,
         revenuePercent,
@@ -219,9 +227,25 @@ export function VipExitWizard({ visible, summary, onClose, onComplete }: Props) 
     if (step === 1) {
       return (
         <PrimaryButton
-          label='Continue'
-          onPress={() => setStep(2)}
+          label={mode === 'reinvest' ? 'Reinvest earnings' : 'Continue'}
+          onPress={async () => {
+            if (mode === 'reinvest') {
+              setSubmitting(true);
+              try {
+                const r = await vipFarmerService.reinvest();
+                setReinvestDone({ reinvestedUsd: r.reinvestedUsd, newPrincipalUsd: r.investment.principalUsd });
+                setDone(true);
+              } catch (e) {
+                Alert.alert('Reinvest', sanitizeUserFacingError((e as Error).message));
+              } finally {
+                setSubmitting(false);
+              }
+              return;
+            }
+            setStep(2);
+          }}
           style={{ marginTop: 12 }}
+          disabled={submitting}
         />
       );
     }
@@ -274,10 +298,16 @@ export function VipExitWizard({ visible, summary, onClose, onComplete }: Props) 
       {done ? (
         <>
           <Text style={styles.thankYou}>
-            {quote?.thankYouMessage || 'Thank you for investing with us.'}
+            {mode === 'reinvest'
+              ? 'Earnings reinvested'
+              : quote?.thankYouMessage || 'Thank you for investing with us.'}
           </Text>
           <Text style={styles.body}>
-            Your withdrawal request is being processed. You will be notified when funds are sent.
+            {mode === 'reinvest'
+              ? reinvestDone
+                ? `Reinvested ${fmtUsd(reinvestDone.reinvestedUsd)}. New principal ${fmtUsd(reinvestDone.newPrincipalUsd)}. Lock restarted from today.`
+                : 'Your earnings were added to your VIP principal and the lock restarted from today.'
+              : 'Your withdrawal request is being processed. You will be notified when funds are sent.'}
           </Text>
         </>
       ) : null}
@@ -288,6 +318,12 @@ export function VipExitWizard({ visible, summary, onClose, onComplete }: Props) 
             Your choice affects penalties, gas fees, and rewards on this exit. A $1,000 investment extra credit
             applies when your principal is over $4,900 and you have more than 22 working accrual days.
           </Text>
+          <ChoiceRow
+            label='Reinvest earnings & continue'
+            description={`Compound ${fmtUsd(available)} into your principal without withdrawing. Lock restarts from today.`}
+            selected={mode === 'reinvest'}
+            onPress={() => setMode('reinvest')}
+          />
           <ChoiceRow
             label='Withdraw all & stop'
             description='End your VIP investment and withdraw principal plus selected revenue.'

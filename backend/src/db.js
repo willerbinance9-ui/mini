@@ -4461,6 +4461,13 @@ const VIP_INVESTMENT_EXTRA_CREDIT_USD = 1000;
 const VIP_INVESTMENT_EXTRA_CREDIT_MIN_PRINCIPAL_USD = 4900;
 const VIP_INVESTMENT_EXTRA_CREDIT_MIN_WORKING_DAYS = 22;
 const VIP_EXIT_REVENUE_PERCENTS = [50, 60, 70, 80, 90, 100];
+const VIP_LOAN_COMMISSION_RATE = 0.3;
+const VIP_LOAN_MIN_ACCRUAL_DAYS = 22; // one completed VIP working month
+const VIP_LOAN_EARNINGS_WINDOW_DAYS = 30;
+const VIP_LOAN_APPROVAL_MAX_DAYS = 2;
+const VIP_LOAN_MIN_USD = 10;
+const VIP_LOAN_RECIPIENT_EXEMPT_DEPOSIT_USD = 5000;
+const VIP_LOAN_RECIPIENT_DEPOSIT_WINDOW_DAYS = 3;
 
 function vipCalendarDaysSinceStart(startedAt) {
   const start = new Date(startedAt);
@@ -4772,6 +4779,181 @@ async function listVipAccrualsForInvestmentIds(investmentIds) {
   if (error && isSchemaError(error)) return [];
   if (error) throw error;
   return data || [];
+}
+
+async function countVipAccrualDaysForUser(userId) {
+  const { count, error } = await supabase
+    .from('vip_accruals')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId);
+  if (error && isSchemaError(error)) return 0;
+  if (error) throw error;
+  return Number(count || 0);
+}
+
+function vipLoanToApi(row, email) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userEmail: email || undefined,
+    investmentId: row.investment_id || null,
+    amountUsd: Number(row.amount_usd),
+    commissionRate: Number(row.commission_rate),
+    commissionUsd: Number(row.commission_usd),
+    disbursedUsd: Number(row.disbursed_usd),
+    lastMonthEarningsUsd: Number(row.last_month_earnings_usd || 0),
+    maxLoanUsd: Number(row.max_loan_usd || 0),
+    outstandingUsd: Number(row.outstanding_usd || 0),
+    repaidUsd: Number(row.repaid_usd || 0),
+    status: row.status,
+    adminNote: row.admin_note || null,
+    requestedAt: row.requested_at,
+    reviewedAt: row.reviewed_at || null,
+    disbursedAt: row.disbursed_at || null,
+    repaidAt: row.repaid_at || null,
+    createdAt: row.created_at,
+  };
+}
+
+async function getOpenVipLoanForUser(userId) {
+  const { data, error } = await supabase
+    .from('vip_loans')
+    .select('*')
+    .eq('user_id', userId)
+    .in('status', ['pending', 'active'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error && isSchemaError(error)) return null;
+  if (error) throw error;
+  return data;
+}
+
+async function getVipLoanById(id) {
+  const { data, error } = await supabase.from('vip_loans').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function insertVipLoan(row) {
+  const now = new Date().toISOString();
+  const payload = { ...row, created_at: now, updated_at: now };
+  const { data, error } = await supabase.from('vip_loans').insert(payload).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
+async function updateVipLoan(loanId, patch) {
+  const row = { updated_at: new Date().toISOString() };
+  if (patch.status !== undefined) row.status = patch.status;
+  if (patch.adminNote !== undefined) row.admin_note = patch.adminNote;
+  if (patch.reviewedAt !== undefined) row.reviewed_at = patch.reviewedAt;
+  if (patch.disbursedAt !== undefined) row.disbursed_at = patch.disbursedAt;
+  if (patch.repaidAt !== undefined) row.repaid_at = patch.repaidAt;
+  if (patch.outstandingUsd !== undefined) row.outstanding_usd = roundWalletUsd(patch.outstandingUsd);
+  if (patch.repaidUsd !== undefined) row.repaid_usd = roundWalletUsd(patch.repaidUsd);
+  if (patch.disbursedUsd !== undefined) row.disbursed_usd = roundWalletUsd(patch.disbursedUsd);
+  if (patch.commissionUsd !== undefined) row.commission_usd = roundWalletUsd(patch.commissionUsd);
+  const { data, error } = await supabase
+    .from('vip_loans')
+    .update(row)
+    .eq('id', loanId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function listVipLoansForUser(userId, limit = 20) {
+  const { data, error } = await supabase
+    .from('vip_loans')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(Math.min(50, Math.max(1, Number(limit) || 20)));
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function listVipLoansAdmin({ status = 'pending', limit = 200 } = {}) {
+  let query = supabase
+    .from('vip_loans')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(Math.min(500, Math.max(1, Number(limit) || 200)));
+  const st = String(status || 'pending').trim().toLowerCase();
+  if (st && st !== 'all') query = query.eq('status', st);
+  const { data, error } = await query;
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function insertVipLoanFundTransfer(row) {
+  const { data, error } = await supabase
+    .from('vip_loan_fund_transfers')
+    .insert(row)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Sum of loan-tainted funds received by a user from loans that are still
+ * outstanding, excluding transfers where the recipient qualified for the
+ * $5,000-deposit exemption. This amount stays withdrawal-restricted.
+ */
+async function sumActiveLoanTaintForRecipient(userId) {
+  const { data, error } = await supabase
+    .from('vip_loan_fund_transfers')
+    .select('amount_usd, vip_loans!inner(status)')
+    .eq('to_user_id', userId)
+    .eq('recipient_exempt', false)
+    .eq('vip_loans.status', 'active');
+  if (error && isSchemaError(error)) return 0;
+  if (error) throw error;
+  let total = 0;
+  for (const row of data || []) total += Number(row.amount_usd || 0);
+  return roundWalletUsd(total);
+}
+
+/**
+ * Total USD-equivalent deposits (crypto payments, local mobile money, on-chain
+ * USDT) a user made in a time window. VIP accrual payouts do not count.
+ */
+async function sumUserDepositsUsdBetween(userId, startIso, endIso) {
+  const isUsdtish = (asset) => String(asset || '').toLowerCase().includes('usdt');
+  let total = 0;
+
+  const ledger = await supabase
+    .from('crypto_ledger_entries')
+    .select('asset, amount')
+    .eq('user_id', userId)
+    .eq('direction', 'in')
+    .in('source', ['payment', 'local_deposit'])
+    .gte('created_at', startIso)
+    .lte('created_at', endIso);
+  if (ledger.error && !isSchemaError(ledger.error)) throw ledger.error;
+  for (const row of ledger.data || []) {
+    if (isUsdtish(row.asset)) total += Number(row.amount || 0);
+  }
+
+  const onchain = await supabase
+    .from('tatum_onchain_txs')
+    .select('asset, amount_display')
+    .eq('user_id', userId)
+    .eq('direction', 'in')
+    .gte('created_at', startIso)
+    .lte('created_at', endIso);
+  if (onchain.error && !isSchemaError(onchain.error)) throw onchain.error;
+  for (const row of onchain.data || []) {
+    if (isUsdtish(row.asset)) total += Number.parseFloat(String(row.amount_display || 0)) || 0;
+  }
+
+  return roundWalletUsd(total);
 }
 
 async function getPlatformRevenueEventBySource(eventType, sourceId) {
@@ -5361,6 +5543,7 @@ module.exports = {
   setWalletBalance,
   ensureUserTransferCode,
   lookupPeerTransferRecipient,
+  getUserIdByTransferCode,
   rpcWalletPeerTransfer,
   createTransaction,
   getTransactionById,
@@ -5576,6 +5759,24 @@ module.exports = {
   listVipExitRequestsForUser,
   getPendingVipExitRequestForUser,
   listVipExitRequestsAdmin,
+  VIP_LOAN_COMMISSION_RATE,
+  VIP_LOAN_MIN_ACCRUAL_DAYS,
+  VIP_LOAN_EARNINGS_WINDOW_DAYS,
+  VIP_LOAN_APPROVAL_MAX_DAYS,
+  VIP_LOAN_MIN_USD,
+  VIP_LOAN_RECIPIENT_EXEMPT_DEPOSIT_USD,
+  VIP_LOAN_RECIPIENT_DEPOSIT_WINDOW_DAYS,
+  countVipAccrualDaysForUser,
+  vipLoanToApi,
+  getOpenVipLoanForUser,
+  getVipLoanById,
+  insertVipLoan,
+  updateVipLoan,
+  listVipLoansForUser,
+  listVipLoansAdmin,
+  insertVipLoanFundTransfer,
+  sumActiveLoanTaintForRecipient,
+  sumUserDepositsUsdBetween,
   getPlatformRevenueEventBySource,
   insertPlatformRevenueEvent,
   listPlatformRevenueEventsAdmin,

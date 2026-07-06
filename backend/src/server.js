@@ -16,6 +16,7 @@ const {
   setWalletBalance,
   ensureUserTransferCode,
   lookupPeerTransferRecipient,
+  getUserIdByTransferCode,
   rpcWalletPeerTransfer,
   createTransaction,
   getTransactionsByUserId,
@@ -80,6 +81,10 @@ const { registerNotificationRoutes } = require('./notificationRoutes');
 const { registerNotificationPreferencesRoutes } = require('./notificationPreferencesRoutes');
 const { registerSupportRoutes } = require('./supportRoutes');
 const { notifyPeerTransfer } = require('./peerTransferNotifications');
+const {
+  getVipLoanWithdrawalRestriction,
+  recordVipLoanFundTransfer,
+} = require('./vipLoanService');
 const { registerLocalMoneyRoutes, handleFlutterwaveWebhook } = require('./localMoneyRoutes');
 const { registerP2pRoutes } = require('./p2pRoutes');
 const { requireComplianceProfile } = require('./middleware/requireComplianceProfile');
@@ -618,10 +623,21 @@ app.post('/wallet/transfer', authMiddleware, requireComplianceProfile, async (re
     });
 
     const fromBalance = Number.parseFloat(String(result?.from_balance ?? 0)) || 0;
-    const recipientUserId = result?.to_user_id ? String(result.to_user_id) : null;
+    const recipientUserId =
+      result?.to_user_id != null
+        ? String(result.to_user_id)
+        : await getUserIdByTransferCode(toTransferCode);
     const idempotent = Boolean(result?.idempotent);
 
     if (!idempotent && recipientUserId) {
+      // Keep moved loan money withdrawal-restricted for the recipient while
+      // the sender's VIP loan is outstanding.
+      await recordVipLoanFundTransfer({
+        fromUserId: req.userId,
+        toUserId: recipientUserId,
+        amountUsd: roundedAmount,
+        transferId: result?.transfer_id || null,
+      });
       void notifyPeerTransfer({
         senderUserId: req.userId,
         recipientUserId,
@@ -702,9 +718,20 @@ app.post('/wallet/withdraw', authMiddleware, requireComplianceProfile, async (re
       }
     }
 
+    const loanRestriction = await getVipLoanWithdrawalRestriction(req.userId);
+    if (loanRestriction.blocked) {
+      return res.status(403).json({ message: loanRestriction.reason, code: 'VIP_LOAN_WITHDRAWAL_LOCKED' });
+    }
+
     const wallet = await ensureWalletForUser(req.userId);
     const current = Number.parseFloat(String(wallet.balance ?? 0)) || 0;
-    if (current < amount) return res.status(400).json({ message: 'Insufficient wallet balance' });
+    const withdrawable = Math.max(0, current - loanRestriction.restrictedUsd);
+    if (withdrawable < amount) {
+      if (loanRestriction.restrictedUsd > 0 && current >= amount) {
+        return res.status(403).json({ message: loanRestriction.reason, code: 'VIP_LOAN_FUNDS_RESTRICTED' });
+      }
+      return res.status(400).json({ message: 'Insufficient wallet balance' });
+    }
 
     const nextBalance = current - amount;
     await setWalletBalance(req.userId, nextBalance);

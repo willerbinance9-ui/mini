@@ -86,6 +86,41 @@ export type VipExitMode = 'full_stop' | 'partial_continue';
 export type VipExitDestination = 'platform' | 'direct_wallet';
 export const VIP_EXIT_REVENUE_PERCENTS = [50, 60, 70, 80, 90, 100] as const;
 
+export type VipLoan = {
+  id: string;
+  amountUsd: number;
+  commissionRate: number;
+  commissionUsd: number;
+  disbursedUsd: number;
+  lastMonthEarningsUsd: number;
+  maxLoanUsd: number;
+  outstandingUsd: number;
+  repaidUsd: number;
+  status: 'pending' | 'active' | 'repaid' | 'rejected';
+  adminNote: string | null;
+  requestedAt: string;
+  reviewedAt: string | null;
+  disbursedAt: string | null;
+  repaidAt: string | null;
+  createdAt: string;
+};
+
+export type VipLoanStatus = {
+  eligible: boolean;
+  ineligibleReason: string | null;
+  monthCompleted: boolean;
+  accrualDays: number;
+  minAccrualDays: number;
+  lastMonthEarningsUsd: number;
+  maxLoanUsd: number;
+  commissionRate: number;
+  minLoanUsd: number;
+  approvalMaxDays: number;
+  openLoan: VipLoan | null;
+  loans: VipLoan[];
+  usageNote: string;
+};
+
 export const vipFarmerService = {
   getSummary: () => api.get<VipSummary>('/vip-farmers/summary'),
   invest: (amount: number) =>
@@ -109,4 +144,20 @@ export const vipFarmerService = {
   }) =>
     api.post<{ request: VipExitRequest; quote: VipExitQuote }>('/vip-farmers/exit/request', payload),
   listExitRequests: () => api.get<{ requests: VipExitRequest[] }>('/vip-farmers/exit/requests'),
+  reinvest: (amount?: number) =>
+    api.post<{
+      investment: VipInvestment;
+      cashWalletUsd: number;
+      reinvestedUsd: number;
+      lockReset: boolean;
+      message: string;
+    }>('/vip-farmers/reinvest', amount != null ? { amount } : {}),
+  getLoanStatus: () => api.get<VipLoanStatus>('/vip-farmers/loans/status'),
+  requestLoan: (amount: number) =>
+    api.post<{ loan: VipLoan; message: string }>('/vip-farmers/loans/request', { amount }),
+  repayLoan: (amount: number) =>
+    api.post<{ loan: VipLoan; cashWalletUsd: number; fullyRepaid: boolean; message: string }>(
+      '/vip-farmers/loans/repay',
+      { amount }
+    ),
 };

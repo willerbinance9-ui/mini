@@ -3,7 +3,11 @@ import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } 
 import { Card } from '../components/Card';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { VipExitWizard } from '../components/VipExitWizard';
-import { vipFarmerService, type VipSummary } from '../services/vipFarmerService';
+import {
+  vipFarmerService,
+  type VipLoanStatus,
+  type VipSummary,
+} from '../services/vipFarmerService';
 import { palette } from '../theme/colors';
 
 function fmtUsd(n: number) {
@@ -12,8 +16,11 @@ function fmtUsd(n: number) {
 
 export function VipFarmersTradeScreen() {
   const [summary, setSummary] = useState<VipSummary | null>(null);
+  const [loanStatus, setLoanStatus] = useState<VipLoanStatus | null>(null);
   const [amount, setAmount] = useState('');
   const [addAmount, setAddAmount] = useState('');
+  const [loanAmount, setLoanAmount] = useState('');
+  const [repayAmount, setRepayAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [exitWizardOpen, setExitWizardOpen] = useState(false);
@@ -21,10 +28,16 @@ export function VipFarmersTradeScreen() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setSummary(await vipFarmerService.getSummary());
+      const [s, loan] = await Promise.all([
+        vipFarmerService.getSummary(),
+        vipFarmerService.getLoanStatus().catch(() => null),
+      ]);
+      setSummary(s);
+      setLoanStatus(loan);
     } catch (e: any) {
       setError(e?.message || 'Failed to load VIP Farmers');
       setSummary(null);
+      setLoanStatus(null);
     }
   }, []);
 
@@ -80,6 +93,74 @@ export function VipFarmersTradeScreen() {
     );
   };
 
+  const onReinvest = async () => {
+    const inv = summary?.investment;
+    const available = inv?.availableRevenueUsd ?? 0;
+    if (available <= 0) {
+      return Alert.alert('Reinvest', 'No earnings available to reinvest.');
+    }
+    Alert.alert(
+      'Reinvest earnings',
+      `Reinvest ${fmtUsd(available)} into your VIP principal? Your lock restarts from today and earnings stay in the investment without withdrawing.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reinvest',
+          onPress: async () => {
+            try {
+              const r = await vipFarmerService.reinvest();
+              await load();
+              Alert.alert('Reinvested', r.message || `Reinvested ${fmtUsd(r.reinvestedUsd)}.`);
+            } catch (e: any) {
+              Alert.alert('Reinvest', e?.message || 'Reinvest failed');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const onRequestLoan = async () => {
+    const n = Number(loanAmount);
+    if (!n || n <= 0) return Alert.alert('Loan', 'Enter a valid amount');
+    const max = loanStatus?.maxLoanUsd ?? 0;
+    const disbursed = n * (1 - (loanStatus?.commissionRate ?? 0.3));
+    Alert.alert(
+      'Request VIP loan',
+      `Request ${fmtUsd(n)} loan? After 30% commission you receive ${fmtUsd(disbursed)} for platform use (farming, trading, VIP). Approval can take up to ${loanStatus?.approvalMaxDays ?? 2} days. Withdrawals stay locked until repaid.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Submit request',
+          onPress: async () => {
+            try {
+              const r = await vipFarmerService.requestLoan(Math.min(n, max));
+              setLoanAmount('');
+              await load();
+              Alert.alert('Loan requested', r.message);
+            } catch (e: any) {
+              Alert.alert('Loan', e?.message || 'Request failed');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const onRepayLoan = async () => {
+    const outstanding = loanStatus?.openLoan?.outstandingUsd ?? 0;
+    const n = repayAmount.trim() ? Number(repayAmount) : outstanding;
+    if (!n || n <= 0) return Alert.alert('Repay', 'Enter a valid amount');
+    try {
+      const r = await vipFarmerService.repayLoan(n);
+      setRepayAmount('');
+      await load();
+      Alert.alert('Loan repayment', r.message);
+    } catch (e: any) {
+      Alert.alert('Repay', e?.message || 'Repayment failed');
+    }
+  };
+
   const openExitWizard = () => {
     if (summary?.pendingExitRequest) {
       Alert.alert(
@@ -94,6 +175,8 @@ export function VipFarmersTradeScreen() {
   const inv = summary?.investment;
   const lockCal = summary?.lockDaysCalendar ?? summary?.lockDays ?? 38;
   const lockWork = summary?.lockDaysWorking ?? 22;
+  const availableRevenue = inv?.availableRevenueUsd ?? 0;
+  const openLoan = loanStatus?.openLoan;
 
   return (
     <>
@@ -123,9 +206,64 @@ export function VipFarmersTradeScreen() {
             {summary.pendingExitRequest ? (
               <Card>
                 <Text style={styles.pendingTitle}>Withdrawal in progress</Text>
-                <Text style={styles.meta}>
-                  Your withdrawal request is being processed.
+                <Text style={styles.meta}>Your withdrawal request is being processed.</Text>
+              </Card>
+            ) : null}
+
+            {openLoan ? (
+              <Card>
+                <Text style={styles.pendingTitle}>
+                  VIP loan · {openLoan.status === 'pending' ? 'Awaiting approval' : 'Active'}
                 </Text>
+                <Text style={styles.meta}>Amount: {fmtUsd(openLoan.amountUsd)}</Text>
+                {openLoan.status === 'active' ? (
+                  <>
+                    <Text style={styles.meta}>Outstanding: {fmtUsd(openLoan.outstandingUsd)}</Text>
+                    <Text style={styles.meta}>Repaid: {fmtUsd(openLoan.repaidUsd)}</Text>
+                    <Text style={[styles.disclaimer, { marginTop: 8 }]}>
+                      Withdrawals are locked until this loan is fully repaid. Loan funds are for platform use only.
+                    </Text>
+                    <TextInput
+                      style={[styles.input, { marginTop: 8 }]}
+                      value={repayAmount}
+                      onChangeText={setRepayAmount}
+                      placeholder={`Repay (max ${fmtUsd(openLoan.outstandingUsd)})`}
+                      placeholderTextColor={palette.textSecondary}
+                      keyboardType='numeric'
+                    />
+                    <PrimaryButton label='Repay loan' onPress={() => void onRepayLoan()} style={{ marginTop: 8 }} />
+                  </>
+                ) : (
+                  <Text style={styles.meta}>
+                    Approval can take up to {loanStatus?.approvalMaxDays ?? 2} days. You will be notified when reviewed.
+                  </Text>
+                )}
+              </Card>
+            ) : loanStatus?.eligible ? (
+              <Card>
+                <Text style={styles.label}>VIP loan</Text>
+                <Text style={styles.meta}>
+                  Last month earnings: {fmtUsd(loanStatus.lastMonthEarningsUsd)} · Max loan:{' '}
+                  {fmtUsd(loanStatus.maxLoanUsd)}
+                </Text>
+                <Text style={styles.disclaimer}>
+                  30% commission deducted upfront. For platform use (farming, trading, VIP). Approval up to{' '}
+                  {loanStatus.approvalMaxDays} days.
+                </Text>
+                <TextInput
+                  style={[styles.input, { marginTop: 8 }]}
+                  value={loanAmount}
+                  onChangeText={setLoanAmount}
+                  placeholder={`Max ${fmtUsd(loanStatus.maxLoanUsd)}`}
+                  placeholderTextColor={palette.textSecondary}
+                  keyboardType='numeric'
+                />
+                <PrimaryButton label='Request loan' onPress={() => void onRequestLoan()} style={{ marginTop: 8 }} />
+              </Card>
+            ) : loanStatus && !loanStatus.eligible && loanStatus.ineligibleReason ? (
+              <Card>
+                <Text style={styles.label}>VIP loan</Text>
+                <Text style={styles.meta}>{loanStatus.ineligibleReason}</Text>
               </Card>
             ) : null}
 
@@ -134,9 +272,7 @@ export function VipFarmersTradeScreen() {
                 <Text style={styles.label}>Active investment</Text>
                 <Text style={styles.big}>{fmtUsd(inv.principalUsd)}</Text>
                 <Text style={styles.meta}>Earned so far: {fmtUsd(inv.totalAccruedUsd)}</Text>
-                <Text style={styles.meta}>
-                  Available revenue: {fmtUsd(inv.availableRevenueUsd ?? inv.totalAccruedUsd)}
-                </Text>
+                <Text style={styles.meta}>Available revenue: {fmtUsd(availableRevenue)}</Text>
                 <Text style={styles.meta}>
                   Working days {inv.workingDays ?? inv.daysAccrued}/{lockWork} · Calendar day{' '}
                   {inv.calendarDays ?? 0}/{lockCal}
@@ -159,6 +295,13 @@ export function VipFarmersTradeScreen() {
                   keyboardType='numeric'
                 />
                 <PrimaryButton label='Add capital' onPress={() => void onAddCapital()} style={{ marginTop: 8 }} />
+                {availableRevenue > 0 && !summary.pendingExitRequest ? (
+                  <PrimaryButton
+                    label={`Reinvest earnings (${fmtUsd(availableRevenue)})`}
+                    onPress={() => void onReinvest()}
+                    style={{ marginTop: 8 }}
+                  />
+                ) : null}
                 <PrimaryButton
                   label='Withdraw / end investment'
                   onPress={openExitWizard}

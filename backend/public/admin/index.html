@@ -1439,6 +1439,31 @@
             </div>
             <p id="vipExitErr" class="err hidden"></p>
           </div>
+          <div id="vipLoanRequestsCard" class="card superadmin-only" style="margin-top:16px;">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Pending VIP loan requests</h3>
+            <p class="hint" style="margin-bottom:12px;">
+              Superadmin only. Approve to credit the member's cash wallet (after 30% commission). Withdrawals stay locked until the loan is fully repaid.
+            </p>
+            <p id="vipLoanStats" class="hint"></p>
+            <div id="vipLoanLoading" class="loading hidden">Loading loan requests…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Member</th>
+                    <th>Requested</th>
+                    <th>Commission</th>
+                    <th>Disburse</th>
+                    <th>Last month earnings</th>
+                    <th>Submitted</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="vipLoanRows"></tbody>
+              </table>
+            </div>
+            <p id="vipLoanErr" class="err hidden"></p>
+          </div>
         </div>
 
         <div id="panelGhost" class="hidden superadmin-only">
@@ -2153,6 +2178,7 @@
     let pendingDropPayouts = [];
     let pendingVipExitRequests = [];
     let vipExitApproveTarget = null;
+    let pendingVipLoans = [];
     let p2pTrades = [];
     let aiPlan = null;
     let aiAllocations = [];
@@ -5164,6 +5190,7 @@
           (data.compounding === false ? 'no compounding' : '');
         renderVipMembersTable();
         await loadVipExitRequests();
+        await loadVipLoans();
       } catch (e) {
         vipMembers = [];
         renderVipSummary(null);
@@ -5415,6 +5442,98 @@
           btnEl.disabled = false;
         }
         return;
+      }
+    }
+
+    function showVipLoanErr(e) {
+      document.getElementById('vipLoanErr').textContent = e.message;
+      document.getElementById('vipLoanErr').classList.remove('hidden');
+    }
+
+    function renderVipLoansTable() {
+      const tbody = document.getElementById('vipLoanRows');
+      tbody.innerHTML = '';
+      if (!pendingVipLoans.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted);">No pending VIP loan requests</td></tr>';
+      }
+      pendingVipLoans.forEach((loan) => {
+        const tr = document.createElement('tr');
+        const actionCell =
+          '<button type="button" class="btn-primary" data-approve-vip-loan="' +
+          loan.id +
+          '" style="width:auto;margin-right:6px;font-size:0.75rem;padding:6px 10px;">Approve</button>' +
+          '<button type="button" class="btn-danger" data-reject-vip-loan="' +
+          loan.id +
+          '" style="width:auto;font-size:0.75rem;padding:6px 10px;">Reject</button>';
+        tr.innerHTML =
+          '<td>' + escapeHtml(loan.userEmail || '—') + '</td>' +
+          '<td><strong>' + fmtMoney(loan.amountUsd || 0) + '</strong></td>' +
+          '<td>' + fmtMoney(loan.commissionUsd || 0) + ' (' + Math.round((loan.commissionRate || 0.3) * 100) + '%)</td>' +
+          '<td>' + fmtMoney(loan.disbursedUsd || 0) + '</td>' +
+          '<td>' + fmtMoney(loan.lastMonthEarningsUsd || 0) + '</td>' +
+          '<td>' + new Date(loan.requestedAt || loan.createdAt).toLocaleString() + '</td>' +
+          '<td style="white-space:nowrap;">' + actionCell + '</td>';
+        tbody.appendChild(tr);
+      });
+      tbody.querySelectorAll('button[data-approve-vip-loan]').forEach((btn) => {
+        btn.onclick = () => actOnVipLoan(btn.getAttribute('data-approve-vip-loan'), 'approve', btn);
+      });
+      tbody.querySelectorAll('button[data-reject-vip-loan]').forEach((btn) => {
+        btn.onclick = () => actOnVipLoan(btn.getAttribute('data-reject-vip-loan'), 'reject', btn);
+      });
+      document.getElementById('vipLoanStats').textContent =
+        pendingVipLoans.length + ' VIP loan request(s) awaiting action';
+    }
+
+    async function loadVipLoans() {
+      if (adminRole !== 'superadmin') return;
+      document.getElementById('vipLoanErr').classList.add('hidden');
+      document.getElementById('vipLoanLoading').classList.remove('hidden');
+      try {
+        const data = await api('/admin/api/vip-farmers/loans?status=pending');
+        pendingVipLoans = data.loans || [];
+        renderVipLoansTable();
+      } catch (e) {
+        pendingVipLoans = [];
+        renderVipLoansTable();
+        showVipLoanErr(e);
+      } finally {
+        document.getElementById('vipLoanLoading').classList.add('hidden');
+      }
+    }
+
+    async function actOnVipLoan(id, action, btnEl) {
+      if (adminRole !== 'superadmin') {
+        alert('Only superadmin can action VIP loan requests.');
+        return;
+      }
+      if (!id) return;
+      if (action === 'reject') {
+        const note = prompt('Rejection note (optional):', '');
+        if (note === null) return;
+        btnEl.disabled = true;
+        try {
+          await api('/admin/api/vip-farmers/loans/' + id + '/reject', {
+            method: 'POST',
+            body: JSON.stringify({ note: note || undefined }),
+          });
+          await loadVipLoans();
+        } catch (e) {
+          alert(e.message);
+        } finally {
+          btnEl.disabled = false;
+        }
+        return;
+      }
+      if (!confirm('Approve this VIP loan and credit the member\'s cash wallet (after commission)?')) return;
+      btnEl.disabled = true;
+      try {
+        await api('/admin/api/vip-farmers/loans/' + id + '/approve', { method: 'POST', body: '{}' });
+        await loadVipLoans();
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        btnEl.disabled = false;
       }
     }
 

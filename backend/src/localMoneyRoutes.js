@@ -24,6 +24,7 @@ const {
   REGIONS,
 } = require('./localMoneyRegions');
 const flutterwave = require('./services/flutterwaveClient');
+const { getVipLoanWithdrawalRestriction } = require('./vipLoanService');
 const { sendSms } = require('./services/twilioSms');
 const {
   MIN_MOMO_USDT,
@@ -228,6 +229,14 @@ function registerLocalMoneyRoutes(app, { authMiddleware }) {
           return res.status(totp.status || 400).json({
             message: totp.message,
             code: totp.code,
+          });
+        }
+
+        const loanRestriction = await getVipLoanWithdrawalRestriction(req.userId);
+        if (loanRestriction.blocked) {
+          return res.status(403).json({
+            message: loanRestriction.reason,
+            code: 'VIP_LOAN_WITHDRAWAL_LOCKED',
           });
         }
 

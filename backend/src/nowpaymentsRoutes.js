@@ -29,7 +29,12 @@ const {
   notifyWithdrawalOutcome,
   payoutOutcomeAlreadyNotified,
 } = require('./depositNotifications');
-const { getCombinedWithdrawable, getCashWalletUsd } = require('./walletFunding');
+const {
+  getCombinedWithdrawable,
+  getCashWalletUsd,
+  maxWithdrawableAmount,
+} = require('./walletFunding');
+const { getVipLoanWithdrawalRestriction } = require('./vipLoanService');
 const { createPayoutAwaitingApproval } = require('./nowpaymentsPayoutFlow');
 const { clearWithdrawalTrustScoreCache } = require('./services/withdrawalTrustScore');
 const {
@@ -594,7 +599,21 @@ function registerNowpaymentsRoutes(app, { authMiddleware }) {
         });
       }
 
+      const loanRestriction = await getVipLoanWithdrawalRestriction(req.userId);
+      if (loanRestriction.blocked) {
+        return res.status(403).json({
+          message: loanRestriction.reason,
+          code: 'VIP_LOAN_WITHDRAWAL_LOCKED',
+        });
+      }
+
       const fundingPreview = await getCombinedWithdrawable(req.userId, currency);
+      if (loanRestriction.restrictedUsd > 0 && fundingPreview.cashFundingEnabled) {
+        // Loan-tainted funds sit in the cash wallet; keep them out of the payout.
+        const usableCash = Math.max(0, fundingPreview.cashWalletUsd - loanRestriction.restrictedUsd);
+        fundingPreview.combinedAvailable = fundingPreview.cryptoAvailable + usableCash;
+        fundingPreview.maxWithdrawable = maxWithdrawableAmount(fundingPreview.combinedAvailable);
+      }
       if (amount > fundingPreview.maxWithdrawable) {
         return res.status(400).json({
           message: `Not enough balance. You can cash out up to ${fundingPreview.maxWithdrawable.toFixed(6)}.`,
