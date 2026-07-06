@@ -60,7 +60,8 @@ export function AuthScreen() {
         return;
       }
     } catch (error: any) {
-      Alert.alert('Auth Error', error.message);
+      const msg = error?.message || 'Sign in failed. Check your email and password.';
+      Alert.alert('Auth Error', msg);
     }
   };
 

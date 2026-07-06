@@ -67,19 +67,23 @@ async function getUserByEmail(email) {
   const normalized = String(email || '')
     .trim()
     .toLowerCase();
-  const { data, error } = await supabase
+
+  const { data: candidates, error: listError } = await supabase
     .from('users')
     .select('*')
-    .eq('email', normalized)
-    .is('partner_id', null)
-    .maybeSingle();
-  if (error && isMissingColumnError(error, 'partner_id')) {
-    const fallback = await supabase.from('users').select('*').eq('email', normalized).maybeSingle();
-    if (fallback.error) throw fallback.error;
-    return fallback.data;
-  }
-  if (error) throw error;
-  return data;
+    .ilike('email', `${normalized}%`);
+  if (listError) throw listError;
+
+  const matches = (candidates || []).filter(
+    (row) => String(row.email || '').trim().toLowerCase() === normalized
+  );
+  const appUsers = matches.filter((row) => row.partner_id == null || row.partner_id === undefined);
+  const pool = appUsers.length ? appUsers : matches;
+  if (!pool.length) return null;
+
+  // If duplicates exist (e.g. legacy whitespace emails), prefer the original account.
+  pool.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  return pool[0];
 }
 
 async function getUserById(userId) {
@@ -200,12 +204,15 @@ async function deleteUserAdmin(userId) {
 async function createUser({ email, passwordHash }) {
   const userId = id();
   const walletId = id();
+  const normalizedEmail = String(email || '')
+    .trim()
+    .toLowerCase();
 
   const { data: user, error: userError } = await supabase
     .from('users')
     .insert({
       id: userId,
-      email,
+      email: normalizedEmail,
       password_hash: passwordHash,
       alpaca_api_key: '',
       alpaca_secret_key: '',
