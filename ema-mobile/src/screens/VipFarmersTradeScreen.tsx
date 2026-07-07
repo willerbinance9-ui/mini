@@ -5,6 +5,8 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { VipExitWizard } from '../components/VipExitWizard';
 import {
   vipFarmerService,
+  reinvestNetUsd,
+  reinvestCommissionUsd,
   type VipLoanStatus,
   type VipSummary,
 } from '../services/vipFarmerService';
@@ -99,9 +101,11 @@ export function VipFarmersTradeScreen() {
     if (available <= 0) {
       return Alert.alert('Reinvest', 'No earnings available to reinvest.');
     }
+    const net = reinvestNetUsd(available);
+    const commission = reinvestCommissionUsd(available);
     Alert.alert(
       'Reinvest earnings',
-      `Reinvest ${fmtUsd(available)} into your VIP principal? Your lock restarts from today and earnings stay in the investment without withdrawing.`,
+      `Reinvest ${fmtUsd(net)} into your VIP principal? A 30% commission (${fmtUsd(commission)}) is deducted from your ${fmtUsd(available)} available revenue. Your lock restarts from today.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -297,7 +301,7 @@ export function VipFarmersTradeScreen() {
                 <PrimaryButton label='Add capital' onPress={() => void onAddCapital()} style={{ marginTop: 8 }} />
                 {availableRevenue > 0 && !summary.pendingExitRequest ? (
                   <PrimaryButton
-                    label={`Reinvest earnings (${fmtUsd(availableRevenue)})`}
+                    label={`Reinvest earnings (${fmtUsd(reinvestNetUsd(availableRevenue))} net)`}
                     onPress={() => void onReinvest()}
                     style={{ marginTop: 8 }}
                   />

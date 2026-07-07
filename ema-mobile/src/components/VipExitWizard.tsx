@@ -13,6 +13,8 @@ import { PrimaryButton } from './PrimaryButton';
 import {
   VIP_EXIT_REVENUE_PERCENTS,
   vipFarmerService,
+  reinvestNetUsd,
+  reinvestCommissionUsd,
   type VipExitDestination,
   type VipExitMode,
   type VipExitQuote,
@@ -292,6 +294,8 @@ export function VipExitWizard({ visible, summary, onClose, onComplete }: Props) 
   if (!inv) return null;
 
   const available = inv.availableRevenueUsd ?? Math.max(0, inv.totalAccruedUsd - (inv.revenueWithdrawnUsd ?? 0));
+  const reinvestNet = reinvestNetUsd(available);
+  const reinvestCommission = reinvestCommissionUsd(available);
 
   return (
     <FormModal visible={visible} title={title} onClose={onClose} footer={footer}>
@@ -305,7 +309,7 @@ export function VipExitWizard({ visible, summary, onClose, onComplete }: Props) 
           <Text style={styles.body}>
             {mode === 'reinvest'
               ? reinvestDone
-                ? `Reinvested ${fmtUsd(reinvestDone.reinvestedUsd)}. New principal ${fmtUsd(reinvestDone.newPrincipalUsd)}. Lock restarted from today.`
+                ? `Reinvested ${fmtUsd(reinvestDone.reinvestedUsd)} (30% commission deducted). New principal ${fmtUsd(reinvestDone.newPrincipalUsd)}. Lock restarted from today.`
                 : 'Your earnings were added to your VIP principal and the lock restarted from today.'
               : 'Your withdrawal request is being processed. You will be notified when funds are sent.'}
           </Text>
@@ -320,7 +324,7 @@ export function VipExitWizard({ visible, summary, onClose, onComplete }: Props) 
           </Text>
           <ChoiceRow
             label='Reinvest earnings & continue'
-            description={`Compound ${fmtUsd(available)} into your principal without withdrawing. Lock restarts from today.`}
+            description={`Compound ${fmtUsd(reinvestNet)} into principal (30% commission ${fmtUsd(reinvestCommission)} deducted from ${fmtUsd(available)} earnings). Lock restarts from today.`}
             selected={mode === 'reinvest'}
             onPress={() => setMode('reinvest')}
           />

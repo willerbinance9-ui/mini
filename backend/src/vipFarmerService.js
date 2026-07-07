@@ -17,6 +17,7 @@ const {
   VIP_ACCRUAL_MAX_WORKING_DAYS,
   VIP_MIN_INVEST_USD,
   VIP_EARLY_PENALTY_RATE,
+  VIP_EXIT_COMMISSION_RATE,
   vipInvestmentToApi,
   getPendingVipExitRequestForUser,
   insertVipReinvestEvent,
@@ -153,7 +154,7 @@ async function addCapitalVip(userId, amount) {
   };
 }
 
-/** Reinvest available VIP earnings into principal without stopping or withdrawing. */
+/** Reinvest available VIP earnings into principal (30% commission, 70% compounds). */
 async function reinvestVipEarnings(userId, amount) {
   const inv = await getActiveVipInvestmentForUser(userId);
   if (!inv) {
@@ -173,33 +174,35 @@ async function reinvestVipEarnings(userId, amount) {
   const totalAccrued = roundUsd(inv.total_accrued_usd || 0);
   const availableRevenue = roundUsd(Math.max(0, totalAccrued - revenueWithdrawn));
 
-  const amt = amount != null && amount !== '' ? roundUsd(amount) : availableRevenue;
-  if (!Number.isFinite(amt) || amt <= 0) {
+  const grossRevenue =
+    amount != null && amount !== '' ? roundUsd(amount) : availableRevenue;
+  if (!Number.isFinite(grossRevenue) || grossRevenue <= 0) {
     const err = new Error('No earnings available to reinvest');
     err.statusCode = 400;
     throw err;
   }
-  if (amt > availableRevenue) {
+  if (grossRevenue > availableRevenue) {
     const err = new Error(`Maximum reinvest is $${availableRevenue.toFixed(2)} (available revenue)`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const commission = roundUsd(grossRevenue * VIP_EXIT_COMMISSION_RATE);
+  const reinvestedUsd = roundUsd(Math.max(0, grossRevenue - commission));
+  if (reinvestedUsd <= 0) {
+    const err = new Error('No earnings available to reinvest after commission');
     err.statusCode = 400;
     throw err;
   }
 
   const wallet = await ensureWalletForUser(userId);
   const cash = roundUsd(wallet?.balance);
-  if (cash < amt) {
-    const err = new Error('Insufficient cash wallet balance for reinvestment');
-    err.statusCode = 400;
-    throw err;
-  }
-
   const previousPrincipal = roundUsd(inv.principal_usd);
   const now = new Date().toISOString();
   const maturesAt = addDaysUtc(now, VIP_LOCK_DAYS_CALENDAR);
-  const newPrincipal = roundUsd(previousPrincipal + amt);
-  const newRevenueWithdrawn = roundUsd(revenueWithdrawn + amt);
+  const newPrincipal = roundUsd(previousPrincipal + reinvestedUsd);
+  const newRevenueWithdrawn = roundUsd(revenueWithdrawn + grossRevenue);
 
-  await setWalletBalance(userId, roundUsd(cash - amt));
   const row = await updateVipInvestment(inv.id, {
     principalUsd: newPrincipal,
     revenueWithdrawnUsd: newRevenueWithdrawn,
@@ -209,12 +212,13 @@ async function reinvestVipEarnings(userId, amount) {
     status: 'active',
   });
 
+  const reinvestEventId = newId();
   try {
     await insertVipReinvestEvent({
-      id: newId(),
+      id: reinvestEventId,
       user_id: userId,
       investment_id: inv.id,
-      amount_usd: amt,
+      amount_usd: reinvestedUsd,
       previous_principal_usd: previousPrincipal,
       new_principal_usd: newPrincipal,
       lock_reset: true,
@@ -224,12 +228,26 @@ async function reinvestVipEarnings(userId, amount) {
     console.error('[vip-farmers/reinvest] audit log failed:', e.message);
   }
 
+  if (commission > 0) {
+    await recordPlatformRevenueIfNew({
+      eventType: 'vip_reinvest_commission',
+      userId,
+      sourceId: reinvestEventId,
+      grossAmount: grossRevenue,
+      feeRate: VIP_EXIT_COMMISSION_RATE,
+      meta: { reinvestedUsd, investmentId: inv.id },
+      eventAt: now,
+    }).catch((e) => console.error('[platform-revenue/vip-reinvest]', e));
+  }
+
   return {
     investment: vipInvestmentToApi(row),
-    cashWalletUsd: roundUsd(cash - amt),
-    reinvestedUsd: amt,
+    cashWalletUsd: cash,
+    grossRevenueUsd: grossRevenue,
+    commissionUsd: commission,
+    reinvestedUsd,
     lockReset: true,
-    message: `Reinvested $${amt.toFixed(2)} into your VIP principal. Lock restarted from today.`,
+    message: `Reinvested $${reinvestedUsd.toFixed(2)} into your VIP principal (30% commission $${commission.toFixed(2)} deducted from $${grossRevenue.toFixed(2)} earnings). Lock restarted from today.`,
   };
 }
 

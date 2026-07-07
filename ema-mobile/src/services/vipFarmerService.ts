@@ -121,6 +121,16 @@ export type VipLoanStatus = {
   usageNote: string;
 };
 
+const REINVEST_COMMISSION_RATE = 0.3;
+
+export function reinvestNetUsd(grossUsd: number) {
+  return Math.round(grossUsd * (1 - REINVEST_COMMISSION_RATE) * 100) / 100;
+}
+
+export function reinvestCommissionUsd(grossUsd: number) {
+  return Math.round(grossUsd * REINVEST_COMMISSION_RATE * 100) / 100;
+}
+
 export const vipFarmerService = {
   getSummary: () => api.get<VipSummary>('/vip-farmers/summary'),
   invest: (amount: number) =>
@@ -148,6 +158,8 @@ export const vipFarmerService = {
     api.post<{
       investment: VipInvestment;
       cashWalletUsd: number;
+      grossRevenueUsd: number;
+      commissionUsd: number;
       reinvestedUsd: number;
       lockReset: boolean;
       message: string;
