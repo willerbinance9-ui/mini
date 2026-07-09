@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Card } from '../components/Card';
 import { journalService, type JournalDayResponse, type JournalMonthResponse } from '../services/journalService';
+import { navigateToGhostAccount } from '../utils/navigationHelpers';
 import { palette } from '../theme/colors';
+import type { RootStackParamList } from '../types';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -23,10 +27,22 @@ function sourceLabel(source: string) {
   if (source === 'airfarming') return 'Airfarming';
   if (source === 'vip') return 'VIP Farmers';
   if (source === 'contracts') return 'Contracts';
+  if (source === 'ghost') return 'Ghost Account';
   return source;
 }
 
+function formatBreakdown(breakdown: { airfarming: number; vip: number; contracts: number; ghost?: number }) {
+  const parts = [
+    `Airfarming ${fmtUsd(breakdown.airfarming)}`,
+    `VIP ${fmtUsd(breakdown.vip)}`,
+    `Contracts ${fmtUsd(breakdown.contracts)}`,
+  ];
+  if ((breakdown.ghost ?? 0) > 0) parts.push(`Ghost ${fmtUsd(breakdown.ghost ?? 0)}`);
+  return parts.join(' · ');
+}
+
 export function JournalScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const now = new Date();
   const [year, setYear] = useState(now.getUTCFullYear());
   const [month, setMonth] = useState(now.getUTCMonth() + 1);
@@ -108,6 +124,24 @@ export function JournalScreen() {
         </Card>
       ) : null}
 
+      {monthData?.ghost ? (
+        <Card style={styles.ghostCard}>
+          <View style={styles.ghostHeader}>
+            <Text style={styles.ghostTitle}>Ghost pool balance</Text>
+            <Pressable onPress={() => navigateToGhostAccount(navigation)} hitSlop={8}>
+              <Text style={styles.ghostLink}>Manage</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.ghostBalance}>{fmtUsd(monthData.ghost.poolBalance)}</Text>
+          <Text style={styles.ghostMeta}>
+            Available {fmtUsd(monthData.ghost.poolAvailable)} · Committed {fmtUsd(monthData.ghost.poolCommitted)}
+            {(monthData.monthGhostProfitUsd ?? 0) > 0
+              ? ` · Recall profit this month ${fmtUsd(monthData.monthGhostProfitUsd ?? 0)}`
+              : ''}
+          </Text>
+        </Card>
+      ) : null}
+
       {monthData ? (
         <Card style={styles.summaryCard}>
           <Text style={styles.summaryText}>
@@ -175,10 +209,7 @@ export function JournalScreen() {
               {dayData.hasProfit ? fmtUsd(dayData.totalUsd) : 'No earnings this day'}
             </Text>
             {dayData.hasProfit ? (
-              <Text style={styles.breakdown}>
-                Airfarming {fmtUsd(dayData.breakdown.airfarming)} · VIP {fmtUsd(dayData.breakdown.vip)} ·
-                Contracts {fmtUsd(dayData.breakdown.contracts)}
-              </Text>
+              <Text style={styles.breakdown}>{formatBreakdown(dayData.breakdown)}</Text>
             ) : null}
             {dayData.items.length ? (
               dayData.items.map((item) => (
@@ -210,6 +241,12 @@ const styles = StyleSheet.create({
   err: { color: palette.danger },
   summaryCard: { marginBottom: 12 },
   summaryText: { color: palette.textSecondary, fontSize: 13 },
+  ghostCard: { marginBottom: 12, borderColor: palette.primary },
+  ghostHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  ghostTitle: { color: palette.textSecondary, fontWeight: '700' },
+  ghostLink: { color: palette.primary, fontWeight: '700', fontSize: 13 },
+  ghostBalance: { color: palette.primary, fontSize: 28, fontWeight: '800' },
+  ghostMeta: { color: palette.textSecondary, fontSize: 12, marginTop: 4 },
   monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   monthTitle: { color: palette.textPrimary, fontSize: 17, fontWeight: '700' },
   weekRow: { flexDirection: 'row', marginBottom: 6 },

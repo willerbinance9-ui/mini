@@ -1,24 +1,42 @@
 import { api } from './api';
 
+export type JournalBreakdown = {
+  airfarming: number;
+  vip: number;
+  contracts: number;
+  ghost: number;
+};
+
+export type JournalGhostContext = {
+  role: 'owner';
+  poolBalance: number;
+  poolAvailable: number;
+  poolCommitted: number;
+  allocatedTotal: number;
+  accountStatus: string;
+};
+
 export type JournalDaySummary = {
   date: string;
   totalUsd: number;
   hasProfit: boolean;
-  breakdown: { airfarming: number; vip: number; contracts: number };
+  breakdown: JournalBreakdown;
 };
 
 export type JournalMonthResponse = {
   year: number;
   month: number;
   monthTotalUsd: number;
+  monthGhostProfitUsd?: number;
   profitDays: number;
   bestDay: { date: string; totalUsd: number } | null;
   days: Record<string, JournalDaySummary>;
+  ghost: JournalGhostContext | null;
 };
 
 export type JournalDayItem = {
   id: string;
-  source: 'airfarming' | 'vip' | 'contracts';
+  source: 'airfarming' | 'vip' | 'contracts' | 'ghost';
   label: string;
   amountUsd: number;
   at: string;
@@ -28,8 +46,9 @@ export type JournalDayResponse = {
   date: string;
   totalUsd: number;
   hasProfit: boolean;
-  breakdown: { airfarming: number; vip: number; contracts: number };
+  breakdown: JournalBreakdown;
   items: JournalDayItem[];
+  ghost: JournalGhostContext | null;
 };
 
 export const journalService = {

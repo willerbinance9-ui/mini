@@ -7,6 +7,7 @@ const {
   removeGhostMember,
   setGhostAccountPaused,
   buildGhostAccountStatus,
+  getGhostAccountBalance,
   processAllGhostLendQueues,
 } = require('./ghostAccountService');
 const { isMissingTableError } = require('./db');
@@ -29,6 +30,16 @@ function registerGhostAccountRoutes(app, { authMiddleware }) {
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: schemaMsg });
       return res.status(500).json({ message: e?.message || 'Ghost Account status failed' });
+    }
+  });
+
+  app.get('/ghost-account/balance', authMiddleware, async (req, res) => {
+    try {
+      const balance = await getGhostAccountBalance(req.userId);
+      return res.json(balance);
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: schemaMsg });
+      return res.status(500).json({ message: e?.message || 'Ghost Account balance failed' });
     }
   });
 

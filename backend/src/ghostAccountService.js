@@ -32,6 +32,7 @@ const {
   listAllGhostAccountsAdmin,
   listAllGhostAccountMembersAdmin,
   listRecalledGhostLendsAdmin,
+  listGhostAccountLendsForMember,
   listUsersAdmin,
   utcTodayYmd,
 } = require('./db');
@@ -580,6 +581,75 @@ async function buildScheduleRow(lend, drop, emailByUserId, poolBalanceRef) {
   };
 }
 
+async function buildGhostMembershipStatus(memberUserId) {
+  const membership = await getGhostAccountMemberByUserId(memberUserId);
+  if (!membership) return null;
+
+  const ghostAccount = membership.ghost_accounts;
+  if (!ghostAccount) return null;
+
+  const owner = await getUserById(ghostAccount.owner_user_id);
+  const lends = await listGhostAccountLendsForMember(memberUserId, 10);
+  const activeLend = lends.find((l) => ['scheduled', 'lent'].includes(l.status)) || null;
+  const committed = await sumCommittedGhostLendAmounts(ghostAccount.id);
+  const poolBalance = Number(ghostAccount.pool_balance || 0);
+
+  return {
+    role: 'member',
+    sponsorEmailMasked: maskEmail(owner?.email),
+    sponsorAccountStatus: ghostAccount.status,
+    sponsorPoolBalance: poolBalance,
+    sponsorPoolAvailable: roundMoney(poolBalance - committed),
+    joinedAt: membership.created_at,
+    activeLend: activeLend
+      ? {
+          lendId: activeLend.id,
+          status: activeLend.status,
+          lendAmount: Number(activeLend.lend_amount || 0),
+          dropId: activeLend.drop_id,
+        }
+      : null,
+    recentLends: lends.slice(0, 5).map((l) => ({
+      lendId: l.id,
+      status: l.status,
+      lendAmount: Number(l.lend_amount || 0),
+      recalledProfitNet: Number(l.recalled_profit_net || 0),
+      recalledAt: l.recalled_at,
+    })),
+  };
+}
+
+async function getGhostAccountBalance(userId) {
+  const account = await getGhostAccountByOwnerUserId(userId);
+  if (account) {
+    const committed = await sumCommittedGhostLendAmounts(account.id);
+    const poolBalance = Number(account.pool_balance || 0);
+    return {
+      role: 'owner',
+      owner: {
+        accountId: account.id,
+        status: account.status,
+        poolBalance,
+        poolAvailable: roundMoney(poolBalance - committed),
+        poolCommitted: roundMoney(committed),
+        allocatedTotal: Number(account.allocated_total || 0),
+      },
+      member: null,
+    };
+  }
+
+  const membership = await buildGhostMembershipStatus(userId);
+  if (membership) {
+    return {
+      role: 'member',
+      owner: null,
+      member: membership,
+    };
+  }
+
+  return { role: 'none', owner: null, member: null };
+}
+
 async function buildGhostAccountStatus(ownerUserId) {
   let account = await getGhostAccountByOwnerUserId(ownerUserId);
   const breakdown = await computeEligibilityBreakdown(ownerUserId);
@@ -600,8 +670,11 @@ async function buildGhostAccountStatus(ownerUserId) {
   };
 
   if (!account) {
+    const membership = await buildGhostMembershipStatus(ownerUserId);
     return {
       enrolled: false,
+      isMember: Boolean(membership),
+      membership,
       ...eligibilityPayload,
     };
   }
@@ -1042,6 +1115,8 @@ module.exports = {
   removeGhostMember,
   setGhostAccountPaused,
   buildGhostAccountStatus,
+  getGhostAccountBalance,
+  buildGhostMembershipStatus,
   processGhostLendQueue,
   processAllGhostLendQueues,
   recallLendForDrop,

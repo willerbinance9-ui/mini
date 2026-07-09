@@ -5372,6 +5372,41 @@ async function listRecalledGhostLendsAdmin(limit = 5000) {
   return data || [];
 }
 
+async function listRecalledGhostLendsForOwnerBetween(ownerUserId, startIso, endIso) {
+  const { data, error } = await supabase
+    .from('ghost_account_lends')
+    .select(
+      'id, ghost_account_id, member_user_id, drop_id, recalled_at, recalled_principal, recalled_profit_net, ghost_accounts!inner(owner_user_id)'
+    )
+    .eq('status', 'recalled')
+    .eq('ghost_accounts.owner_user_id', ownerUserId)
+    .gte('recalled_at', startIso)
+    .lte('recalled_at', endIso)
+    .not('recalled_at', 'is', null);
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function listRecalledGhostLendsForOwnerOnDate(ownerUserId, dateYmd) {
+  const startIso = `${String(dateYmd).slice(0, 10)}T00:00:00.000Z`;
+  const endIso = `${String(dateYmd).slice(0, 10)}T23:59:59.999Z`;
+  return listRecalledGhostLendsForOwnerBetween(ownerUserId, startIso, endIso);
+}
+
+async function listGhostAccountLendsForMember(memberUserId, limit = 20) {
+  const cap = Math.min(50, Math.max(1, Number(limit) || 20));
+  const { data, error } = await supabase
+    .from('ghost_account_lends')
+    .select('*, ghost_accounts(id, owner_user_id, pool_balance, status)')
+    .eq('member_user_id', memberUserId)
+    .order('created_at', { ascending: false })
+    .limit(cap);
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
 async function listAllGhostAccountsAdmin(limit = 100) {
   const { data, error } = await supabase
     .from('ghost_accounts')
@@ -5852,6 +5887,9 @@ module.exports = {
   listGhostAccountLedger,
   listAllGhostAccountsAdmin,
   listRecalledGhostLendsAdmin,
+  listRecalledGhostLendsForOwnerBetween,
+  listRecalledGhostLendsForOwnerOnDate,
+  listGhostAccountLendsForMember,
   listAllGhostAccountMembersAdmin,
   ensureUserTradingWallet,
   getUserTradingWallet,

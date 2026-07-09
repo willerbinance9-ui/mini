@@ -175,6 +175,54 @@ export function GhostAccountScreen() {
   }
 
   if (!status.enrolled) {
+    if (status.isMember && status.membership) {
+      const m = status.membership;
+      return (
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
+        >
+          <Text style={styles.intro}>
+            You are a member of a Ghost Account. Your sponsor funds airfarming drops from their pool.
+          </Text>
+          <Card style={styles.heroCard}>
+            <Text style={styles.label}>Sponsor</Text>
+            <Text style={styles.big}>{m.sponsorEmailMasked}</Text>
+            <Text style={styles.hint}>
+              Pool {fmtUsd(m.sponsorPoolBalance)} · Available {fmtUsd(m.sponsorPoolAvailable)} ·{' '}
+              {m.sponsorAccountStatus === 'active' ? 'Active' : 'Paused'}
+            </Text>
+          </Card>
+          {m.activeLend ? (
+            <Card style={styles.infoCard}>
+              <Text style={styles.sectionTitle}>Active ghost funding</Text>
+              <Text style={styles.hint}>
+                {fmtUsd(m.activeLend.lendAmount)} scheduled for your next drop ({m.activeLend.status})
+              </Text>
+            </Card>
+          ) : null}
+          {(m.recentLends?.length ?? 0) > 0 ? (
+            <Card style={styles.infoCard}>
+              <Text style={styles.sectionTitle}>Recent ghost lends</Text>
+              {m.recentLends.map((l) => (
+                <View key={l.lendId} style={styles.memberRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.memberEmail}>{l.status}</Text>
+                    <Text style={styles.hint}>
+                      {fmtUsd(l.lendAmount)}
+                      {l.recalledProfitNet > 0 ? ` · recall profit ${fmtUsd(l.recalledProfitNet)}` : ''}
+                    </Text>
+                  </View>
+                  <Text style={styles.small}>{fmtDate(l.recalledAt)}</Text>
+                </View>
+              ))}
+            </Card>
+          ) : null}
+        </ScrollView>
+      );
+    }
+
     const needed =
       status.amountNeeded && status.amountNeeded > 0
         ? status.amountNeeded

@@ -4,6 +4,10 @@ const {
   listContractAccrualsForUserOnDate,
   listVipAccrualsForUserBetween,
   listVipAccrualsForUserOnDate,
+  listRecalledGhostLendsForOwnerBetween,
+  listRecalledGhostLendsForOwnerOnDate,
+  getGhostAccountByOwnerUserId,
+  sumCommittedGhostLendAmounts,
 } = require('./db');
 
 function roundUsd(n) {
@@ -28,7 +32,22 @@ function monthBounds(year, month) {
 }
 
 function emptyBreakdown() {
-  return { airfarming: 0, vip: 0, contracts: 0 };
+  return { airfarming: 0, vip: 0, contracts: 0, ghost: 0 };
+}
+
+async function buildGhostJournalContext(userId) {
+  const account = await getGhostAccountByOwnerUserId(userId);
+  if (!account) return null;
+  const committed = await sumCommittedGhostLendAmounts(account.id);
+  const poolBalance = Number(account.pool_balance || 0);
+  return {
+    role: 'owner',
+    poolBalance,
+    poolAvailable: roundUsd(poolBalance - committed),
+    poolCommitted: roundUsd(committed),
+    allocatedTotal: roundUsd(account.allocated_total || 0),
+    accountStatus: account.status,
+  };
 }
 
 function buildMonthDaysMap(year, month) {
@@ -59,10 +78,11 @@ async function getJournalMonth(userId, year, month) {
   const { startYmd, endYmd, startIso, endIso } = monthBounds(year, month);
   const days = buildMonthDaysMap(year, month);
 
-  const [drops, contracts, vipRows] = await Promise.all([
+  const [drops, contracts, vipRows, ghostRecalls] = await Promise.all([
     listPaidAirfarmingDropsForUserBetween(userId, startIso, endIso),
     listContractAccrualsForUserBetween(userId, startYmd, endYmd),
     listVipAccrualsForUserBetween(userId, startYmd, endYmd),
+    listRecalledGhostLendsForOwnerBetween(userId, startIso, endIso),
   ]);
 
   for (const d of drops) {
@@ -74,10 +94,17 @@ async function getJournalMonth(userId, year, month) {
   for (const v of vipRows) {
     addToDay(days, String(v.accrual_date).slice(0, 10), 'vip', v.amount);
   }
+  for (const g of ghostRecalls) {
+    addToDay(days, dayKey(g.recalled_at), 'ghost', g.recalled_profit_net);
+  }
 
   const dayList = Object.values(days);
   const monthTotal = roundUsd(dayList.reduce((s, d) => s + d.totalUsd, 0));
   const profitDays = dayList.filter((d) => d.hasProfit).length;
+  const monthGhostProfit = roundUsd(
+    ghostRecalls.reduce((s, g) => s + Number(g.recalled_profit_net || 0), 0)
+  );
+  const ghost = await buildGhostJournalContext(userId);
   let bestDay = null;
   for (const d of dayList) {
     if (!d.hasProfit) continue;
@@ -88,9 +115,11 @@ async function getJournalMonth(userId, year, month) {
     year: Number(year),
     month: Number(month),
     monthTotalUsd: monthTotal,
+    monthGhostProfitUsd: monthGhostProfit,
     profitDays,
     bestDay,
     days,
+    ghost,
   };
 }
 
@@ -99,10 +128,11 @@ async function getJournalDay(userId, dateYmd) {
   const startIso = `${date}T00:00:00.000Z`;
   const endIso = `${date}T23:59:59.999Z`;
 
-  const [drops, contracts, vipRows] = await Promise.all([
+  const [drops, contracts, vipRows, ghostRecalls] = await Promise.all([
     listPaidAirfarmingDropsForUserBetween(userId, startIso, endIso),
     listContractAccrualsForUserOnDate(userId, date),
     listVipAccrualsForUserOnDate(userId, date),
+    listRecalledGhostLendsForOwnerOnDate(userId, date),
   ]);
 
   const items = [];
@@ -135,6 +165,17 @@ async function getJournalDay(userId, dateYmd) {
       at: v.created_at || `${date}T12:00:00.000Z`,
     });
   }
+  for (const g of ghostRecalls) {
+    const amt = roundUsd(g.recalled_profit_net);
+    if (amt <= 0) continue;
+    items.push({
+      id: g.id,
+      source: 'ghost',
+      label: 'Ghost Account recall profit',
+      amountUsd: amt,
+      at: g.recalled_at,
+    });
+  }
 
   items.sort((a, b) => String(a.at).localeCompare(String(b.at)));
 
@@ -143,6 +184,7 @@ async function getJournalDay(userId, dateYmd) {
     breakdown[item.source] = roundUsd(breakdown[item.source] + item.amountUsd);
   }
   const totalUsd = roundUsd(items.reduce((s, i) => s + i.amountUsd, 0));
+  const ghost = await buildGhostJournalContext(userId);
 
   return {
     date,
@@ -150,6 +192,7 @@ async function getJournalDay(userId, dateYmd) {
     hasProfit: totalUsd > 0,
     breakdown,
     items,
+    ghost,
   };
 }
 
