@@ -25,6 +25,7 @@ const {
   vipReinvestEventToApi,
   getUsersByIds,
   vipExitRequestToApi,
+  listVipAccrualsBetween,
   utcTodayYmd,
 } = require('./db');
 const {
@@ -356,12 +357,80 @@ async function listAdminVipReinvestments({ limit = 200 } = {}) {
   };
 }
 
+async function getVipRevenueJournal(year, month) {
+  const y = Number(year);
+  const m = Number(month);
+  const start = new Date(Date.UTC(y, m - 1, 1));
+  const end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+  const startYmd = start.toISOString().slice(0, 10);
+  const endYmd = end.toISOString().slice(0, 10);
+  const daysInMonth = end.getUTCDate();
+
+  const rows = await listVipAccrualsBetween(startYmd, endYmd);
+  const days = {};
+  for (let d = 1; d <= daysInMonth; d += 1) {
+    const ymd = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    days[ymd] = {
+      date: ymd,
+      payoutUsd: 0,
+      platformFeeUsd: 0,
+      accrualCount: 0,
+      uniqueUsers: 0,
+      hasPayout: false,
+    };
+  }
+
+  const usersByDay = new Map();
+  for (const row of rows) {
+    const ymd = String(row.accrual_date).slice(0, 10);
+    if (!days[ymd]) continue;
+    const net = roundUsd(row.amount);
+    // Net is after 3% platform fee: net = gross * 0.97 => gross = net / 0.97, fee = gross - net
+    const gross = net > 0 ? roundUsd(net / (1 - PLATFORM_FEE_VIP_RATE)) : 0;
+    const fee = roundUsd(Math.max(0, gross - net));
+    days[ymd].payoutUsd = roundUsd(days[ymd].payoutUsd + net);
+    days[ymd].platformFeeUsd = roundUsd(days[ymd].platformFeeUsd + fee);
+    days[ymd].accrualCount += 1;
+    days[ymd].hasPayout = days[ymd].payoutUsd > 0;
+    if (!usersByDay.has(ymd)) usersByDay.set(ymd, new Set());
+    usersByDay.get(ymd).add(row.user_id);
+  }
+
+  for (const [ymd, set] of usersByDay.entries()) {
+    if (days[ymd]) days[ymd].uniqueUsers = set.size;
+  }
+
+  const dayList = Object.values(days);
+  const monthPayoutUsd = roundUsd(dayList.reduce((s, d) => s + d.payoutUsd, 0));
+  const monthPlatformFeeUsd = roundUsd(dayList.reduce((s, d) => s + d.platformFeeUsd, 0));
+  const payoutDays = dayList.filter((d) => d.hasPayout).length;
+  let bestDay = null;
+  for (const d of dayList) {
+    if (!d.hasPayout) continue;
+    if (!bestDay || d.payoutUsd > bestDay.payoutUsd) {
+      bestDay = { date: d.date, payoutUsd: d.payoutUsd, platformFeeUsd: d.platformFeeUsd };
+    }
+  }
+
+  return {
+    year: y,
+    month: m,
+    monthPayoutUsd,
+    monthPlatformFeeUsd,
+    payoutDays,
+    accrualCount: rows.length,
+    bestDay,
+    days,
+  };
+}
+
 module.exports = {
   getVipSummary,
   investVip,
   addCapitalVip,
   reinvestVipEarnings,
   listAdminVipReinvestments,
+  getVipRevenueJournal,
   withdrawVipAtMaturity,
   earlyWithdrawVip,
   runVipDailyAccrual,

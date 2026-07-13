@@ -14,6 +14,8 @@ const {
   listGhostAccountLends,
   listGhostAccountLendsByStatus,
   sumCommittedGhostLendAmounts,
+  sumGhostLendAmountsByStatus,
+  sumAllActiveGhostLendAmountsByAccount,
   insertGhostAccountLedger,
   listGhostAccountLedger,
   ensureWalletForUser,
@@ -831,31 +833,91 @@ async function getGhostRevenueAdminStats({ recentLimit = 50 } = {}) {
 }
 
 async function listGhostAccountsAdminSummary() {
-  const rows = await listAllGhostAccountsAdmin(200);
-  if (!rows.length) return [];
+  const emptyBreakdown = { scheduledUsd: 0, lentUsd: 0, committedUsd: 0, activeCount: 0 };
+  const [rows, allMembers, lendByAccount] = await Promise.all([
+    listAllGhostAccountsAdmin(200),
+    listAllGhostAccountMembersAdmin(2000),
+    sumAllActiveGhostLendAmountsByAccount(),
+  ]);
+
+  if (!rows.length) {
+    return {
+      accounts: [],
+      count: 0,
+      totals: {
+        poolBalanceUsd: 0,
+        poolAvailableUsd: 0,
+        poolInUseUsd: 0,
+        scheduledUsd: 0,
+        allocatedTotalUsd: 0,
+        memberCount: 0,
+      },
+    };
+  }
 
   const ownerIds = rows.map((r) => r.owner_user_id);
   const owners = await getUsersByIds(ownerIds);
   const emailById = new Map(owners.map((u) => [u.id, u.email]));
 
-  const out = [];
+  const memberCountByAccount = new Map();
+  for (const m of allMembers) {
+    const gid = m.ghost_account_id;
+    memberCountByAccount.set(gid, (memberCountByAccount.get(gid) || 0) + 1);
+  }
+
+  const accounts = [];
+  let poolBalanceUsd = 0;
+  let poolAvailableUsd = 0;
+  let poolInUseUsd = 0;
+  let scheduledUsdTotal = 0;
+  let allocatedTotalUsd = 0;
+  let memberCountTotal = 0;
+
   for (const row of rows) {
-    const members = await listGhostAccountMembers(row.id);
-    const committed = await sumCommittedGhostLendAmounts(row.id);
+    const lendBreakdown = lendByAccount.get(row.id) || emptyBreakdown;
     const poolBalance = Number(row.pool_balance || 0);
-    out.push({
+    const allocatedTotal = Number(row.allocated_total || 0);
+    const poolAvailable = roundMoney(poolBalance - lendBreakdown.committedUsd);
+    const memberCount = memberCountByAccount.get(row.id) || 0;
+
+    poolBalanceUsd = roundMoney(poolBalanceUsd + poolBalance);
+    poolAvailableUsd = roundMoney(poolAvailableUsd + poolAvailable);
+    poolInUseUsd = roundMoney(poolInUseUsd + lendBreakdown.lentUsd);
+    scheduledUsdTotal = roundMoney(scheduledUsdTotal + lendBreakdown.scheduledUsd);
+    allocatedTotalUsd = roundMoney(allocatedTotalUsd + allocatedTotal);
+    memberCountTotal += memberCount;
+
+    accounts.push({
       id: row.id,
       ownerUserId: row.owner_user_id,
       ownerEmail: emailById.get(row.owner_user_id) || '—',
-      memberCount: members.length,
+      memberCount,
       poolBalance,
-      poolAvailable: roundMoney(poolBalance - committed),
-      poolCommitted: committed,
+      poolAvailable,
+      poolCommitted: lendBreakdown.committedUsd,
+      poolInUse: lendBreakdown.lentUsd,
+      scheduledUsd: lendBreakdown.scheduledUsd,
+      allocatedTotal,
+      activeLendCount: lendBreakdown.activeCount,
       status: row.status,
       createdAt: row.created_at,
     });
   }
-  return out;
+
+  accounts.sort((a, b) => b.poolBalance - a.poolBalance);
+
+  return {
+    accounts,
+    count: accounts.length,
+    totals: {
+      poolBalanceUsd,
+      poolAvailableUsd,
+      poolInUseUsd,
+      scheduledUsd: scheduledUsdTotal,
+      allocatedTotalUsd,
+      memberCount: memberCountTotal,
+    },
+  };
 }
 
 async function buildMemberNetworkNode(memberUserId, email, ghostAccountId) {

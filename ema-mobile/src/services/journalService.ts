@@ -27,6 +27,7 @@ export type JournalMonthResponse = {
   year: number;
   month: number;
   monthTotalUsd: number;
+  monthVipProfitUsd?: number;
   monthGhostProfitUsd?: number;
   profitDays: number;
   bestDay: { date: string; totalUsd: number } | null;

@@ -4640,6 +4640,18 @@ async function listVipAccrualsForUserOnDate(userId, dateYmd) {
   return data || [];
 }
 
+async function listVipAccrualsBetween(startYmd, endYmd) {
+  const { data, error } = await supabase
+    .from('vip_accruals')
+    .select('id, user_id, investment_id, accrual_date, amount, rate, created_at')
+    .gte('accrual_date', String(startYmd).slice(0, 10))
+    .lte('accrual_date', String(endYmd).slice(0, 10))
+    .order('accrual_date', { ascending: true });
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
 async function listVipInvestmentsAdmin({ status = 'active', limit = 500 } = {}) {
   let query = supabase.from('vip_investments').select('*').order('started_at', { ascending: false }).limit(limit);
   const st = String(status || 'active').trim().toLowerCase();
@@ -5363,15 +5375,65 @@ async function countActiveGhostLendsForAccount(ghostAccountId) {
   return count || 0;
 }
 
-async function sumCommittedGhostLendAmounts(ghostAccountId) {
+async function sumGhostLendAmountsByStatus(ghostAccountId) {
   const { data, error } = await supabase
     .from('ghost_account_lends')
-    .select('lend_amount')
+    .select('lend_amount, status')
     .eq('ghost_account_id', ghostAccountId)
     .in('status', ['scheduled', 'lent']);
-  if (error && isSchemaError(error)) return 0;
+  if (error && isSchemaError(error)) return { scheduledUsd: 0, lentUsd: 0, committedUsd: 0, activeCount: 0 };
   if (error) throw error;
-  return (data || []).reduce((sum, r) => sum + Number(r.lend_amount || 0), 0);
+  let scheduledUsd = 0;
+  let lentUsd = 0;
+  let activeCount = 0;
+  for (const r of data || []) {
+    const amt = Number(r.lend_amount || 0);
+    if (r.status === 'scheduled') scheduledUsd += amt;
+    if (r.status === 'lent') {
+      lentUsd += amt;
+      activeCount += 1;
+    }
+  }
+  return {
+    scheduledUsd: Math.round(scheduledUsd * 100) / 100,
+    lentUsd: Math.round(lentUsd * 100) / 100,
+    committedUsd: Math.round((scheduledUsd + lentUsd) * 100) / 100,
+    activeCount,
+  };
+}
+
+async function sumAllActiveGhostLendAmountsByAccount() {
+  const { data, error } = await supabase
+    .from('ghost_account_lends')
+    .select('ghost_account_id, lend_amount, status')
+    .in('status', ['scheduled', 'lent']);
+  if (error && isSchemaError(error)) return new Map();
+  if (error) throw error;
+  const byAccount = new Map();
+  for (const r of data || []) {
+    const id = r.ghost_account_id;
+    if (!byAccount.has(id)) {
+      byAccount.set(id, { scheduledUsd: 0, lentUsd: 0, committedUsd: 0, activeCount: 0 });
+    }
+    const entry = byAccount.get(id);
+    const amt = Number(r.lend_amount || 0);
+    if (r.status === 'scheduled') entry.scheduledUsd += amt;
+    if (r.status === 'lent') {
+      entry.lentUsd += amt;
+      entry.activeCount += 1;
+    }
+  }
+  for (const entry of byAccount.values()) {
+    entry.scheduledUsd = Math.round(entry.scheduledUsd * 100) / 100;
+    entry.lentUsd = Math.round(entry.lentUsd * 100) / 100;
+    entry.committedUsd = Math.round((entry.scheduledUsd + entry.lentUsd) * 100) / 100;
+  }
+  return byAccount;
+}
+
+async function sumCommittedGhostLendAmounts(ghostAccountId) {
+  const breakdown = await sumGhostLendAmountsByStatus(ghostAccountId);
+  return breakdown.committedUsd;
 }
 
 async function insertGhostAccountLedger(row) {
@@ -5459,7 +5521,7 @@ async function listAllGhostAccountMembersAdmin(limit = 500) {
     .from('ghost_account_members')
     .select('*, ghost_accounts(id, owner_user_id, pool_balance, status)')
     .order('created_at', { ascending: true })
-    .limit(Math.min(500, Math.max(1, Number(limit) || 500)));
+    .limit(Math.min(5000, Math.max(1, Number(limit) || 500)));
   if (error && isSchemaError(error)) return [];
   if (error) throw error;
   return data || [];
@@ -5864,6 +5926,7 @@ module.exports = {
   insertVipAccrual,
   listVipAccrualsForUserBetween,
   listVipAccrualsForUserOnDate,
+  listVipAccrualsBetween,
   listVipInvestmentsAdmin,
   listVipAccrualsForInvestmentIds,
   insertVipExitRequest,
@@ -5922,6 +5985,8 @@ module.exports = {
   listGhostAccountLendsByStatus,
   countActiveGhostLendsForAccount,
   sumCommittedGhostLendAmounts,
+  sumGhostLendAmountsByStatus,
+  sumAllActiveGhostLendAmountsByAccount,
   insertGhostAccountLedger,
   listGhostAccountLedger,
   listAllGhostAccountsAdmin,

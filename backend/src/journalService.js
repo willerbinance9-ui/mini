@@ -104,6 +104,7 @@ async function getJournalMonth(userId, year, month) {
   const monthGhostProfit = roundUsd(
     ghostRecalls.reduce((s, g) => s + Number(g.recalled_profit_net || 0), 0)
   );
+  const monthVipProfit = roundUsd(vipRows.reduce((s, v) => s + Number(v.amount || 0), 0));
   const ghost = await buildGhostJournalContext(userId);
   let bestDay = null;
   for (const d of dayList) {
@@ -115,6 +116,7 @@ async function getJournalMonth(userId, year, month) {
     year: Number(year),
     month: Number(month),
     monthTotalUsd: monthTotal,
+    monthVipProfitUsd: monthVipProfit,
     monthGhostProfitUsd: monthGhostProfit,
     profitDays,
     bestDay,

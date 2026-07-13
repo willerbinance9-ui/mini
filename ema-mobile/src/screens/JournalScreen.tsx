@@ -142,6 +142,14 @@ export function JournalScreen() {
         </Card>
       ) : null}
 
+      {monthData && (monthData.monthVipProfitUsd ?? 0) > 0 ? (
+        <Card style={styles.vipCard}>
+          <Text style={styles.vipTitle}>VIP Farmers this month</Text>
+          <Text style={styles.vipBalance}>{fmtUsd(monthData.monthVipProfitUsd ?? 0)}</Text>
+          <Text style={styles.vipMeta}>Daily payouts credited to your balance (UTC)</Text>
+        </Card>
+      ) : null}
+
       {monthData ? (
         <Card style={styles.summaryCard}>
           <Text style={styles.summaryText}>
@@ -247,6 +255,10 @@ const styles = StyleSheet.create({
   ghostLink: { color: palette.primary, fontWeight: '700', fontSize: 13 },
   ghostBalance: { color: palette.primary, fontSize: 28, fontWeight: '800' },
   ghostMeta: { color: palette.textSecondary, fontSize: 12, marginTop: 4 },
+  vipCard: { marginBottom: 12, borderColor: 'rgba(234, 179, 8, 0.55)' },
+  vipTitle: { color: palette.textSecondary, fontWeight: '700', marginBottom: 4 },
+  vipBalance: { color: '#EAB308', fontSize: 28, fontWeight: '800' },
+  vipMeta: { color: palette.textSecondary, fontSize: 12, marginTop: 4 },
   monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   monthTitle: { color: palette.textPrimary, fontSize: 17, fontWeight: '700' },
   weekRow: { flexDirection: 'row', marginBottom: 6 },

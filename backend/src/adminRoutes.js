@@ -68,7 +68,7 @@ const {
   approveVipLoan,
   rejectVipLoan,
 } = require('./vipLoanService');
-const { listAdminVipReinvestments } = require('./vipFarmerService');
+const { listAdminVipReinvestments, getVipRevenueJournal } = require('./vipFarmerService');
 const { normalizeTargetUserId } = require('./notificationRoutes');
 const { approveWithdrawal, rejectWithdrawal } = require('./adminWithdrawals');
 const { releaseP2pEscrow, refundP2pEscrow } = require('./p2pEscrow');
@@ -1538,6 +1538,23 @@ function registerAdminRoutes(app) {
     }
   });
 
+  app.get('/admin/api/vip-farmers/revenue-journal', adminAuthMiddleware, async (req, res) => {
+    try {
+      const now = new Date();
+      const year = Number(req.query.year) || now.getUTCFullYear();
+      const month = Number(req.query.month) || now.getUTCMonth() + 1;
+      if (month < 1 || month > 12) return res.status(400).json({ message: 'Invalid month' });
+      const data = await getVipRevenueJournal(year, month);
+      return res.json(data);
+    } catch (e) {
+      if (isMissingTableError(e) || isSchemaError(e)) {
+        return res.status(503).json({ message: 'VIP Farmers schema missing.' });
+      }
+      console.error('[admin/vip-farmers/revenue-journal]', e);
+      return res.status(500).json({ message: e.message || 'Failed to load VIP revenue journal' });
+    }
+  });
+
   app.get('/admin/api/p2p/trades', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
     try {
       const status = String(req.query.status || 'all').trim();
@@ -1820,8 +1837,8 @@ function registerAdminRoutes(app) {
 
   app.get('/admin/api/ghost-accounts', adminAuthMiddleware, requireSuperAdmin, async (_req, res) => {
     try {
-      const accounts = await listGhostAccountsAdminSummary();
-      return res.json({ accounts, count: accounts.length });
+      const data = await listGhostAccountsAdminSummary();
+      return res.json(data);
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: ghostSchemaMsg });
       console.error('[admin/ghost-accounts]', e);

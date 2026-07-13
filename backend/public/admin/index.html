@@ -1415,6 +1415,24 @@
             </div>
             <p id="vipErr" class="err hidden"></p>
           </div>
+          <div class="card" style="margin-top:16px;">
+            <h3 style="margin:0 0 8px;font-size:1rem;">VIP daily revenue journal (UTC)</h3>
+            <p class="hint" style="margin-bottom:12px;">
+              Daily VIP Farmers payouts to members and the platform’s 3% fee. Weekends are usually empty because accruals skip Saturday/Sunday UTC.
+            </p>
+            <div class="row" style="align-items:center;justify-content:space-between;margin-bottom:12px;max-width:360px;">
+              <button type="button" class="btn-ghost" id="vipJournalPrev" style="width:auto;min-width:48px;">←</button>
+              <strong id="vipJournalMonthLabel">—</strong>
+              <button type="button" class="btn-ghost" id="vipJournalNext" style="width:auto;min-width:48px;">→</button>
+            </div>
+            <div class="stat-grid" id="vipJournalSummaryGrid" style="max-width:900px;margin-bottom:12px;"></div>
+            <p id="vipJournalStats" class="hint"></p>
+            <div id="vipJournalLoading" class="loading hidden">Loading VIP revenue journal…</div>
+            <div id="vipJournalGrid" class="journal-grid" style="margin-bottom:12px;"></div>
+            <p id="vipJournalDayTitle" class="hint" style="margin:8px 0;font-weight:700;"></p>
+            <div class="stat-grid" id="vipJournalDayStats" style="max-width:700px;margin-bottom:8px;"></div>
+            <p id="vipJournalErr" class="err hidden"></p>
+          </div>
           <div id="vipExitRequestsCard" class="card superadmin-only" style="margin-top:16px;">
             <h3 style="margin:0 0 8px;font-size:1rem;">Pending VIP exit requests</h3>
             <p class="hint" style="margin-bottom:12px;">
@@ -1510,32 +1528,37 @@
         </div>
 
         <div id="panelGhost" class="hidden superadmin-only">
-          <div class="card ghost-particle-panel">
-            <div class="ghost-particle-header">
-              <h3 style="margin:0 0 6px;font-size:1rem;">Ghost particle network</h3>
-              <p class="hint" style="margin:0 0 10px;">
-                Every account is a dot on the sphere. <span style="color:#e8e8e8;">White</span> lines link ghost pool owners to members.
-                Lines turn <span style="color:#5eb3ff;">blue</span> for pending transfers when a member drop is due in under 5 minutes.
-                Hover a dot for balances and transfer state.
-              </p>
-              <div class="row" style="align-items:center;margin-bottom:8px;">
-                <button type="button" class="btn-primary" id="refreshGhostBtn" style="width:auto;">Refresh</button>
-                <div class="ghost-network-legend" style="margin-left:16px;">
-                  <span><span class="ghost-legend-dot ghost-legend-idle"></span>Connected / idle</span>
-                  <span><span class="ghost-legend-dot ghost-legend-soon"></span>Serving &lt; 5 min</span>
-                  <span style="opacity:0.45;">· dim = not in ghost</span>
-                </div>
-              </div>
-              <p id="ghostStats" class="hint" style="margin:0;"></p>
-              <div id="ghostLoading" class="loading hidden">Loading particle network…</div>
+          <div class="card">
+            <h3 style="margin:0 0 8px;font-size:1rem;">Ghost accounts</h3>
+            <p class="hint" style="margin-bottom:12px;">
+              Live pool balances for every ghost account. <strong>In use</strong> is money currently lent to member airfarming drops;
+              <strong>Scheduled</strong> is reserved for upcoming lends; <strong>Available</strong> can still be allocated or withdrawn by the owner.
+            </p>
+            <div class="row" style="align-items:flex-end;margin-bottom:12px;">
+              <button type="button" class="btn-primary" id="refreshGhostBtn" style="width:auto;">Refresh</button>
             </div>
-            <div class="ghost-network-wrap">
-              <div class="ghost-network-canvas-box">
-                <canvas id="ghostNetworkCanvas" width="960" height="640"></canvas>
-                <div id="ghostNetworkTooltip"></div>
-              </div>
+            <div class="stat-grid" id="ghostSummaryGrid" style="max-width:1100px;margin-bottom:16px;"></div>
+            <p id="ghostStats" class="hint"></p>
+            <div id="ghostLoading" class="loading hidden">Loading ghost accounts…</div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Owner</th>
+                    <th>Status</th>
+                    <th>Members</th>
+                    <th>Pool balance</th>
+                    <th>In use (lent)</th>
+                    <th>Scheduled</th>
+                    <th>Available</th>
+                    <th>Allocated total</th>
+                    <th>Active lends</th>
+                  </tr>
+                </thead>
+                <tbody id="ghostAccountRows"></tbody>
+              </table>
             </div>
-            <p id="ghostErr" class="err hidden" style="padding:12px 20px;"></p>
+            <p id="ghostErr" class="err hidden"></p>
           </div>
         </div>
 
@@ -5352,6 +5375,7 @@
         await loadVipExitRequests();
         await loadVipLoans();
         await loadVipReinvestments();
+        await loadVipRevenueJournal();
       } catch (e) {
         vipMembers = [];
         renderVipSummary(null);
@@ -5360,6 +5384,113 @@
       } finally {
         document.getElementById('vipLoading').classList.add('hidden');
       }
+    }
+
+    let vipJournalYear = null;
+    let vipJournalMonth = null;
+    let vipJournalSelectedDate = null;
+    let vipJournalData = null;
+
+    function showVipJournalErr(e) {
+      const el = document.getElementById('vipJournalErr');
+      if (!el) return;
+      el.textContent = e.message || 'Failed to load VIP journal';
+      el.classList.remove('hidden');
+    }
+
+    function renderVipRevenueJournal() {
+      const label = document.getElementById('vipJournalMonthLabel');
+      const grid = document.getElementById('vipJournalGrid');
+      const summary = document.getElementById('vipJournalSummaryGrid');
+      const stats = document.getElementById('vipJournalStats');
+      if (!vipJournalData || !grid) return;
+      if (label) label.textContent = journalMonthLabel(vipJournalYear, vipJournalMonth);
+      const d = vipJournalData;
+      if (summary) {
+        summary.innerHTML =
+          '<div class="stat"><div class="val">' + fmtMoney(d.monthPayoutUsd || 0) + '</div><div class="lbl">Paid to members</div></div>' +
+          '<div class="stat"><div class="val">' + fmtMoney(d.monthPlatformFeeUsd || 0) + '</div><div class="lbl">Platform fee (3%)</div></div>' +
+          '<div class="stat"><div class="val">' + (d.payoutDays || 0) + '</div><div class="lbl">Payout days</div></div>' +
+          '<div class="stat"><div class="val">' + (d.accrualCount || 0) + '</div><div class="lbl">Accrual events</div></div>';
+      }
+      if (stats) {
+        stats.textContent = d.bestDay
+          ? ('Best day ' + d.bestDay.date + ' · ' + fmtMoney(d.bestDay.payoutUsd || 0) + ' paid')
+          : 'No VIP payouts this month yet';
+      }
+      const cells = buildJournalCalendarCells(vipJournalYear, vipJournalMonth);
+      grid.innerHTML = '';
+      cells.forEach((cell) => {
+        if (!cell.day || !cell.ymd) {
+          const empty = document.createElement('div');
+          empty.className = 'journal-cell empty';
+          grid.appendChild(empty);
+          return;
+        }
+        const info = d.days?.[cell.ymd];
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'journal-cell' + (info?.hasPayout ? ' profit' : '') + (cell.ymd === vipJournalSelectedDate ? ' selected' : '');
+        btn.setAttribute('data-vip-journal-date', cell.ymd);
+        btn.innerHTML = '<div class="journal-day">' + cell.day + '</div>' +
+          (info?.hasPayout ? ('<div class="journal-amt">' + fmtMoney(info.payoutUsd).replace('$','') + '</div>') : '');
+        btn.onclick = () => {
+          vipJournalSelectedDate = cell.ymd;
+          renderVipRevenueJournal();
+          renderVipJournalDay(cell.ymd);
+        };
+        grid.appendChild(btn);
+      });
+      if (vipJournalSelectedDate) renderVipJournalDay(vipJournalSelectedDate);
+    }
+
+    function renderVipJournalDay(ymd) {
+      const title = document.getElementById('vipJournalDayTitle');
+      const dayStats = document.getElementById('vipJournalDayStats');
+      const info = vipJournalData?.days?.[ymd];
+      if (title) title.textContent = ymd + ' (UTC)';
+      if (!dayStats) return;
+      if (!info || !info.hasPayout) {
+        dayStats.innerHTML = '<div class="stat"><div class="val">—</div><div class="lbl">No VIP payouts this day</div></div>';
+        return;
+      }
+      dayStats.innerHTML =
+        '<div class="stat"><div class="val">' + fmtMoney(info.payoutUsd || 0) + '</div><div class="lbl">Paid to members</div></div>' +
+        '<div class="stat"><div class="val">' + fmtMoney(info.platformFeeUsd || 0) + '</div><div class="lbl">Platform fee</div></div>' +
+        '<div class="stat"><div class="val">' + (info.uniqueUsers || 0) + '</div><div class="lbl">Members paid</div></div>' +
+        '<div class="stat"><div class="val">' + (info.accrualCount || 0) + '</div><div class="lbl">Accruals</div></div>';
+    }
+
+    async function loadVipRevenueJournal() {
+      const err = document.getElementById('vipJournalErr');
+      const loading = document.getElementById('vipJournalLoading');
+      if (err) err.classList.add('hidden');
+      if (loading) loading.classList.remove('hidden');
+      try {
+        const now = new Date();
+        if (vipJournalYear == null) vipJournalYear = now.getUTCFullYear();
+        if (vipJournalMonth == null) vipJournalMonth = now.getUTCMonth() + 1;
+        if (!vipJournalSelectedDate) vipJournalSelectedDate = now.toISOString().slice(0, 10);
+        const data = await api('/admin/api/vip-farmers/revenue-journal?year=' + vipJournalYear + '&month=' + vipJournalMonth);
+        vipJournalData = data;
+        renderVipRevenueJournal();
+      } catch (e) {
+        vipJournalData = null;
+        showVipJournalErr(e);
+      } finally {
+        if (loading) loading.classList.add('hidden');
+      }
+    }
+
+    function shiftVipJournalMonth(delta) {
+      let m = (vipJournalMonth || 1) + delta;
+      let y = vipJournalYear || new Date().getUTCFullYear();
+      if (m < 1) { m = 12; y -= 1; }
+      else if (m > 12) { m = 1; y += 1; }
+      vipJournalYear = y;
+      vipJournalMonth = m;
+      vipJournalSelectedDate = y + '-' + String(m).padStart(2, '0') + '-01';
+      void loadVipRevenueJournal();
     }
 
     function showVipExitErr(e) {
@@ -5893,252 +6024,68 @@
       });
     }
 
-    let ghostNetworkData = null;
-    let ghostNetworkAnimId = null;
-    let ghostNetworkPollTimer = null;
-    let ghostNetworkRotation = 0;
-
     function showGhostErr(e) {
       document.getElementById('ghostErr').textContent = e.message;
       document.getElementById('ghostErr').classList.remove('hidden');
     }
 
-    function stopGhostNetworkAnim() {
-      if (ghostNetworkAnimId) {
-        cancelAnimationFrame(ghostNetworkAnimId);
-        ghostNetworkAnimId = null;
-      }
-    }
-
     function stopGhostNetworkPoll() {
-      if (ghostNetworkPollTimer) {
-        clearInterval(ghostNetworkPollTimer);
-        ghostNetworkPollTimer = null;
-      }
-      stopGhostNetworkAnim();
+      // retained no-op for setTab compatibility (particle network removed)
     }
 
-    function startGhostNetworkPoll() {
-      if (ghostNetworkPollTimer) {
-        clearInterval(ghostNetworkPollTimer);
-        ghostNetworkPollTimer = null;
-      }
-      if (activeTab !== 'ghost') return;
-      const sec = ghostNetworkData?.pollIntervalSec || 5;
-      ghostNetworkPollTimer = setInterval(() => {
-        if (activeTab === 'ghost') loadGhostParticleNetwork(true).catch(showGhostErr);
-      }, sec * 1000);
-    }
+    function renderGhostAccounts(data) {
+      const totals = data.totals || {};
+      const accounts = data.accounts || [];
+      document.getElementById('ghostSummaryGrid').innerHTML =
+        '<div class="stat"><div class="val">' + fmtMoney(totals.poolBalanceUsd || 0) + '</div><div class="lbl">Total pool balance</div></div>' +
+        '<div class="stat"><div class="val">' + fmtMoney(totals.poolInUseUsd || 0) + '</div><div class="lbl">In use (lent now)</div></div>' +
+        '<div class="stat"><div class="val">' + fmtMoney(totals.scheduledUsd || 0) + '</div><div class="lbl">Scheduled</div></div>' +
+        '<div class="stat"><div class="val">' + fmtMoney(totals.poolAvailableUsd || 0) + '</div><div class="lbl">Available</div></div>';
 
-    function fibonacciSpherePoint(i, n, radius) {
-      const ga = Math.PI * (3 - Math.sqrt(5));
-      const y = 1 - (i / Math.max(1, n - 1)) * 2;
-      const r = Math.sqrt(Math.max(0, 1 - y * y));
-      const theta = ga * i;
-      return {
-        x: Math.cos(theta) * r * radius,
-        y: y * radius,
-        z: Math.sin(theta) * r * radius,
-      };
-    }
-
-    function project3d(x, y, z, rotY, cx, cy, scale) {
-      const cos = Math.cos(rotY);
-      const sin = Math.sin(rotY);
-      const rx = x * cos - z * sin;
-      const rz = x * sin + z * cos;
-      const persp = 1 / (1 + rz * 0.0018);
-      return { px: cx + rx * persp * scale, py: cy + y * persp * scale, depth: rz };
-    }
-
-    function ghostNodeRadius(node) {
-      if (node.ghostRole === 'owner') return 7;
-      if (node.connected) return 5;
-      return 2;
-    }
-
-    function ghostNodeColor(node) {
-      if (node.servingSoon) return '#5eb3ff';
-      if (node.ghostRole === 'owner') return '#ffffff';
-      if (node.connected) return '#d8e8ff';
-      return 'rgba(180, 200, 230, 0.35)';
-    }
-
-    function ghostEdgeColor(edge) {
-      return edge.servingSoon ? '#5eb3ff' : '#e8e8e8';
-    }
-
-    function renderGhostParticleCanvas(data) {
-      const canvas = document.getElementById('ghostNetworkCanvas');
-      if (!canvas || !data) return;
-      const ctx = canvas.getContext('2d');
-      const w = canvas.width;
-      const h = canvas.height;
-      const cx = w / 2;
-      const cy = h / 2;
-      const rawNodes = data.nodes || [];
-      const edges = data.edges || [];
-      const n = rawNodes.length;
-      const radius = Math.min(w, h) * 0.38;
-
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, w, h);
-
-      for (let i = 0; i < 120; i++) {
-        const p = fibonacciSpherePoint(i, 120, radius * 1.05);
-        const proj = project3d(p.x, p.y, p.z, ghostNetworkRotation * 0.6, cx, cy, 1);
-        ctx.beginPath();
-        ctx.arc(proj.px, proj.py, 1, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(120, 170, 220, 0.12)';
-        ctx.fill();
-      }
-
-      const nodeById = new Map();
-      const drawNodes = rawNodes.map((node, i) => {
-        const p = fibonacciSpherePoint(i, Math.max(n, 2), radius);
-        const proj = project3d(p.x, p.y, p.z, ghostNetworkRotation, cx, cy, 1);
-        const r = ghostNodeRadius(node);
-        const item = { node, px: proj.px, py: proj.py, depth: proj.depth, r, idx: i };
-        nodeById.set(node.userId, item);
-        return item;
-      });
-      drawNodes.sort((a, b) => a.depth - b.depth);
-
-      const edgeDraws = edges
-        .map((edge) => {
-          const from = nodeById.get(edge.fromUserId);
-          const to = nodeById.get(edge.toUserId);
-          if (!from || !to) return null;
-          return {
-            edge,
-            from,
-            to,
-            depth: (from.depth + to.depth) / 2,
-          };
-        })
-        .filter(Boolean);
-      edgeDraws.sort((a, b) => a.depth - b.depth);
-
-      edgeDraws.forEach((ed) => {
-        const color = ghostEdgeColor(ed.edge);
-        ctx.beginPath();
-        ctx.moveTo(ed.from.px, ed.from.py);
-        ctx.lineTo(ed.to.px, ed.to.py);
-        ctx.strokeStyle = color;
-        ctx.globalAlpha = ed.edge.servingSoon ? 0.95 : ed.edge.pendingTransfer ? 0.75 : 0.45;
-        ctx.lineWidth = ed.edge.servingSoon ? 2.2 : ed.edge.pendingTransfer ? 1.6 : 1;
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      });
-
-      drawNodes.forEach((dn) => {
-        const color = ghostNodeColor(dn.node);
-        ctx.beginPath();
-        ctx.arc(dn.px, dn.py, dn.r, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        if (dn.node.servingSoon) {
-          ctx.shadowColor = '#5eb3ff';
-          ctx.shadowBlur = 14;
-        }
-        ctx.fill();
-        ctx.shadowBlur = 0;
-      });
-
-      ghostNetworkRotation += 0.003;
-      ghostNetworkAnimId = requestAnimationFrame(() => {
-        if (activeTab === 'ghost' && ghostNetworkData) renderGhostParticleCanvas(ghostNetworkData);
-      });
-
-      canvas._ghostNodes = drawNodes;
-    }
-
-    function ghostNodeTooltipHtml(node) {
-      let html = '<strong>' + escapeHtml(node.email) + '</strong><br>';
-      if (node.ghostRole === 'owner') {
-        html += 'Ghost pool owner<br>Pool: ' + fmtMoney(node.poolBalance || 0) +
-          ' · Members: ' + (node.memberCount || 0);
-      } else if (node.ghostRole === 'member') {
-        html += 'Ghost member<br>Have: ' + fmtMoney(node.airfarmingBalance || 0) +
-          ' · Need: ' + fmtMoney(node.needed || 0);
-        if (node.lendStatus) html += '<br>Transfer: ' + escapeHtml(node.lendStatus) +
-          (node.lendAmount != null ? ' ' + fmtMoney(node.lendAmount) : '');
-        if (node.dueAt) html += '<br>Drop: ' + new Date(node.dueAt).toLocaleString();
-        if (node.servingSoon) html += '<br><span style="color:#5eb3ff;">Serving in &lt; 5 min</span>';
-      } else {
-        html += 'Not connected to ghost';
-      }
-      return html;
-    }
-
-    function setupGhostCanvasHover() {
-      const canvas = document.getElementById('ghostNetworkCanvas');
-      const tip = document.getElementById('ghostNetworkTooltip');
-      if (!canvas || canvas._ghostHoverBound) return;
-      canvas._ghostHoverBound = true;
-      canvas.addEventListener('mousemove', (ev) => {
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        const mx = (ev.clientX - rect.left) * scaleX;
-        const my = (ev.clientY - rect.top) * scaleY;
-        const nodes = canvas._ghostNodes || [];
-        let hit = -1;
-        for (let i = nodes.length - 1; i >= 0; i--) {
-          const dx = mx - nodes[i].px;
-          const dy = my - nodes[i].py;
-          const hitR = nodes[i].r + (nodes[i].node.connected ? 10 : 4);
-          if (dx * dx + dy * dy <= hitR * hitR) {
-            hit = i;
-            break;
-          }
-        }
-        if (hit >= 0) {
-          tip.style.display = 'block';
-          tip.style.left = (ev.clientX - rect.left + 12) + 'px';
-          tip.style.top = (ev.clientY - rect.top + 12) + 'px';
-          tip.innerHTML = ghostNodeTooltipHtml(nodes[hit].node);
-        } else {
-          tip.style.display = 'none';
-        }
-      });
-      canvas.addEventListener('mouseleave', () => {
-        tip.style.display = 'none';
-      });
-    }
-
-    function renderGhostStats(data) {
-      const s = data.stats || {};
       document.getElementById('ghostStats').textContent =
-        (s.totalUsers || 0) + ' accounts · ' +
-        (s.ghostOwners || 0) + ' ghost owners · ' +
-        (s.ghostMembers || 0) + ' members · ' +
-        (s.unconnected || 0) + ' unconnected · ' +
-        (s.pendingTransfers || 0) + ' pending transfers · ' +
-        (s.servingSoonCount || 0) + ' serving soon';
-    }
+        (data.count || accounts.length) + ' ghost account(s) · ' +
+        (totals.memberCount || 0) + ' members · allocated lifetime ' +
+        fmtMoney(totals.allocatedTotalUsd || 0);
 
-    async function loadGhostParticleNetwork(silent) {
-      if (!silent) {
-        document.getElementById('ghostErr').classList.add('hidden');
-        document.getElementById('ghostLoading').classList.remove('hidden');
+      const tbody = document.getElementById('ghostAccountRows');
+      tbody.innerHTML = '';
+      if (!accounts.length) {
+        tbody.innerHTML = '<tr><td colspan="9" style="color:var(--muted);">No ghost accounts enrolled yet.</td></tr>';
+        return;
       }
-      try {
-        const data = await api('/admin/api/ghost-accounts/particle-network');
-        ghostNetworkData = data;
-        renderGhostStats(data);
-        if (ghostNetworkAnimId) cancelAnimationFrame(ghostNetworkAnimId);
-        renderGhostParticleCanvas(data);
-        setupGhostCanvasHover();
-        startGhostNetworkPoll();
-      } catch (e) {
-        showGhostErr(e);
-      } finally {
-        if (!silent) document.getElementById('ghostLoading').classList.add('hidden');
-      }
+      accounts.forEach((a) => {
+        const tr = document.createElement('tr');
+        const status = a.status === 'active'
+          ? '<span class="pill ok">active</span>'
+          : '<span class="pill warn">' + escapeHtml(a.status || '—') + '</span>';
+        tr.innerHTML =
+          '<td>' + escapeHtml(a.ownerEmail || '—') + '</td>' +
+          '<td>' + status + '</td>' +
+          '<td>' + (a.memberCount || 0) + '</td>' +
+          '<td><strong>' + fmtMoney(a.poolBalance || 0) + '</strong></td>' +
+          '<td>' + fmtMoney(a.poolInUse || 0) + '</td>' +
+          '<td>' + fmtMoney(a.scheduledUsd || 0) + '</td>' +
+          '<td>' + fmtMoney(a.poolAvailable || 0) + '</td>' +
+          '<td>' + fmtMoney(a.allocatedTotal || 0) + '</td>' +
+          '<td>' + (a.activeLendCount || 0) + '</td>';
+        tbody.appendChild(tr);
+      });
     }
 
     async function loadGhostAccounts() {
-      await loadGhostParticleNetwork(false);
+      document.getElementById('ghostErr').classList.add('hidden');
+      document.getElementById('ghostLoading').classList.remove('hidden');
+      try {
+        const data = await api('/admin/api/ghost-accounts');
+        renderGhostAccounts(data);
+      } catch (e) {
+        document.getElementById('ghostSummaryGrid').innerHTML = '';
+        document.getElementById('ghostAccountRows').innerHTML = '';
+        document.getElementById('ghostStats').textContent = '';
+        showGhostErr(e);
+      } finally {
+        document.getElementById('ghostLoading').classList.add('hidden');
+      }
     }
 
     async function loadLiveTrading() {
@@ -6497,8 +6444,10 @@
     document.getElementById('refreshP2pBtn').onclick = () => loadP2pTrades();
     document.getElementById('p2pStatusFilter').onchange = () => loadP2pTrades();
     document.getElementById('refreshVipBtn').onclick = () => loadVipFarmers().catch(showVipErr);
+    document.getElementById('vipJournalPrev').onclick = () => shiftVipJournalMonth(-1);
+    document.getElementById('vipJournalNext').onclick = () => shiftVipJournalMonth(1);
     document.getElementById('refreshLiveTradingBtn').onclick = () => loadLiveTrading().catch(showLiveTradingErr);
-    document.getElementById('refreshGhostBtn').onclick = () => loadGhostParticleNetwork(false).catch(showGhostErr);
+    document.getElementById('refreshGhostBtn').onclick = () => loadGhostAccounts().catch(showGhostErr);
     document.getElementById('refreshLevelsBtn').onclick = () => loadLevels().catch(showLevelsErr);
     document.getElementById('levelsSearch').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') loadLevels().catch(showLevelsErr);
