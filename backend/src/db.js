@@ -5050,6 +5050,42 @@ async function listPlatformRevenueEventsAdmin({ limit = 10000 } = {}) {
   return data || [];
 }
 
+async function insertPlatformProfitWithdrawal(row) {
+  const payload = {
+    id: row.id || id(),
+    amount_usd: roundWalletUsd(row.amount_usd),
+    note: row.note || null,
+    admin_username: String(row.admin_username || '').trim() || 'admin',
+    created_at: row.created_at || new Date().toISOString(),
+  };
+  const { data, error } = await supabase
+    .from('platform_profit_withdrawals')
+    .insert(payload)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function listPlatformProfitWithdrawalsAdmin({ limit = 100 } = {}) {
+  const cap = Math.min(500, Math.max(1, Number(limit) || 100));
+  const { data, error } = await supabase
+    .from('platform_profit_withdrawals')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(cap);
+  if (error && isSchemaError(error)) return [];
+  if (error) throw error;
+  return data || [];
+}
+
+async function sumPlatformProfitWithdrawalsUsd() {
+  const { data, error } = await supabase.from('platform_profit_withdrawals').select('amount_usd');
+  if (error && isSchemaError(error)) return 0;
+  if (error) throw error;
+  return roundWalletUsd((data || []).reduce((s, r) => s + Number(r.amount_usd || 0), 0));
+}
+
 function userDropScheduleRowToApi(row) {
   if (!row) return null;
   return {
@@ -5860,6 +5896,9 @@ module.exports = {
   getPlatformRevenueEventBySource,
   insertPlatformRevenueEvent,
   listPlatformRevenueEventsAdmin,
+  insertPlatformProfitWithdrawal,
+  listPlatformProfitWithdrawalsAdmin,
+  sumPlatformProfitWithdrawalsUsd,
   listPaidAirfarmingDropsForUserBetween,
   listContractAccrualsForUserBetween,
   listContractAccrualsForUserOnDate,

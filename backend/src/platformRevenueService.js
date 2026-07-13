@@ -1,7 +1,11 @@
+const crypto = require('crypto');
 const {
   insertPlatformRevenueEvent,
   getPlatformRevenueEventBySource,
   listPlatformRevenueEventsAdmin,
+  insertPlatformProfitWithdrawal,
+  listPlatformProfitWithdrawalsAdmin,
+  sumPlatformProfitWithdrawalsUsd,
   getUserById,
   utcTodayYmd,
 } = require('./db');
@@ -84,6 +88,8 @@ function aggregateRevenueRows(rows) {
       airfarming_drop: empty(),
       withdrawal: empty(),
       vip_accrual: empty(),
+      vip_loan_commission: empty(),
+      vip_reinvest_commission: empty(),
     },
   };
 
@@ -105,15 +111,65 @@ function aggregateRevenueRows(rows) {
     bump(totals.all);
     if (at === today) bump(totals.today);
     if (at >= monthStart) bump(totals.month);
-    if (totals.byType[type]) bump(totals.byType[type]);
+    if (!totals.byType[type]) totals.byType[type] = empty();
+    bump(totals.byType[type]);
   }
 
   return totals;
 }
 
+async function getPlatformProfitBalance() {
+  const rows = await listPlatformRevenueEventsAdmin({ limit: 10000 });
+  const totalFeesUsd = roundUsd(rows.reduce((s, r) => s + Number(r.fee_amount || 0), 0));
+  const withdrawnUsd = roundUsd(await sumPlatformProfitWithdrawalsUsd());
+  const availableUsd = roundUsd(Math.max(0, totalFeesUsd - withdrawnUsd));
+  return { totalFeesUsd, withdrawnUsd, availableUsd };
+}
+
+async function withdrawPlatformProfit({ amount, note, adminUsername }) {
+  const amt = roundUsd(amount);
+  if (!Number.isFinite(amt) || amt <= 0) {
+    const err = new Error('Enter a valid amount greater than 0');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const balance = await getPlatformProfitBalance();
+  if (amt > balance.availableUsd) {
+    const err = new Error(
+      `Insufficient platform profit. Available ${balance.availableUsd.toFixed(2)}, requested ${amt.toFixed(2)}.`
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const row = await insertPlatformProfitWithdrawal({
+    id: crypto.randomUUID(),
+    amount_usd: amt,
+    note: note ? String(note).trim().slice(0, 500) : null,
+    admin_username: String(adminUsername || 'superadmin').trim() || 'superadmin',
+  });
+
+  const next = await getPlatformProfitBalance();
+  return {
+    withdrawal: {
+      id: row.id,
+      amountUsd: Number(row.amount_usd),
+      note: row.note,
+      adminUsername: row.admin_username,
+      createdAt: row.created_at,
+    },
+    balance: next,
+    message: `Withdrew $${amt.toFixed(2)} from platform profit. Remaining available: $${next.availableUsd.toFixed(2)}.`,
+  };
+}
+
 async function getPlatformRevenueAdminStats({ recentLimit = 80 } = {}) {
   const rows = await listPlatformRevenueEventsAdmin({ limit: 10000 });
   const recent = rows.slice(0, Math.min(recentLimit, rows.length));
+  const withdrawals = await listPlatformProfitWithdrawalsAdmin({ limit: 50 });
+  const balance = await getPlatformProfitBalance();
+
   return {
     rates: {
       airfarmingDrop: PLATFORM_FEE_DROP_RATE,
@@ -121,6 +177,14 @@ async function getPlatformRevenueAdminStats({ recentLimit = 80 } = {}) {
       vipAccrual: PLATFORM_FEE_VIP_RATE,
     },
     summary: aggregateRevenueRows(rows),
+    profitBalance: balance,
+    recentWithdrawals: withdrawals.map((w) => ({
+      id: w.id,
+      amountUsd: Number(w.amount_usd),
+      note: w.note,
+      adminUsername: w.admin_username,
+      createdAt: w.created_at,
+    })),
     recent: recent.map((r) => ({
       id: r.id,
       eventType: r.event_type,
@@ -145,4 +209,6 @@ module.exports = {
   splitPlatformFee,
   recordPlatformRevenueIfNew,
   getPlatformRevenueAdminStats,
+  getPlatformProfitBalance,
+  withdrawPlatformProfit,
 };

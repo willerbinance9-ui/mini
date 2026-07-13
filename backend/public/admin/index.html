@@ -1642,6 +1642,40 @@
             </p>
             <h4 style="margin:0 0 8px;font-size:0.9rem;">Platform fees</h4>
             <div class="stat-grid" id="accountRevenueGrid" style="max-width:1100px;margin-bottom:16px;"></div>
+            <div id="platformProfitWithdrawCard" class="superadmin-only" style="margin:16px 0 20px;padding:14px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.02);">
+              <h4 style="margin:0 0 6px;font-size:0.9rem;">Withdraw platform profit</h4>
+              <p class="hint" style="margin-bottom:10px;">
+                Superadmin only. Removes the selected amount from available platform fee profit
+                (fees earned minus previous withdrawals). This is a ledger debit — it does not send crypto.
+              </p>
+              <div class="stat-grid" id="platformProfitBalanceGrid" style="max-width:900px;margin-bottom:12px;"></div>
+              <div class="row" style="align-items:flex-end;gap:10px;flex-wrap:wrap;">
+                <div style="min-width:140px;">
+                  <label for="platformProfitWithdrawAmount">Amount (USD)</label>
+                  <input id="platformProfitWithdrawAmount" type="number" min="0.01" step="0.01" placeholder="0.00" style="margin-bottom:0;" />
+                </div>
+                <div style="flex:1;min-width:200px;">
+                  <label for="platformProfitWithdrawNote">Note (optional)</label>
+                  <input id="platformProfitWithdrawNote" type="text" maxlength="500" placeholder="e.g. bank transfer / ops payout" style="margin-bottom:0;" />
+                </div>
+                <button type="button" class="btn-primary" id="platformProfitWithdrawBtn">Withdraw</button>
+              </div>
+              <p id="platformProfitWithdrawMsg" class="hint" style="margin-top:8px;"></p>
+              <h4 style="margin:16px 0 8px;font-size:0.85rem;">Recent profit withdrawals</h4>
+              <div style="overflow-x:auto;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>Amount</th>
+                      <th>Admin</th>
+                      <th>Note</th>
+                    </tr>
+                  </thead>
+                  <tbody id="platformProfitWithdrawRows"></tbody>
+                </table>
+              </div>
+            </div>
             <h4 style="margin:16px 0 8px;font-size:0.9rem;">By source (all time)</h4>
             <div class="stat-grid" id="accountRevenueByType" style="max-width:1100px;margin-bottom:16px;"></div>
             <p id="accountRevenueStats" class="hint"></p>
@@ -4938,6 +4972,8 @@
       airfarming_drop: 'Drop payout',
       withdrawal: 'Withdrawal',
       vip_accrual: 'VIP interest',
+      vip_loan_commission: 'VIP loan commission',
+      vip_reinvest_commission: 'VIP reinvest commission',
     };
 
     function showAccountRevenueErr(e) {
@@ -4987,6 +5023,48 @@
       );
     }
 
+    function renderPlatformProfitBalance(balance, withdrawals) {
+      const b = balance && typeof balance === 'object'
+        ? balance
+        : { totalFeesUsd: 0, withdrawnUsd: 0, availableUsd: 0 };
+      const grid = document.getElementById('platformProfitBalanceGrid');
+      if (grid) {
+        grid.innerHTML =
+          '<div class="stat"><div class="val">' +
+          fmtMoney(Number(b.availableUsd) || 0) +
+          '</div><div class="lbl">Available to withdraw</div></div>' +
+          '<div class="stat"><div class="val">' +
+          fmtMoney(Number(b.totalFeesUsd) || 0) +
+          '</div><div class="lbl">Fees earned (all time)</div></div>' +
+          '<div class="stat"><div class="val">' +
+          fmtMoney(Number(b.withdrawnUsd) || 0) +
+          '</div><div class="lbl">Already withdrawn</div></div>';
+      }
+      const tbody = document.getElementById('platformProfitWithdrawRows');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      const rows = withdrawals || [];
+      if (!rows.length) {
+        tbody.innerHTML =
+          '<tr><td colspan="4" style="color:var(--muted);">No profit withdrawals yet.</td></tr>';
+        return;
+      }
+      rows.forEach((w) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' +
+          new Date(w.createdAt).toLocaleString() +
+          '</td><td><strong>' +
+          fmtMoney(w.amountUsd || 0) +
+          '</strong></td><td>' +
+          escapeHtml(w.adminUsername || '—') +
+          '</td><td>' +
+          escapeHtml(w.note || '—') +
+          '</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
     function renderAccountRevenue(data) {
       if (data.schemaMissing) {
         document.getElementById('accountRevenueGrid').innerHTML =
@@ -5000,6 +5078,7 @@
           '<tr><td colspan="6" style="color:var(--muted);">' + escapeHtml(data.message || 'Schema missing') + '</td></tr>';
         document.getElementById('accountGhostRevenueRows').innerHTML =
           '<tr><td colspan="6" style="color:var(--muted);">Ghost recalls unavailable until ghost schema is migrated.</td></tr>';
+        renderPlatformProfitBalance(null, []);
         return;
       }
       const s = data.summary || {};
@@ -5016,11 +5095,15 @@
         Math.round((rates.vipAccrual || 0.03) * 100) +
         '%</div><div class="lbl">Rates (drop / withdraw / VIP)</div></div>';
 
+      renderPlatformProfitBalance(data.profitBalance, data.recentWithdrawals);
+
       const by = s.byType || {};
       document.getElementById('accountRevenueByType').innerHTML =
         renderAccountRevenueBucket(by.airfarming_drop, 'Drop payouts (10%)') +
         renderAccountRevenueBucket(by.withdrawal, 'Withdrawals (5%)') +
-        renderAccountRevenueBucket(by.vip_accrual, 'VIP interest (3%)');
+        renderAccountRevenueBucket(by.vip_accrual, 'VIP interest (3%)') +
+        renderAccountRevenueBucket(by.vip_loan_commission, 'VIP loan commission (30%)') +
+        renderAccountRevenueBucket(by.vip_reinvest_commission, 'VIP reinvest commission (30%)');
 
       document.getElementById('accountRevenueStats').textContent =
         (data.recent || []).length + ' recent events loaded · platform keeps fees on approved payouts';
@@ -5122,6 +5205,39 @@
         document.getElementById('accountRevenueLoading').classList.add('hidden');
       }
     }
+
+    async function submitPlatformProfitWithdraw() {
+      const amountEl = document.getElementById('platformProfitWithdrawAmount');
+      const noteEl = document.getElementById('platformProfitWithdrawNote');
+      const msgEl = document.getElementById('platformProfitWithdrawMsg');
+      const btn = document.getElementById('platformProfitWithdrawBtn');
+      const amount = Number(amountEl.value);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        msgEl.textContent = 'Enter a valid amount greater than 0.';
+        return;
+      }
+      if (!confirm('Withdraw ' + fmtMoney(amount) + ' from platform profit?')) return;
+      btn.disabled = true;
+      msgEl.textContent = 'Withdrawing…';
+      try {
+        const res = await api('/admin/api/account/revenue/withdraw', {
+          method: 'POST',
+          body: JSON.stringify({ amount, note: noteEl.value || '' }),
+        });
+        amountEl.value = '';
+        noteEl.value = '';
+        msgEl.textContent = res.message || 'Withdrawn.';
+        await loadAccountRevenue();
+      } catch (e) {
+        msgEl.textContent = e.message || 'Withdraw failed';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById('platformProfitWithdrawBtn')?.addEventListener('click', () => {
+      void submitPlatformProfitWithdraw();
+    });
 
     let vipMembers = [];
 

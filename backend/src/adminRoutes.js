@@ -76,6 +76,7 @@ const {
   splitPlatformFee,
   recordPlatformRevenueIfNew,
   getPlatformRevenueAdminStats,
+  withdrawPlatformProfit,
   PLATFORM_FEE_DROP_RATE,
 } = require('./platformRevenueService');
 const { getWithdrawalTrustScoreForUser } = require('./services/withdrawalTrustScore');
@@ -1300,6 +1301,29 @@ function registerAdminRoutes(app) {
       }
       console.error('[admin/account/revenue]', e);
       return res.status(500).json({ message: e.message || 'Failed to load platform revenue' });
+    }
+  });
+
+  app.post('/admin/api/account/revenue/withdraw', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
+    try {
+      const amount = Number(req.body?.amount);
+      const note = req.body?.note != null ? String(req.body.note) : '';
+      const result = await withdrawPlatformProfit({
+        amount,
+        note,
+        adminUsername: req.adminUser || 'superadmin',
+      });
+      return res.json(result);
+    } catch (e) {
+      if (e.statusCode === 400) return res.status(400).json({ message: e.message });
+      if (isMissingTableError(e) || isSchemaError(e)) {
+        return res.status(503).json({
+          message:
+            'Platform profit withdrawals schema missing. Run backend/sql/migrations/20260713_platform_profit_withdrawals.sql in Supabase.',
+        });
+      }
+      console.error('[admin/account/revenue/withdraw]', e);
+      return res.status(500).json({ message: e.message || 'Failed to withdraw platform profit' });
     }
   });
 
