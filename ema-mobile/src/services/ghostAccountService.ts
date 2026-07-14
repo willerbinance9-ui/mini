@@ -231,6 +231,50 @@ function normalizeLend(row: any): GhostUpcomingLend {
   };
 }
 
+export type GhostJournalDaySummary = {
+  date: string;
+  profitUsd: number;
+  recallCount: number;
+  hasProfit: boolean;
+};
+
+export type GhostJournalGhostSnapshot = {
+  id: string;
+  label: string;
+  status: string;
+  poolBalance: number;
+  poolAvailable: number;
+  poolCommitted: number;
+  allocatedTotal: number;
+  profitUsd?: number;
+  principalUsd?: number;
+  recallCount?: number;
+  recalls?: Array<{
+    id: string;
+    profitUsd: number;
+    principalUsd: number;
+    recalledAt: string;
+  }>;
+};
+
+export type GhostJournalMonthResponse = {
+  year: number;
+  month: number;
+  enrolled: boolean;
+  monthProfitUsd: number;
+  profitDays: number;
+  bestDay: { date: string; profitUsd: number } | null;
+  days: Record<string, GhostJournalDaySummary>;
+  ghosts: GhostJournalGhostSnapshot[];
+};
+
+export type GhostJournalDayResponse = {
+  date: string;
+  enrolled: boolean;
+  profitUsd: number;
+  ghosts: GhostJournalGhostSnapshot[];
+};
+
 export const ghostAccountService = {
   async getBalance(): Promise<GhostAccountBalance> {
     const data = await api.get<Record<string, unknown>>('/ghost-account/balance');
@@ -241,6 +285,12 @@ export const ghostAccountService = {
     const data = await api.get<Record<string, unknown>>('/ghost-account/status');
     return normalizeStatus(data);
   },
+
+  getJournalMonth: (year: number, month: number) =>
+    api.get<GhostJournalMonthResponse>(`/ghost-account/journal/month?year=${year}&month=${month}`),
+
+  getJournalDay: (date: string) =>
+    api.get<GhostJournalDayResponse>(`/ghost-account/journal/day?date=${encodeURIComponent(date)}`),
 
   async enroll(): Promise<GhostAccountStatus> {
     const data = await api.post<{ status: Record<string, unknown> }>('/ghost-account/enroll', {});

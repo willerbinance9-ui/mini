@@ -34,6 +34,8 @@ const {
   listAllGhostAccountsAdmin,
   listAllGhostAccountMembersAdmin,
   listRecalledGhostLendsAdmin,
+  listRecalledGhostLendsForOwnerBetween,
+  listRecalledGhostLendsForOwnerOnDate,
   listGhostAccountLendsForMember,
   listUsersAdmin,
   utcTodayYmd,
@@ -769,6 +771,139 @@ function startOfUtcMonthYmd() {
   return `${today.slice(0, 7)}-01`;
 }
 
+function monthBoundsUtc(year, month) {
+  const y = Number(year);
+  const m = Number(month);
+  const start = new Date(Date.UTC(y, m - 1, 1));
+  const end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+  return {
+    year: y,
+    month: m,
+    startYmd: start.toISOString().slice(0, 10),
+    endYmd: end.toISOString().slice(0, 10),
+    startIso: start.toISOString(),
+    endIso: end.toISOString(),
+    daysInMonth: end.getUTCDate(),
+  };
+}
+
+async function buildOwnerGhostSnapshot(ownerUserId) {
+  const account = await getGhostAccountByOwnerUserId(ownerUserId);
+  if (!account) return null;
+  const committed = await sumCommittedGhostLendAmounts(account.id);
+  const poolBalance = roundMoney(Number(account.pool_balance || 0));
+  return {
+    id: account.id,
+    label: 'Ghost Account',
+    status: account.status,
+    poolBalance,
+    poolAvailable: roundMoney(poolBalance - committed),
+    poolCommitted: roundMoney(committed),
+    allocatedTotal: roundMoney(Number(account.allocated_total || 0)),
+  };
+}
+
+async function getGhostOwnerJournalMonth(ownerUserId, year, month) {
+  const bounds = monthBoundsUtc(year, month);
+  const account = await getGhostAccountByOwnerUserId(ownerUserId);
+  if (!account) {
+    return {
+      year: bounds.year,
+      month: bounds.month,
+      enrolled: false,
+      monthProfitUsd: 0,
+      profitDays: 0,
+      bestDay: null,
+      days: {},
+      ghosts: [],
+    };
+  }
+
+  const rows = await listRecalledGhostLendsForOwnerBetween(ownerUserId, bounds.startIso, bounds.endIso);
+  const days = {};
+  for (let d = 1; d <= bounds.daysInMonth; d += 1) {
+    const ymd = `${bounds.year}-${String(bounds.month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    days[ymd] = { date: ymd, profitUsd: 0, recallCount: 0, hasProfit: false };
+  }
+
+  for (const row of rows) {
+    const ymd = String(row.recalled_at || '').slice(0, 10);
+    if (!days[ymd]) continue;
+    const profit = roundMoney(Number(row.recalled_profit_net || 0));
+    if (profit <= 0) continue;
+    days[ymd].profitUsd = roundMoney(days[ymd].profitUsd + profit);
+    days[ymd].recallCount += 1;
+    days[ymd].hasProfit = days[ymd].profitUsd > 0;
+  }
+
+  const dayList = Object.values(days);
+  const monthProfitUsd = roundMoney(dayList.reduce((s, d) => s + d.profitUsd, 0));
+  const profitDays = dayList.filter((d) => d.hasProfit).length;
+  let bestDay = null;
+  for (const d of dayList) {
+    if (!d.hasProfit) continue;
+    if (!bestDay || d.profitUsd > bestDay.profitUsd) bestDay = { date: d.date, profitUsd: d.profitUsd };
+  }
+
+  const snapshot = await buildOwnerGhostSnapshot(ownerUserId);
+  return {
+    year: bounds.year,
+    month: bounds.month,
+    enrolled: true,
+    monthProfitUsd,
+    profitDays,
+    bestDay,
+    days,
+    ghosts: snapshot ? [snapshot] : [],
+  };
+}
+
+async function getGhostOwnerJournalDay(ownerUserId, dateYmd) {
+  const date = String(dateYmd || '').slice(0, 10);
+  const account = await getGhostAccountByOwnerUserId(ownerUserId);
+  if (!account) {
+    return { date, enrolled: false, profitUsd: 0, ghosts: [] };
+  }
+
+  const rows = await listRecalledGhostLendsForOwnerOnDate(ownerUserId, date);
+  let profitUsd = 0;
+  let principalUsd = 0;
+  let recallCount = 0;
+  const recalls = [];
+  for (const row of rows) {
+    const profit = roundMoney(Number(row.recalled_profit_net || 0));
+    const principal = roundMoney(Number(row.recalled_principal || 0));
+    if (profit <= 0 && principal <= 0) continue;
+    profitUsd = roundMoney(profitUsd + profit);
+    principalUsd = roundMoney(principalUsd + principal);
+    recallCount += 1;
+    recalls.push({
+      id: row.id,
+      profitUsd: profit,
+      principalUsd: principal,
+      recalledAt: row.recalled_at,
+    });
+  }
+
+  const snapshot = await buildOwnerGhostSnapshot(ownerUserId);
+  return {
+    date,
+    enrolled: true,
+    profitUsd,
+    ghosts: snapshot
+      ? [
+          {
+            ...snapshot,
+            profitUsd,
+            principalUsd,
+            recallCount,
+            recalls,
+          },
+        ]
+      : [],
+  };
+}
+
 function aggregateGhostRecallRows(rows) {
   const empty = () => ({ count: 0, profitUsd: 0, principalUsd: 0, totalSweepUsd: 0 });
   const totals = { all: empty(), today: empty(), month: empty() };
@@ -1191,4 +1326,6 @@ module.exports = {
   getGhostRevenueAdminStats,
   buildGhostNetworkAdmin,
   buildGhostParticleNetworkAdmin,
+  getGhostOwnerJournalMonth,
+  getGhostOwnerJournalDay,
 };

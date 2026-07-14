@@ -9,6 +9,8 @@ const {
   buildGhostAccountStatus,
   getGhostAccountBalance,
   processAllGhostLendQueues,
+  getGhostOwnerJournalMonth,
+  getGhostOwnerJournalDay,
 } = require('./ghostAccountService');
 const { isMissingTableError } = require('./db');
 
@@ -40,6 +42,35 @@ function registerGhostAccountRoutes(app, { authMiddleware }) {
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: schemaMsg });
       return res.status(500).json({ message: e?.message || 'Ghost Account balance failed' });
+    }
+  });
+
+  app.get('/ghost-account/journal/month', authMiddleware, async (req, res) => {
+    try {
+      const year = Number(req.query.year);
+      const month = Number(req.query.month);
+      if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+        return res.status(400).json({ message: 'year and month are required' });
+      }
+      const data = await getGhostOwnerJournalMonth(req.userId, year, month);
+      return res.json(data);
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: schemaMsg });
+      return res.status(500).json({ message: e?.message || 'Ghost journal month failed' });
+    }
+  });
+
+  app.get('/ghost-account/journal/day', authMiddleware, async (req, res) => {
+    try {
+      const date = String(req.query.date || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ message: 'date=YYYY-MM-DD is required' });
+      }
+      const data = await getGhostOwnerJournalDay(req.userId, date);
+      return res.json(data);
+    } catch (e) {
+      if (isMissingTableError(e)) return res.status(503).json({ message: schemaMsg });
+      return res.status(500).json({ message: e?.message || 'Ghost journal day failed' });
     }
   });
 

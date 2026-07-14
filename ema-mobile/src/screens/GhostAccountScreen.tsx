@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -9,17 +10,22 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Card } from '../components/Card';
 import { PrimaryButton } from '../components/PrimaryButton';
 import {
   ghostAccountService,
   type GhostAccountStatus,
+  type GhostJournalDayResponse,
+  type GhostJournalMonthResponse,
   type GhostMemberLookup,
 } from '../services/ghostAccountService';
 import { palette } from '../theme/colors';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types';
+
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function fmtUsd(n: number) {
   return '$' + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -35,8 +41,17 @@ function fmtDate(iso: string | null) {
   });
 }
 
+function monthLabel(year: number, month: number) {
+  return new Date(Date.UTC(year, month - 1, 1)).toLocaleString(undefined, {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 export function GhostAccountScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const now = new Date();
   const [status, setStatus] = useState<GhostAccountStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,17 +60,51 @@ export function GhostAccountScreen() {
   const [memberEmail, setMemberEmail] = useState('');
   const [lookupResult, setLookupResult] = useState<GhostMemberLookup | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
+  const [showManage, setShowManage] = useState(false);
+  const [year, setYear] = useState(now.getUTCFullYear());
+  const [month, setMonth] = useState(now.getUTCMonth() + 1);
+  const [selectedDate, setSelectedDate] = useState(now.toISOString().slice(0, 10));
+  const [monthData, setMonthData] = useState<GhostJournalMonthResponse | null>(null);
+  const [dayData, setDayData] = useState<GhostJournalDayResponse | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const calendarCells = useMemo(() => {
+    const first = new Date(Date.UTC(year, month - 1, 1));
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const startDow = (first.getUTCDay() + 6) % 7;
+    const cells: Array<{ key: string; day: number | null; ymd: string | null }> = [];
+    for (let i = 0; i < startDow; i += 1) cells.push({ key: `pad-${i}`, day: null, ymd: null });
+    for (let d = 1; d <= daysInMonth; d += 1) {
+      const ymd = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      cells.push({ key: ymd, day: d, ymd });
+    }
+    return cells;
+  }, [year, month]);
+
+  const loadJournal = useCallback(async () => {
+    try {
+      const [m, d] = await Promise.all([
+        ghostAccountService.getJournalMonth(year, month),
+        ghostAccountService.getJournalDay(selectedDate),
+      ]);
+      setMonthData(m);
+      setDayData(d);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load ghost journal');
+    }
+  }, [year, month, selectedDate]);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      setStatus(await ghostAccountService.getStatus());
+      const next = await ghostAccountService.getStatus();
+      setStatus(next);
+      if (next.enrolled) await loadJournal();
     } catch (e: any) {
       setError(e?.message || 'Failed to load Ghost Account');
       setStatus(null);
     }
-  }, []);
+  }, [loadJournal]);
 
   useEffect(() => {
     void load();
@@ -63,18 +112,42 @@ export function GhostAccountScreen() {
 
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
+    if (!status?.enrolled) return;
     const sec = status?.pollIntervalSec ?? 45;
     pollRef.current = setInterval(() => void load(), sec * 1000);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [load, status?.pollIntervalSec]);
+  }, [load, status?.enrolled, status?.pollIntervalSec]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await load();
     setRefreshing(false);
   }, [load]);
+
+  const shiftMonth = (delta: number) => {
+    let m = month + delta;
+    let y = year;
+    if (m < 1) {
+      m = 12;
+      y -= 1;
+    } else if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+    setYear(y);
+    setMonth(m);
+    setSelectedDate(`${y}-${String(m).padStart(2, '0')}-01`);
+  };
+
+  const onSelectDay = (ymd: string) => {
+    setSelectedDate(ymd);
+    void ghostAccountService
+      .getJournalDay(ymd)
+      .then(setDayData)
+      .catch((e: any) => setError(e?.message || 'Failed to load day'));
+  };
 
   const onEnroll = async () => {
     try {
@@ -90,6 +163,7 @@ export function GhostAccountScreen() {
     try {
       setStatus(await ghostAccountService.allocate(n));
       setAllocateAmount('');
+      await loadJournal();
     } catch (e: any) {
       Alert.alert('Allocate', e?.message || 'Allocation failed');
     }
@@ -101,6 +175,7 @@ export function GhostAccountScreen() {
     try {
       setStatus(await ghostAccountService.deallocate(n));
       setDeallocateAmount('');
+      await loadJournal();
     } catch (e: any) {
       Alert.alert('Withdraw', e?.message || 'Withdraw failed');
     }
@@ -274,7 +349,10 @@ export function GhostAccountScreen() {
             <PrimaryButton label="Enroll in Ghost Account" onPress={onEnroll} style={{ marginTop: 16 }} />
           ) : (
             <View style={{ marginTop: 16, gap: 10 }}>
-              <PrimaryButton label="Deposit funds" onPress={() => navigation.navigate('Wallet')} />
+              <PrimaryButton
+                label="Deposit funds"
+                onPress={() => navigation.getParent()?.navigate('MainTabs', { screen: 'Wallet' })}
+              />
               {breakdown && breakdown.airfarmingUsd > 0 ? (
                 <PrimaryButton
                   label="Return airfarming to cash"
@@ -285,30 +363,12 @@ export function GhostAccountScreen() {
             </View>
           )}
         </Card>
-
-        <Card style={styles.infoCard}>
-          <Text style={styles.sectionTitle}>How Ghost Account works</Text>
-          <View style={styles.stepsList}>
-            {[
-              `Enroll when your combined balance exceeds ${fmtUsd(status.minEligibilityUsd)}.`,
-              `Allocate at least ${fmtUsd(status.minAllocationUsd)} from cash into the pool.`,
-              'Add members by email — the pool tops up their airfarming balance before drops.',
-              'Principal and net profit return to your pool after each drop.',
-            ].map((step, index) => (
-              <View key={step} style={styles.stepRow}>
-                <View style={styles.stepBadge}>
-                  <Text style={styles.stepNum}>{index + 1}</Text>
-                </View>
-                <Text style={styles.stepText}>{step}</Text>
-              </View>
-            ))}
-          </View>
-        </Card>
       </ScrollView>
     );
   }
 
   const acct = status.account!;
+  const dayGhosts = dayData?.ghosts?.length ? dayData.ghosts : monthData?.ghosts || [];
 
   return (
     <ScrollView
@@ -316,9 +376,7 @@ export function GhostAccountScreen() {
       contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
     >
-      <Text style={styles.intro}>
-        Pool funds member airfarming drops at T-24h; principal and net profit return after payout.
-      </Text>
+      <Text style={styles.intro}>Ghost profit journal (UTC). Tap a day to see pool balance and what it made.</Text>
 
       {error ? (
         <Card style={styles.infoCard}>
@@ -326,126 +384,200 @@ export function GhostAccountScreen() {
         </Card>
       ) : null}
 
-      <Card style={styles.heroCard}>
-        <View style={styles.rowBetween}>
-          <Text style={styles.label}>Pool balance</Text>
-          <View style={styles.row}>
-            <Text style={styles.small}>Auto-lend</Text>
-            <Switch
-              value={acct.status === 'active'}
-              onValueChange={(v) => void onTogglePause(!v)}
-              trackColor={{ true: palette.primary }}
-            />
-          </View>
-        </View>
-        <Text style={styles.big}>{fmtUsd(acct.poolBalance)}</Text>
-        <Text style={styles.hint}>
-          Available {fmtUsd(acct.poolAvailable)} · Committed {fmtUsd(acct.poolCommitted)}
-        </Text>
-      </Card>
-
-      <Card style={styles.infoCard}>
-        <Text style={styles.sectionTitle}>Allocate to pool</Text>
-        <TextInput
-          style={styles.input}
-          placeholder={status.minAllocationUsd.toString()}
-          placeholderTextColor={palette.textMuted}
-          keyboardType="decimal-pad"
-          value={allocateAmount}
-          onChangeText={setAllocateAmount}
-        />
-        <PrimaryButton label="Allocate from cash" onPress={onAllocate} />
-        <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Withdraw uncommitted</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Amount"
-          placeholderTextColor={palette.textMuted}
-          keyboardType="decimal-pad"
-          value={deallocateAmount}
-          onChangeText={setDeallocateAmount}
-        />
-        <PrimaryButton label="Return to cash" onPress={onDeallocate} />
-      </Card>
-
-      <Card style={styles.infoCard}>
-        <Text style={styles.sectionTitle}>Add member</Text>
-        <Text style={styles.hint}>Enter the exact registered email. No results until it matches.</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="member@example.com"
-          placeholderTextColor={palette.textMuted}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={memberEmail}
-          onChangeText={setMemberEmail}
-        />
-        <PrimaryButton label="Look up" onPress={onLookup} />
-        {lookupError ? <Text style={styles.err}>{lookupError}</Text> : null}
-        {lookupResult ? (
-          <View style={styles.lookupBox}>
-            <Text style={styles.lookupEmail}>{lookupResult.displayEmail}</Text>
-            <PrimaryButton label="Add to Ghost Account" onPress={onAddMember} style={{ marginTop: 8 }} />
-          </View>
-        ) : null}
-      </Card>
-
-      {(status.members?.length ?? 0) > 0 ? (
-        <Card style={styles.infoCard}>
-          <Text style={styles.sectionTitle}>Members</Text>
-          {status.members!.map((m) => (
-            <View key={m.memberUserId} style={styles.memberRow}>
-              <Text style={styles.memberEmail}>{m.emailMasked}</Text>
-              <PrimaryButton
-                label="Remove"
-                onPress={() => onRemoveMember(m.memberUserId, m.emailMasked)}
-                style={styles.removeBtn}
-              />
-            </View>
-          ))}
+      {monthData ? (
+        <Card style={styles.summaryCard}>
+          <Text style={styles.summaryText}>
+            Month profit {fmtUsd(monthData.monthProfitUsd)} · {monthData.profitDays} profit day
+            {monthData.profitDays === 1 ? '' : 's'}
+            {monthData.bestDay ? ` · Best ${fmtUsd(monthData.bestDay.profitUsd)}` : ''}
+          </Text>
         </Card>
       ) : null}
 
-      {(status.warnings?.length ?? 0) > 0 ? (
-        <Card style={styles.infoCard}>
-          <Text style={styles.sectionTitle}>Warnings</Text>
-          {status.warnings!.map((w) => (
-            <Text key={w.lendId} style={styles.warn}>
-              {w.message}
+      <Card style={styles.infoCard}>
+        <View style={styles.monthHeader}>
+          <Pressable onPress={() => shiftMonth(-1)} hitSlop={12}>
+            <Ionicons name="chevron-back" size={24} color={palette.primary} />
+          </Pressable>
+          <Text style={styles.monthTitle}>{monthLabel(year, month)}</Text>
+          <Pressable onPress={() => shiftMonth(1)} hitSlop={12}>
+            <Ionicons name="chevron-forward" size={24} color={palette.primary} />
+          </Pressable>
+        </View>
+
+        <View style={styles.weekRow}>
+          {WEEKDAYS.map((w) => (
+            <Text key={w} style={styles.weekLabel}>
+              {w}
             </Text>
           ))}
-        </Card>
-      ) : null}
+        </View>
 
-      {(status.upcomingLends?.length ?? 0) > 0 ? (
-        <Card style={styles.infoCard}>
-          <Text style={styles.sectionTitle}>Scheduled auto-transfers</Text>
-          {status.upcomingLends!.map((l) => (
-            <View key={l.lendId} style={styles.lendRow}>
-              <Text style={styles.lendTitle}>{l.memberEmailMasked}</Text>
+        <View style={styles.grid}>
+          {calendarCells.map((cell) => {
+            if (!cell.day || !cell.ymd) {
+              return <View key={cell.key} style={styles.cellEmpty} />;
+            }
+            const dayInfo = monthData?.days?.[cell.ymd];
+            const hasProfit = Boolean(dayInfo?.hasProfit);
+            const selected = cell.ymd === selectedDate;
+            return (
+              <Pressable
+                key={cell.key}
+                style={[styles.cell, hasProfit && styles.cellProfit, selected && styles.cellSelected]}
+                onPress={() => onSelectDay(cell.ymd!)}
+              >
+                <Text style={[styles.cellDay, hasProfit && styles.cellDayProfit]}>{cell.day}</Text>
+                {hasProfit ? <Text style={styles.cellAmt}>{fmtUsd(dayInfo!.profitUsd)}</Text> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </Card>
+
+      <Card style={styles.detailCard}>
+        <Text style={styles.detailTitle}>{selectedDate}</Text>
+        <Text style={styles.detailTotal}>{fmtUsd(dayData?.profitUsd ?? 0)}</Text>
+        <Text style={styles.hint}>Total ghost profit this day</Text>
+
+        {dayGhosts.length === 0 ? (
+          <Text style={[styles.hint, { marginTop: 12 }]}>No ghost account data for this day.</Text>
+        ) : (
+          dayGhosts.map((g) => (
+            <View key={g.id} style={styles.ghostRow}>
+              <View style={styles.rowBetween}>
+                <Text style={styles.ghostLabel}>{g.label || 'Ghost Account'}</Text>
+                <Text style={styles.small}>{g.status === 'active' ? 'Active' : g.status}</Text>
+              </View>
+              <View style={styles.ghostStats}>
+                <View style={styles.ghostStat}>
+                  <Text style={styles.ghostStatLbl}>Has (pool)</Text>
+                  <Text style={styles.ghostStatVal}>{fmtUsd(g.poolBalance)}</Text>
+                </View>
+                <View style={styles.ghostStat}>
+                  <Text style={styles.ghostStatLbl}>Made this day</Text>
+                  <Text style={[styles.ghostStatVal, styles.madeVal]}>{fmtUsd(g.profitUsd ?? 0)}</Text>
+                </View>
+              </View>
               <Text style={styles.hint}>
-                Drop {fmtDate(l.dueAt)} · lend {fmtUsd(l.lendAmount)} · est. net {fmtUsd(l.projectedProfitNet)}
-              </Text>
-              <Text style={styles.hint}>
-                Range {fmtUsd(l.minBalance ?? 0)}–{fmtUsd(l.maxBalance ?? 0)} · {l.percent ?? '—'}% · {l.lendStatus}
+                Available {fmtUsd(g.poolAvailable)} · Committed {fmtUsd(g.poolCommitted)}
               </Text>
             </View>
-          ))}
-        </Card>
-      ) : null}
+          ))
+        )}
+      </Card>
 
-      {(status.recallHistory?.length ?? 0) > 0 ? (
-        <Card style={styles.infoCard}>
-          <Text style={styles.sectionTitle}>Recent recalls</Text>
-          {status.recallHistory!.map((l) => (
-            <View key={`recall-${l.lendId}`} style={styles.lendRow}>
-              <Text style={styles.lendTitle}>{l.memberEmailMasked}</Text>
-              <Text style={styles.hint}>
-                Returned {fmtUsd(l.recalledPrincipal + l.recalledProfitNet)} (principal{' '}
-                {fmtUsd(l.recalledPrincipal)} + net {fmtUsd(l.recalledProfitNet)})
-              </Text>
+      <Pressable style={styles.manageToggle} onPress={() => setShowManage((v) => !v)}>
+        <Text style={styles.manageToggleText}>{showManage ? 'Hide manage pool' : 'Manage pool'}</Text>
+        <Ionicons name={showManage ? 'chevron-up' : 'chevron-down'} size={18} color={palette.primary} />
+      </Pressable>
+
+      {showManage ? (
+        <>
+          <Card style={styles.heroCard}>
+            <View style={styles.rowBetween}>
+              <Text style={styles.label}>Pool balance</Text>
+              <View style={styles.row}>
+                <Text style={styles.small}>Auto-lend</Text>
+                <Switch
+                  value={acct.status === 'active'}
+                  onValueChange={(v) => void onTogglePause(!v)}
+                  trackColor={{ true: palette.primary }}
+                />
+              </View>
             </View>
-          ))}
-        </Card>
+            <Text style={styles.big}>{fmtUsd(acct.poolBalance)}</Text>
+            <Text style={styles.hint}>
+              Available {fmtUsd(acct.poolAvailable)} · Committed {fmtUsd(acct.poolCommitted)}
+            </Text>
+          </Card>
+
+          <Card style={styles.infoCard}>
+            <Text style={styles.sectionTitle}>Allocate to pool</Text>
+            <TextInput
+              style={styles.input}
+              placeholder={status.minAllocationUsd.toString()}
+              placeholderTextColor={palette.textMuted}
+              keyboardType="decimal-pad"
+              value={allocateAmount}
+              onChangeText={setAllocateAmount}
+            />
+            <PrimaryButton label="Allocate from cash" onPress={onAllocate} />
+            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Withdraw uncommitted</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Amount"
+              placeholderTextColor={palette.textMuted}
+              keyboardType="decimal-pad"
+              value={deallocateAmount}
+              onChangeText={setDeallocateAmount}
+            />
+            <PrimaryButton label="Return to cash" onPress={onDeallocate} />
+          </Card>
+
+          <Card style={styles.infoCard}>
+            <Text style={styles.sectionTitle}>Add member</Text>
+            <Text style={styles.hint}>Enter the exact registered email. No results until it matches.</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="member@example.com"
+              placeholderTextColor={palette.textMuted}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={memberEmail}
+              onChangeText={setMemberEmail}
+            />
+            <PrimaryButton label="Look up" onPress={onLookup} />
+            {lookupError ? <Text style={styles.err}>{lookupError}</Text> : null}
+            {lookupResult ? (
+              <View style={styles.lookupBox}>
+                <Text style={styles.lookupEmail}>{lookupResult.displayEmail}</Text>
+                <PrimaryButton label="Add to Ghost Account" onPress={onAddMember} style={{ marginTop: 8 }} />
+              </View>
+            ) : null}
+          </Card>
+
+          {(status.members?.length ?? 0) > 0 ? (
+            <Card style={styles.infoCard}>
+              <Text style={styles.sectionTitle}>Members</Text>
+              {status.members!.map((m) => (
+                <View key={m.memberUserId} style={styles.memberRow}>
+                  <Text style={styles.memberEmail}>{m.emailMasked}</Text>
+                  <PrimaryButton
+                    label="Remove"
+                    onPress={() => onRemoveMember(m.memberUserId, m.emailMasked)}
+                    style={styles.removeBtn}
+                  />
+                </View>
+              ))}
+            </Card>
+          ) : null}
+
+          {(status.warnings?.length ?? 0) > 0 ? (
+            <Card style={styles.infoCard}>
+              <Text style={styles.sectionTitle}>Warnings</Text>
+              {status.warnings!.map((w) => (
+                <Text key={w.lendId} style={styles.warn}>
+                  {w.message}
+                </Text>
+              ))}
+            </Card>
+          ) : null}
+
+          {(status.upcomingLends?.length ?? 0) > 0 ? (
+            <Card style={styles.infoCard}>
+              <Text style={styles.sectionTitle}>Scheduled auto-transfers</Text>
+              {status.upcomingLends!.map((l) => (
+                <View key={l.lendId} style={styles.lendRow}>
+                  <Text style={styles.lendTitle}>{l.memberEmailMasked}</Text>
+                  <Text style={styles.hint}>
+                    Drop {fmtDate(l.dueAt)} · lend {fmtUsd(l.lendAmount)} · est. net {fmtUsd(l.projectedProfitNet)}
+                  </Text>
+                </View>
+              ))}
+            </Card>
+          ) : null}
+        </>
       ) : null}
     </ScrollView>
   );
@@ -468,7 +600,10 @@ const styles = StyleSheet.create({
     backgroundColor: palette.surfaceElevated,
     borderColor: palette.border,
     borderWidth: 1,
+    marginBottom: 12,
   },
+  summaryCard: { marginBottom: 12 },
+  summaryText: { color: palette.textSecondary, fontSize: 13 },
   label: { color: palette.textSecondary, fontSize: 13, fontWeight: '600' },
   big: { color: palette.textPrimary, fontSize: 32, fontWeight: '800', marginTop: 6 },
   statusLine: { color: palette.textPrimary, fontSize: 14, lineHeight: 20, marginTop: 10 },
@@ -545,22 +680,67 @@ const styles = StyleSheet.create({
   },
   breakdownLabel: { color: palette.textSecondary, fontSize: 14 },
   breakdownVal: { color: palette.textPrimary, fontWeight: '700', fontSize: 14 },
-  stepsList: { gap: 12 },
-  stepRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  stepBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: palette.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
-  },
-  stepNum: { color: palette.primaryContrast, fontSize: 13, fontWeight: '800' },
-  stepText: { flex: 1, color: palette.textSecondary, fontSize: 14, lineHeight: 21 },
   secondaryBtn: {
     backgroundColor: palette.background,
     borderWidth: 1,
     borderColor: palette.border,
   },
+  monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  monthTitle: { color: palette.textPrimary, fontSize: 17, fontWeight: '700' },
+  weekRow: { flexDirection: 'row', marginBottom: 6 },
+  weekLabel: { flex: 1, textAlign: 'center', color: palette.textSecondary, fontSize: 11, fontWeight: '600' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  cellEmpty: { width: `${100 / 7}%`, aspectRatio: 1, padding: 2 },
+  cell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    padding: 4,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  cellProfit: { backgroundColor: 'rgba(34, 197, 94, 0.18)', borderColor: 'rgba(34, 197, 94, 0.45)' },
+  cellSelected: { borderColor: palette.primary, borderWidth: 2 },
+  cellDay: { color: palette.textPrimary, fontWeight: '700', fontSize: 14 },
+  cellDayProfit: { color: palette.success },
+  cellAmt: { color: palette.success, fontSize: 8, marginTop: 2 },
+  detailCard: {
+    marginTop: 4,
+    marginBottom: 12,
+    backgroundColor: palette.surfaceElevated,
+    borderColor: palette.border,
+    borderWidth: 1,
+  },
+  detailTitle: { color: palette.textSecondary, fontWeight: '700', marginBottom: 6 },
+  detailTotal: { color: palette.primary, fontSize: 28, fontWeight: '800', marginBottom: 4 },
+  ghostRow: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+  },
+  ghostLabel: { color: palette.textPrimary, fontWeight: '700', fontSize: 16 },
+  ghostStats: { flexDirection: 'row', gap: 12, marginTop: 10, marginBottom: 8 },
+  ghostStat: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: palette.background,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  ghostStatLbl: { color: palette.textSecondary, fontSize: 12, fontWeight: '600', marginBottom: 4 },
+  ghostStatVal: { color: palette.textPrimary, fontSize: 18, fontWeight: '800' },
+  madeVal: { color: palette.success },
+  manageToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  manageToggleText: { color: palette.primary, fontWeight: '700', fontSize: 15 },
 });
