@@ -91,3 +91,7 @@ export function navigateToGhostAccount(navigation: NavLike) {
 export function navigateToVipFarmersTrade(navigation: NavLike) {
   getRootNavigation(navigation).navigate('VipFarmersTrade');
 }
+
+export function navigateToVipLoan(navigation: NavLike) {
+  getRootNavigation(navigation).navigate('VipLoan');
+}

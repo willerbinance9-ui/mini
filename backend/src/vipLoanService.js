@@ -20,11 +20,17 @@ const {
   createAppNotification,
   isSchemaError,
   isMissingTableError,
+  isAddressWhitelistedForUser,
   utcTodayYmd,
+  VIP_DAILY_RATE,
+  VIP_ACCRUAL_MAX_WORKING_DAYS,
   VIP_LOAN_COMMISSION_RATE,
+  VIP_LOAN_NEW_HAIRCUT_RATE,
+  VIP_LOAN_NEW_COMMISSION_RATE,
   VIP_LOAN_MIN_ACCRUAL_DAYS,
   VIP_LOAN_EARNINGS_WINDOW_DAYS,
-  VIP_LOAN_APPROVAL_MAX_DAYS,
+  VIP_LOAN_APPROVAL_MAX_BUSINESS_DAYS,
+  VIP_LOAN_MIN_PRINCIPAL_USD,
   VIP_LOAN_MIN_USD,
   VIP_LOAN_RECIPIENT_EXEMPT_DEPOSIT_USD,
   VIP_LOAN_RECIPIENT_DEPOSIT_WINDOW_DAYS,
@@ -64,28 +70,89 @@ async function getLastMonthVipEarnings(userId) {
   return roundUsd(total);
 }
 
+function projectedMonthVipEarnings(principalUsd) {
+  return roundUsd(Number(principalUsd || 0) * VIP_DAILY_RATE * VIP_ACCRUAL_MAX_WORKING_DAYS);
+}
+
 /**
- * Loan eligibility + limits for a VIP farmer.
- * Eligible when they hold an active VIP investment and have completed at least
- * one full VIP working month (22 accrual days).
+ * Compute loan offer from VIP principal + month accrual.
+ * - Standard (completed ≥1 VIP working month): loan = month accrual, commission 30%
+ * - New (under one month): loan = month accrual × 50%, then commission 10%
+ */
+function buildVipLoanOffer({ principalUsd, monthCompleted, lastMonthEarningsUsd }) {
+  const projectedMonthUsd = projectedMonthVipEarnings(principalUsd);
+  const monthEarningsBaseUsd = monthCompleted
+    ? roundUsd(Math.max(lastMonthEarningsUsd || 0, projectedMonthUsd || 0))
+    : projectedMonthUsd;
+
+  if (monthCompleted) {
+    const amountUsd = monthEarningsBaseUsd;
+    const commissionRate = VIP_LOAN_COMMISSION_RATE;
+    const commissionUsd = roundUsd(amountUsd * commissionRate);
+    const disbursedUsd = roundUsd(amountUsd - commissionUsd);
+    return {
+      borrowerTier: 'standard',
+      monthCompleted: true,
+      monthEarningsBaseUsd,
+      projectedMonthUsd,
+      lastMonthEarningsUsd: roundUsd(lastMonthEarningsUsd || 0),
+      haircutRate: 0,
+      amountUsd,
+      maxLoanUsd: amountUsd,
+      commissionRate,
+      commissionUsd,
+      disbursedUsd,
+    };
+  }
+
+  const haircutRate = VIP_LOAN_NEW_HAIRCUT_RATE;
+  const amountUsd = roundUsd(monthEarningsBaseUsd * haircutRate);
+  const commissionRate = VIP_LOAN_NEW_COMMISSION_RATE;
+  const commissionUsd = roundUsd(amountUsd * commissionRate);
+  const disbursedUsd = roundUsd(amountUsd - commissionUsd);
+  return {
+    borrowerTier: 'new',
+    monthCompleted: false,
+    monthEarningsBaseUsd,
+    projectedMonthUsd,
+    lastMonthEarningsUsd: roundUsd(lastMonthEarningsUsd || 0),
+    haircutRate,
+    amountUsd,
+    maxLoanUsd: amountUsd,
+    commissionRate,
+    commissionUsd,
+    disbursedUsd,
+  };
+}
+
+/**
+ * Loan eligibility + offer for a VIP farmer.
+ * Eligible when active VIP principal is above $2,500.
  */
 async function getVipLoanStatus(userId) {
   const inv = await getActiveVipInvestmentForUser(userId);
   const accrualDays = await countVipAccrualDaysForUser(userId);
   const lastMonthEarningsUsd = await getLastMonthVipEarnings(userId);
   const monthCompleted = accrualDays >= VIP_LOAN_MIN_ACCRUAL_DAYS;
-  const eligible = Boolean(inv) && monthCompleted && lastMonthEarningsUsd >= VIP_LOAN_MIN_USD;
+  const principalUsd = roundUsd(inv?.principal_usd || 0);
+  const eligible = Boolean(inv) && principalUsd > VIP_LOAN_MIN_PRINCIPAL_USD;
   const openLoanRow = await getOpenVipLoanForUser(userId);
   const loans = await listVipLoansForUser(userId, 10);
 
   let ineligibleReason = null;
   if (!inv) {
     ineligibleReason = 'You need an active VIP Farmers investment to request a loan.';
-  } else if (!monthCompleted) {
-    ineligibleReason = `Loans unlock after a full VIP month (${VIP_LOAN_MIN_ACCRUAL_DAYS} working days). You have ${accrualDays}.`;
-  } else if (lastMonthEarningsUsd < VIP_LOAN_MIN_USD) {
-    ineligibleReason = 'You have no VIP earnings in the last month to borrow against.';
+  } else if (principalUsd <= VIP_LOAN_MIN_PRINCIPAL_USD) {
+    ineligibleReason = `VIP loans require more than $${VIP_LOAN_MIN_PRINCIPAL_USD.toLocaleString()} in VIP farming principal. You have $${principalUsd.toFixed(2)}.`;
   }
+
+  const offer = inv
+    ? buildVipLoanOffer({
+        principalUsd,
+        monthCompleted,
+        lastMonthEarningsUsd,
+      })
+    : null;
 
   return {
     eligible,
@@ -93,31 +160,66 @@ async function getVipLoanStatus(userId) {
     monthCompleted,
     accrualDays,
     minAccrualDays: VIP_LOAN_MIN_ACCRUAL_DAYS,
+    minPrincipalUsd: VIP_LOAN_MIN_PRINCIPAL_USD,
+    principalUsd,
     lastMonthEarningsUsd,
-    maxLoanUsd: lastMonthEarningsUsd,
-    commissionRate: VIP_LOAN_COMMISSION_RATE,
+    projectedMonthUsd: offer?.projectedMonthUsd || 0,
+    monthEarningsBaseUsd: offer?.monthEarningsBaseUsd || 0,
+    borrowerTier: offer?.borrowerTier || null,
+    haircutRate: offer?.haircutRate || 0,
+    maxLoanUsd: offer?.maxLoanUsd || 0,
+    amountUsd: offer?.amountUsd || 0,
+    commissionRate: offer?.commissionRate || VIP_LOAN_COMMISSION_RATE,
+    commissionUsd: offer?.commissionUsd || 0,
+    disbursedUsd: offer?.disbursedUsd || 0,
     minLoanUsd: VIP_LOAN_MIN_USD,
-    approvalMaxDays: VIP_LOAN_APPROVAL_MAX_DAYS,
+    approvalMaxBusinessDays: VIP_LOAN_APPROVAL_MAX_BUSINESS_DAYS,
+    approvalMaxDays: VIP_LOAN_APPROVAL_MAX_BUSINESS_DAYS,
     openLoan: vipLoanToApi(openLoanRow),
     loans: loans.map((l) => vipLoanToApi(l)),
     usageNote:
-      'Loans are for use on the platform (farming, trading, or VIP). Withdrawals stay locked until the loan is fully repaid.',
+      'After you accept, funds arrive within 3 business days to the wallet you choose. Withdrawals stay locked until the loan is fully repaid.',
   };
 }
 
-async function requestVipLoan(userId, amount) {
-  const amt = roundUsd(amount);
-  if (!Number.isFinite(amt) || amt < VIP_LOAN_MIN_USD) {
-    throw badRequest(`Minimum loan is $${VIP_LOAN_MIN_USD}`);
+async function requestVipLoan(userId, payload = {}) {
+  const destination = String(payload.destination || payload.payoutDestination || 'platform')
+    .trim()
+    .toLowerCase();
+  if (destination !== 'platform' && destination !== 'direct_wallet') {
+    throw badRequest('Choose platform wallet or an external payout wallet.');
+  }
+
+  let walletAddress = String(payload.walletAddress || payload.payoutWalletAddress || '')
+    .trim();
+  if (destination === 'direct_wallet') {
+    if (!walletAddress) throw badRequest('Enter or select the wallet that should receive the loan.');
+    const ok = await isAddressWhitelistedForUser(userId, 'usdttrc20', walletAddress).catch(() => false);
+    // Also allow usdt if currency stored differently
+    const okAlt = ok || (await isAddressWhitelistedForUser(userId, 'USDTTRC20', walletAddress).catch(() => false));
+    if (!ok && !okAlt) {
+      // Check any currency match on exact address via list
+      const { listWhitelistedWalletsByUserId } = require('./db');
+      const wallets = await listWhitelistedWalletsByUserId(userId);
+      const match = wallets.find(
+        (w) => String(w.address || '').trim().toLowerCase() === walletAddress.toLowerCase()
+      );
+      if (!match) {
+        throw badRequest('Payout wallet must be one of your whitelisted withdrawal addresses.');
+      }
+      walletAddress = String(match.address).trim();
+    }
+  } else {
+    walletAddress = null;
   }
 
   const inv = await getActiveVipInvestmentForUser(userId);
   if (!inv) throw badRequest('You need an active VIP Farmers investment to request a loan.');
 
-  const accrualDays = await countVipAccrualDaysForUser(userId);
-  if (accrualDays < VIP_LOAN_MIN_ACCRUAL_DAYS) {
+  const principalUsd = roundUsd(inv.principal_usd);
+  if (principalUsd <= VIP_LOAN_MIN_PRINCIPAL_USD) {
     throw badRequest(
-      `Loans unlock after a full VIP month (${VIP_LOAN_MIN_ACCRUAL_DAYS} working days). You have ${accrualDays}.`
+      `VIP loans require more than $${VIP_LOAN_MIN_PRINCIPAL_USD.toLocaleString()} in VIP farming principal.`
     );
   }
 
@@ -125,40 +227,55 @@ async function requestVipLoan(userId, amount) {
   if (open) {
     throw badRequest(
       open.status === 'pending'
-        ? 'You already have a loan request awaiting approval.'
+        ? 'You already have a loan request awaiting disbursement.'
         : 'Repay your current loan in full before requesting a new one.'
     );
   }
 
+  const accrualDays = await countVipAccrualDaysForUser(userId);
+  const monthCompleted = accrualDays >= VIP_LOAN_MIN_ACCRUAL_DAYS;
   const lastMonthEarningsUsd = await getLastMonthVipEarnings(userId);
-  if (amt > lastMonthEarningsUsd) {
-    throw badRequest(
-      `Maximum loan is your last month's VIP earnings ($${lastMonthEarningsUsd.toFixed(2)}).`
-    );
+  const offer = buildVipLoanOffer({
+    principalUsd,
+    monthCompleted,
+    lastMonthEarningsUsd,
+  });
+
+  if (offer.amountUsd < VIP_LOAN_MIN_USD || offer.disbursedUsd <= 0) {
+    throw badRequest('Your calculated loan offer is too small to request right now.');
   }
 
-  const commission = roundUsd(amt * VIP_LOAN_COMMISSION_RATE);
-  const disbursed = roundUsd(amt - commission);
-
+  // Amount is fixed to the calculated offer (accept offer flow).
+  const amt = offer.amountUsd;
   const row = await insertVipLoan({
     id: newId(),
     user_id: userId,
     investment_id: inv.id,
     amount_usd: amt,
-    commission_rate: VIP_LOAN_COMMISSION_RATE,
-    commission_usd: commission,
-    disbursed_usd: disbursed,
-    last_month_earnings_usd: lastMonthEarningsUsd,
-    max_loan_usd: lastMonthEarningsUsd,
+    commission_rate: offer.commissionRate,
+    commission_usd: offer.commissionUsd,
+    disbursed_usd: offer.disbursedUsd,
+    last_month_earnings_usd: offer.lastMonthEarningsUsd,
+    month_earnings_base_usd: offer.monthEarningsBaseUsd,
+    max_loan_usd: offer.maxLoanUsd,
     outstanding_usd: amt,
     repaid_usd: 0,
     status: 'pending',
+    payout_destination: destination,
+    payout_wallet_address: walletAddress,
+    borrower_tier: offer.borrowerTier,
+    haircut_rate: offer.haircutRate,
     requested_at: new Date().toISOString(),
   });
 
+  const destLabel =
+    destination === 'platform'
+      ? 'your platform cash wallet'
+      : `wallet ${walletAddress.slice(0, 8)}…${walletAddress.slice(-6)}`;
+
   return {
     loan: vipLoanToApi(row),
-    message: `Loan request submitted. Approval can take up to ${VIP_LOAN_APPROVAL_MAX_DAYS} days. You will receive $${disbursed.toFixed(2)} after the 30% commission.`,
+    message: `Loan accepted. You will receive $${offer.disbursedUsd.toFixed(2)} in ${destLabel} within ${VIP_LOAN_APPROVAL_MAX_BUSINESS_DAYS} business days.`,
   };
 }
 
@@ -219,17 +336,21 @@ async function approveVipLoan(loanId) {
   if (loan.status !== 'pending') throw badRequest('Loan is not pending');
 
   const disbursed = roundUsd(loan.disbursed_usd);
-  const wallet = await ensureWalletForUser(loan.user_id);
-  const cash = roundUsd(wallet?.balance);
-  await setWalletBalance(loan.user_id, roundUsd(cash + disbursed));
-  await createTransaction({
-    userId: loan.user_id,
-    type: 'deposit',
-    amount: disbursed,
-    status: 'completed',
-  });
-
+  const destination = loan.payout_destination || 'platform';
   const now = new Date().toISOString();
+
+  if (destination === 'platform') {
+    const wallet = await ensureWalletForUser(loan.user_id);
+    const cash = roundUsd(wallet?.balance);
+    await setWalletBalance(loan.user_id, roundUsd(cash + disbursed));
+    await createTransaction({
+      userId: loan.user_id,
+      type: 'deposit',
+      amount: disbursed,
+      status: 'completed',
+    });
+  }
+
   const updated = await updateVipLoan(loanId, {
     status: 'active',
     reviewedAt: now,
@@ -244,18 +365,27 @@ async function approveVipLoan(loanId) {
       sourceId: loan.id,
       grossAmount: roundUsd(loan.amount_usd),
       feeRate: Number(loan.commission_rate) || VIP_LOAN_COMMISSION_RATE,
-      meta: { disbursedUsd: disbursed },
+      meta: {
+        disbursedUsd: disbursed,
+        payoutDestination: destination,
+        borrowerTier: loan.borrower_tier || 'standard',
+      },
       eventAt: now,
     }).catch((e) => console.error('[platform-revenue/vip-loan]', e));
   }
 
+  const payoutMsg =
+    destination === 'platform'
+      ? `$${disbursed.toFixed(2)} was credited to your cash wallet.`
+      : `$${disbursed.toFixed(2)} was sent to your selected wallet (${loan.payout_wallet_address || 'external'}).`;
+
   await notifyVipLoanOutcome(
     loan.user_id,
-    'VIP loan approved',
-    `Your VIP loan of $${roundUsd(loan.amount_usd).toFixed(2)} was approved. $${disbursed.toFixed(2)} (after 30% commission) was credited to your cash wallet for use on the platform. Withdrawals stay locked until you repay $${roundUsd(loan.amount_usd).toFixed(2)} in full.`
+    'VIP loan disbursed',
+    `Your VIP loan of $${roundUsd(loan.amount_usd).toFixed(2)} was approved. ${payoutMsg} Withdrawals stay locked until you repay $${roundUsd(loan.amount_usd).toFixed(2)} in full.`
   );
 
-  return { loan: vipLoanToApi(updated), disbursedUsd: disbursed };
+  return { loan: vipLoanToApi(updated), disbursedUsd: disbursed, payoutDestination: destination };
 }
 
 async function rejectVipLoan(loanId, note) {
@@ -287,13 +417,6 @@ async function listAdminVipLoans({ status = 'pending', limit = 200 } = {}) {
   return { loans: rows.map((r) => vipLoanToApi(r, emailById.get(r.user_id))) };
 }
 
-/**
- * Withdrawal restrictions from VIP loans:
- * - A borrower with a pending or outstanding loan cannot withdraw at all.
- * - A user who received loan funds via peer transfer cannot withdraw that
- *   portion while the loan is outstanding, unless they deposited >= $5,000 in
- *   the 3 days before the loan was disbursed.
- */
 async function getVipLoanWithdrawalRestriction(userId) {
   try {
     const open = await getOpenVipLoanForUser(userId);
@@ -324,11 +447,6 @@ async function getVipLoanWithdrawalRestriction(userId) {
   }
 }
 
-/**
- * Record a peer transfer made while the sender has an outstanding VIP loan so
- * the moved funds stay withdrawal-restricted for the recipient. Call after a
- * successful (non-idempotent) transfer.
- */
 async function recordVipLoanFundTransfer({ fromUserId, toUserId, amountUsd, transferId }) {
   try {
     const loan = await getOpenVipLoanForUser(fromUserId);
@@ -369,4 +487,5 @@ module.exports = {
   listAdminVipLoans,
   getVipLoanWithdrawalRestriction,
   recordVipLoanFundTransfer,
+  buildVipLoanOffer,
 };

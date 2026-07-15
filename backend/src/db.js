@@ -4472,9 +4472,13 @@ const VIP_INVESTMENT_EXTRA_CREDIT_MIN_PRINCIPAL_USD = 4900;
 const VIP_INVESTMENT_EXTRA_CREDIT_MIN_WORKING_DAYS = 22;
 const VIP_EXIT_REVENUE_PERCENTS = [50, 60, 70, 80, 90, 100];
 const VIP_LOAN_COMMISSION_RATE = 0.3;
+const VIP_LOAN_NEW_HAIRCUT_RATE = 0.5;
+const VIP_LOAN_NEW_COMMISSION_RATE = 0.1;
 const VIP_LOAN_MIN_ACCRUAL_DAYS = 22; // one completed VIP working month
 const VIP_LOAN_EARNINGS_WINDOW_DAYS = 30;
-const VIP_LOAN_APPROVAL_MAX_DAYS = 2;
+const VIP_LOAN_APPROVAL_MAX_BUSINESS_DAYS = 3;
+const VIP_LOAN_APPROVAL_MAX_DAYS = VIP_LOAN_APPROVAL_MAX_BUSINESS_DAYS;
+const VIP_LOAN_MIN_PRINCIPAL_USD = 2500;
 const VIP_LOAN_MIN_USD = 10;
 const VIP_LOAN_RECIPIENT_EXEMPT_DEPOSIT_USD = 5000;
 const VIP_LOAN_RECIPIENT_DEPOSIT_WINDOW_DAYS = 3;
@@ -4825,11 +4829,16 @@ function vipLoanToApi(row, email) {
     commissionUsd: Number(row.commission_usd),
     disbursedUsd: Number(row.disbursed_usd),
     lastMonthEarningsUsd: Number(row.last_month_earnings_usd || 0),
+    monthEarningsBaseUsd: Number(row.month_earnings_base_usd || row.last_month_earnings_usd || 0),
     maxLoanUsd: Number(row.max_loan_usd || 0),
     outstandingUsd: Number(row.outstanding_usd || 0),
     repaidUsd: Number(row.repaid_usd || 0),
     status: row.status,
     adminNote: row.admin_note || null,
+    payoutDestination: row.payout_destination || 'platform',
+    payoutWalletAddress: row.payout_wallet_address || null,
+    borrowerTier: row.borrower_tier || 'standard',
+    haircutRate: Number(row.haircut_rate || 0),
     requestedAt: row.requested_at,
     reviewedAt: row.reviewed_at || null,
     disbursedAt: row.disbursed_at || null,
@@ -5936,9 +5945,13 @@ module.exports = {
   getPendingVipExitRequestForUser,
   listVipExitRequestsAdmin,
   VIP_LOAN_COMMISSION_RATE,
+  VIP_LOAN_NEW_HAIRCUT_RATE,
+  VIP_LOAN_NEW_COMMISSION_RATE,
   VIP_LOAN_MIN_ACCRUAL_DAYS,
   VIP_LOAN_EARNINGS_WINDOW_DAYS,
   VIP_LOAN_APPROVAL_MAX_DAYS,
+  VIP_LOAN_APPROVAL_MAX_BUSINESS_DAYS,
+  VIP_LOAN_MIN_PRINCIPAL_USD,
   VIP_LOAN_MIN_USD,
   VIP_LOAN_RECIPIENT_EXEMPT_DEPOSIT_USD,
   VIP_LOAN_RECIPIENT_DEPOSIT_WINDOW_DAYS,

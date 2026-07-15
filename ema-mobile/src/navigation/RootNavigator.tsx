@@ -5,6 +5,7 @@ import { P2PStackNavigator } from './P2PStackNavigator';
 import { AirfarmingTradeScreen } from '../screens/AirfarmingTradeScreen';
 import { GhostAccountScreen } from '../screens/GhostAccountScreen';
 import { VipFarmersTradeScreen } from '../screens/VipFarmersTradeScreen';
+import { VipLoanScreen } from '../screens/VipLoanScreen';
 import { ExpertAutoTradingScreen } from '../screens/ExpertAutoTradingScreen';
 import { LiveTradingScreen } from '../screens/LiveTradingScreen';
 import { LiveTradingCreateBotScreen } from '../screens/LiveTradingCreateBotScreen';
@@ -52,6 +53,7 @@ export function RootNavigator() {
       <Stack.Screen name='AirfarmingTrade' component={AirfarmingTradeScreen} options={{ title: 'Airfarmers' }} />
       <Stack.Screen name='GhostAccount' component={GhostAccountScreen} options={{ title: 'Ghost Account' }} />
       <Stack.Screen name='VipFarmersTrade' component={VipFarmersTradeScreen} options={{ title: 'Live VIP Farmers' }} />
+      <Stack.Screen name='VipLoan' component={VipLoanScreen} options={{ title: 'VIP Loan' }} />
       <Stack.Screen name='ExpertAutoTrading' component={ExpertAutoTradingScreen} options={{ title: 'Expert Account Manager' }} />
       <Stack.Screen name='LiveTrading' component={LiveTradingScreen} options={{ title: 'My accounts' }} />
       <Stack.Screen name='Trades' component={TradesScreen} options={{ title: 'Trades' }} />

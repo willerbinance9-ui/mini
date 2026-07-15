@@ -1462,7 +1462,8 @@
           <div id="vipLoanRequestsCard" class="card superadmin-only" style="margin-top:16px;">
             <h3 style="margin:0 0 8px;font-size:1rem;">VIP loan management</h3>
             <p class="hint" style="margin-bottom:12px;">
-              Superadmin only. Approve pending loans to credit cash (after 30% commission). Active loans lock member withdrawals until repaid.
+              Superadmin only. Approve pending loans to disburse within 3 business days (cash or external wallet).
+              Active loans lock member withdrawals until repaid.
             </p>
             <div class="row" style="align-items:flex-end;margin-bottom:12px;">
               <div>
@@ -1487,11 +1488,12 @@
                   <tr>
                     <th>Member</th>
                     <th>Status</th>
+                    <th>Tier</th>
                     <th>Requested</th>
                     <th>Outstanding</th>
                     <th>Commission</th>
                     <th>Disburse</th>
-                    <th>Last month earnings</th>
+                    <th>Payout wallet</th>
                     <th>Submitted</th>
                     <th></th>
                   </tr>
@@ -5748,7 +5750,7 @@
       tbody.innerHTML = '';
       if (!pendingVipLoans.length) {
         tbody.innerHTML =
-          '<tr><td colspan="9" style="color:var(--muted);">No VIP loans for this filter</td></tr>';
+          '<tr><td colspan="10" style="color:var(--muted);">No VIP loans for this filter</td></tr>';
       }
       pendingVipLoans.forEach((loan) => {
         const tr = document.createElement('tr');
@@ -5779,14 +5781,20 @@
           actionCell =
             '<span style="font-size:0.72rem;color:var(--muted);">' + escapeHtml(loan.adminNote) + '</span>';
         }
+        const payout =
+          loan.payoutDestination === 'direct_wallet'
+            ? escapeHtml(loan.payoutWalletAddress || 'external')
+            : 'Platform cash';
+        const tier = loan.borrowerTier === 'new' ? 'new (−50% then 10%)' : 'standard (−30%)';
         tr.innerHTML =
           '<td>' + escapeHtml(loan.userEmail || '—') + '</td>' +
           '<td>' + statusPill + '</td>' +
+          '<td>' + escapeHtml(tier) + '</td>' +
           '<td><strong>' + fmtMoney(loan.amountUsd || 0) + '</strong></td>' +
           '<td>' + (status === 'active' || status === 'repaid' ? fmtMoney(loan.outstandingUsd || 0) : '—') + '</td>' +
           '<td>' + fmtMoney(loan.commissionUsd || 0) + ' (' + Math.round((loan.commissionRate || 0.3) * 100) + '%)</td>' +
           '<td>' + fmtMoney(loan.disbursedUsd || 0) + '</td>' +
-          '<td>' + fmtMoney(loan.lastMonthEarningsUsd || 0) + '</td>' +
+          '<td style="font-size:0.72rem;max-width:180px;word-break:break-all;">' + payout + '</td>' +
           '<td>' + new Date(loan.requestedAt || loan.createdAt).toLocaleString() + '</td>' +
           '<td style="white-space:nowrap;">' + actionCell + '</td>';
         tbody.appendChild(tr);

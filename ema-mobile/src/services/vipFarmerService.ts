@@ -93,11 +93,16 @@ export type VipLoan = {
   commissionUsd: number;
   disbursedUsd: number;
   lastMonthEarningsUsd: number;
+  monthEarningsBaseUsd?: number;
   maxLoanUsd: number;
   outstandingUsd: number;
   repaidUsd: number;
   status: 'pending' | 'active' | 'repaid' | 'rejected';
   adminNote: string | null;
+  payoutDestination?: 'platform' | 'direct_wallet';
+  payoutWalletAddress?: string | null;
+  borrowerTier?: 'standard' | 'new';
+  haircutRate?: number;
   requestedAt: string;
   reviewedAt: string | null;
   disbursedAt: string | null;
@@ -111,11 +116,21 @@ export type VipLoanStatus = {
   monthCompleted: boolean;
   accrualDays: number;
   minAccrualDays: number;
+  minPrincipalUsd?: number;
+  principalUsd?: number;
   lastMonthEarningsUsd: number;
+  projectedMonthUsd?: number;
+  monthEarningsBaseUsd?: number;
+  borrowerTier?: 'standard' | 'new' | null;
+  haircutRate?: number;
   maxLoanUsd: number;
+  amountUsd?: number;
   commissionRate: number;
+  commissionUsd?: number;
+  disbursedUsd?: number;
   minLoanUsd: number;
   approvalMaxDays: number;
+  approvalMaxBusinessDays?: number;
   openLoan: VipLoan | null;
   loans: VipLoan[];
   usageNote: string;
@@ -165,8 +180,11 @@ export const vipFarmerService = {
       message: string;
     }>('/vip-farmers/reinvest', amount != null ? { amount } : {}),
   getLoanStatus: () => api.get<VipLoanStatus>('/vip-farmers/loans/status'),
-  requestLoan: (amount: number) =>
-    api.post<{ loan: VipLoan; message: string }>('/vip-farmers/loans/request', { amount }),
+  requestLoan: (payload: {
+    amount?: number;
+    destination: 'platform' | 'direct_wallet';
+    walletAddress?: string;
+  }) => api.post<{ loan: VipLoan; message: string }>('/vip-farmers/loans/request', payload),
   repayLoan: (amount: number) =>
     api.post<{ loan: VipLoan; cashWalletUsd: number; fullyRepaid: boolean; message: string }>(
       '/vip-farmers/loans/repay',

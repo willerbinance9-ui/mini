@@ -1,28 +1,30 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Card } from '../components/Card';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { VipExitWizard } from '../components/VipExitWizard';
 import {
   vipFarmerService,
-  reinvestNetUsd,
-  reinvestCommissionUsd,
   type VipLoanStatus,
   type VipSummary,
+  reinvestNetUsd,
+  reinvestCommissionUsd,
 } from '../services/vipFarmerService';
 import { palette } from '../theme/colors';
+import type { RootStackParamList } from '../types';
 
 function fmtUsd(n: number) {
   return '$' + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function VipFarmersTradeScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [summary, setSummary] = useState<VipSummary | null>(null);
   const [loanStatus, setLoanStatus] = useState<VipLoanStatus | null>(null);
   const [amount, setAmount] = useState('');
   const [addAmount, setAddAmount] = useState('');
-  const [loanAmount, setLoanAmount] = useState('');
-  const [repayAmount, setRepayAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [exitWizardOpen, setExitWizardOpen] = useState(false);
@@ -124,47 +126,6 @@ export function VipFarmersTradeScreen() {
     );
   };
 
-  const onRequestLoan = async () => {
-    const n = Number(loanAmount);
-    if (!n || n <= 0) return Alert.alert('Loan', 'Enter a valid amount');
-    const max = loanStatus?.maxLoanUsd ?? 0;
-    const disbursed = n * (1 - (loanStatus?.commissionRate ?? 0.3));
-    Alert.alert(
-      'Request VIP loan',
-      `Request ${fmtUsd(n)} loan? After 30% commission you receive ${fmtUsd(disbursed)} for platform use (farming, trading, VIP). Approval can take up to ${loanStatus?.approvalMaxDays ?? 2} days. Withdrawals stay locked until repaid.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Submit request',
-          onPress: async () => {
-            try {
-              const r = await vipFarmerService.requestLoan(Math.min(n, max));
-              setLoanAmount('');
-              await load();
-              Alert.alert('Loan requested', r.message);
-            } catch (e: any) {
-              Alert.alert('Loan', e?.message || 'Request failed');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const onRepayLoan = async () => {
-    const outstanding = loanStatus?.openLoan?.outstandingUsd ?? 0;
-    const n = repayAmount.trim() ? Number(repayAmount) : outstanding;
-    if (!n || n <= 0) return Alert.alert('Repay', 'Enter a valid amount');
-    try {
-      const r = await vipFarmerService.repayLoan(n);
-      setRepayAmount('');
-      await load();
-      Alert.alert('Loan repayment', r.message);
-    } catch (e: any) {
-      Alert.alert('Repay', e?.message || 'Repayment failed');
-    }
-  };
-
   const openExitWizard = () => {
     if (summary?.pendingExitRequest) {
       Alert.alert(
@@ -207,67 +168,29 @@ export function VipFarmersTradeScreen() {
               <Text style={styles.big}>{fmtUsd(summary.cashWalletUsd)}</Text>
             </Card>
 
+            <Card>
+              <Text style={styles.label}>VIP Loan</Text>
+              {openLoan ? (
+                <Text style={styles.meta}>
+                  {openLoan.status === 'pending' ? 'Loan awaiting disbursement' : 'Active loan'} ·{' '}
+                  {fmtUsd(openLoan.amountUsd)}
+                </Text>
+              ) : (
+                <Text style={styles.meta}>
+                  Borrow against monthly VIP accrual if you have more than $2,500 in VIP.
+                </Text>
+              )}
+              <PrimaryButton
+                label="Open VIP Loan"
+                onPress={() => navigation.navigate('VipLoan')}
+                style={{ marginTop: 10 }}
+              />
+            </Card>
+
             {summary.pendingExitRequest ? (
               <Card>
                 <Text style={styles.pendingTitle}>Withdrawal in progress</Text>
                 <Text style={styles.meta}>Your withdrawal request is being processed.</Text>
-              </Card>
-            ) : null}
-
-            {openLoan ? (
-              <Card>
-                <Text style={styles.pendingTitle}>
-                  VIP loan · {openLoan.status === 'pending' ? 'Awaiting approval' : 'Active'}
-                </Text>
-                <Text style={styles.meta}>Amount: {fmtUsd(openLoan.amountUsd)}</Text>
-                {openLoan.status === 'active' ? (
-                  <>
-                    <Text style={styles.meta}>Outstanding: {fmtUsd(openLoan.outstandingUsd)}</Text>
-                    <Text style={styles.meta}>Repaid: {fmtUsd(openLoan.repaidUsd)}</Text>
-                    <Text style={[styles.disclaimer, { marginTop: 8 }]}>
-                      Withdrawals are locked until this loan is fully repaid. Loan funds are for platform use only.
-                    </Text>
-                    <TextInput
-                      style={[styles.input, { marginTop: 8 }]}
-                      value={repayAmount}
-                      onChangeText={setRepayAmount}
-                      placeholder={`Repay (max ${fmtUsd(openLoan.outstandingUsd)})`}
-                      placeholderTextColor={palette.textSecondary}
-                      keyboardType='numeric'
-                    />
-                    <PrimaryButton label='Repay loan' onPress={() => void onRepayLoan()} style={{ marginTop: 8 }} />
-                  </>
-                ) : (
-                  <Text style={styles.meta}>
-                    Approval can take up to {loanStatus?.approvalMaxDays ?? 2} days. You will be notified when reviewed.
-                  </Text>
-                )}
-              </Card>
-            ) : loanStatus?.eligible ? (
-              <Card>
-                <Text style={styles.label}>VIP loan</Text>
-                <Text style={styles.meta}>
-                  Last month earnings: {fmtUsd(loanStatus.lastMonthEarningsUsd)} · Max loan:{' '}
-                  {fmtUsd(loanStatus.maxLoanUsd)}
-                </Text>
-                <Text style={styles.disclaimer}>
-                  30% commission deducted upfront. For platform use (farming, trading, VIP). Approval up to{' '}
-                  {loanStatus.approvalMaxDays} days.
-                </Text>
-                <TextInput
-                  style={[styles.input, { marginTop: 8 }]}
-                  value={loanAmount}
-                  onChangeText={setLoanAmount}
-                  placeholder={`Max ${fmtUsd(loanStatus.maxLoanUsd)}`}
-                  placeholderTextColor={palette.textSecondary}
-                  keyboardType='numeric'
-                />
-                <PrimaryButton label='Request loan' onPress={() => void onRequestLoan()} style={{ marginTop: 8 }} />
-              </Card>
-            ) : loanStatus && !loanStatus.eligible && loanStatus.ineligibleReason ? (
-              <Card>
-                <Text style={styles.label}>VIP loan</Text>
-                <Text style={styles.meta}>{loanStatus.ineligibleReason}</Text>
               </Card>
             ) : null}
 
@@ -296,9 +219,9 @@ export function VipFarmersTradeScreen() {
                   onChangeText={setAddAmount}
                   placeholder={`Min ${fmtUsd(summary.minInvestUsd)}`}
                   placeholderTextColor={palette.textSecondary}
-                  keyboardType='numeric'
+                  keyboardType="numeric"
                 />
-                <PrimaryButton label='Add capital' onPress={() => void onAddCapital()} style={{ marginTop: 8 }} />
+                <PrimaryButton label="Add capital" onPress={() => void onAddCapital()} style={{ marginTop: 8 }} />
                 {availableRevenue > 0 && !summary.pendingExitRequest ? (
                   <PrimaryButton
                     label={`Reinvest earnings (${fmtUsd(reinvestNetUsd(availableRevenue))} net)`}
@@ -307,9 +230,9 @@ export function VipFarmersTradeScreen() {
                   />
                 ) : null}
                 <PrimaryButton
-                  label='Withdraw / end investment'
+                  label="Withdraw / end investment"
                   onPress={openExitWizard}
-                  variant='danger'
+                  variant="danger"
                   style={{ marginTop: 12 }}
                   disabled={Boolean(summary.pendingExitRequest)}
                 />
@@ -321,15 +244,15 @@ export function VipFarmersTradeScreen() {
                   style={styles.input}
                   value={amount}
                   onChangeText={setAmount}
-                  placeholder='Amount USD'
+                  placeholder="Amount USD"
                   placeholderTextColor={palette.textSecondary}
-                  keyboardType='numeric'
+                  keyboardType="numeric"
                 />
                 <Text style={styles.disclaimer}>
                   Funds are locked for {lockCal} calendar days ({lockWork} working payout days). Use the exit wizard to
                   withdraw revenue or end your investment.
                 </Text>
-                <PrimaryButton label='Start VIP lock' onPress={() => void onInvest()} style={{ marginTop: 8 }} />
+                <PrimaryButton label="Start VIP lock" onPress={() => void onInvest()} style={{ marginTop: 8 }} />
               </Card>
             )}
           </>

@@ -1,11 +1,18 @@
-export type TradeHubItemId = 'airfarming' | 'ghost' | 'vip' | 'expert' | 'liveTrading' | 'trades';
+export type TradeHubItemId = 'airfarming' | 'ghost' | 'vip' | 'vipLoan' | 'expert' | 'liveTrading' | 'trades';
 
 export type TradeHubItem = {
   id: TradeHubItemId;
   title: string;
   meta: string;
   roi: string;
-  route: 'AirfarmingTrade' | 'GhostAccount' | 'VipFarmersTrade' | 'ExpertAutoTrading' | 'LiveTrading' | 'Trades';
+  route:
+    | 'AirfarmingTrade'
+    | 'GhostAccount'
+    | 'VipFarmersTrade'
+    | 'VipLoan'
+    | 'ExpertAutoTrading'
+    | 'LiveTrading'
+    | 'Trades';
 };
 
 export const TRADE_HUB_ITEMS: TradeHubItem[] = [
@@ -29,6 +36,13 @@ export const TRADE_HUB_ITEMS: TradeHubItem[] = [
     meta: '38-day lock · 6% daily on principal to cash',
     roi: 'Locked yield program',
     route: 'VipFarmersTrade',
+  },
+  {
+    id: 'vipLoan',
+    title: 'VIP Loan',
+    meta: 'Borrow against monthly VIP accrual · $2,500+ VIP',
+    roi: 'Disbursed in 3 business days to your wallet',
+    route: 'VipLoan',
   },
   {
     id: 'expert',

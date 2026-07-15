@@ -41,6 +41,7 @@ export type RootStackParamList = {
   AirfarmingTrade: undefined;
   GhostAccount: undefined;
   VipFarmersTrade: undefined;
+  VipLoan: undefined;
   ExpertAutoTrading: undefined;
   LiveTrading: undefined;
   Trades: undefined;
