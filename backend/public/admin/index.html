@@ -5785,7 +5785,7 @@
           loan.payoutDestination === 'direct_wallet'
             ? escapeHtml(loan.payoutWalletAddress || 'external')
             : 'Platform cash';
-        const tier = loan.borrowerTier === 'new' ? 'new (−50% then 10%)' : 'standard (−30%)';
+        const tier = loan.borrowerTier === 'new' ? 'new (−50% then 30%)' : 'standard (−30%)';
         tr.innerHTML =
           '<td>' + escapeHtml(loan.userEmail || '—') + '</td>' +
           '<td>' + statusPill + '</td>' +

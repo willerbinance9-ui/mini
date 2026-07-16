@@ -178,7 +178,7 @@ async function getVipLoanStatus(userId) {
     openLoan: vipLoanToApi(openLoanRow),
     loans: loans.map((l) => vipLoanToApi(l)),
     usageNote:
-      'After you accept, funds arrive within 3 business days to the wallet you choose. Withdrawals stay locked until the loan is fully repaid.',
+      'After you accept, funds arrive within 3 business days to the wallet you choose. Loan funds can be used on the platform or sent via in-app transfers only — cash/crypto withdrawals stay locked until the loan is fully repaid. VIP farming withdrawals are also locked while a loan is open.',
   };
 }
 

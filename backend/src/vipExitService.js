@@ -13,6 +13,7 @@ const {
   getPendingVipExitRequestForUser,
   listVipExitRequestsAdmin,
   getUsersByIds,
+  getOpenVipLoanForUser,
   VIP_EXIT_REVENUE_PERCENTS,
   VIP_EXIT_PENALTY_RATE,
   VIP_EXIT_COMMISSION_RATE,
@@ -164,9 +165,21 @@ function fmtUsdLabel(n) {
   return '$' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+async function assertNoOpenVipLoan(userId) {
+  const open = await getOpenVipLoanForUser(userId);
+  if (!open) return;
+  throw badRequest(
+    open.status === 'pending'
+      ? 'VIP farming withdrawals are locked while your VIP loan request is awaiting disbursement. Wait until the loan is repaid to exit VIP.'
+      : `VIP farming withdrawals are locked until your VIP loan is fully repaid ($${roundUsd(open.outstanding_usd).toFixed(2)} outstanding).`
+  );
+}
+
 async function computeVipExitQuote(userId, body) {
   const payload = normalizePayload(body);
   validatePayload(payload);
+
+  await assertNoOpenVipLoan(userId);
 
   const inv = await getActiveVipInvestmentForUser(userId);
   if (!inv) throw badRequest('No active VIP investment');
@@ -179,6 +192,7 @@ async function computeVipExitQuote(userId, body) {
 }
 
 async function submitVipExitRequest(userId, body) {
+  await assertNoOpenVipLoan(userId);
   const quote = await computeVipExitQuote(userId, body);
   const inv = await getActiveVipInvestmentForUser(userId);
   if (!inv) throw badRequest('No active VIP investment');

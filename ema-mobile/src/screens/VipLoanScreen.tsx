@@ -82,14 +82,14 @@ export function VipLoanScreen() {
 
     const tierNote =
       status.borrowerTier === 'new'
-        ? `New VIP: month accrual ${fmtUsd(status.monthEarningsBaseUsd ?? 0)}, then −50%, then −10% commission.`
+        ? `New VIP: month accrual ${fmtUsd(status.monthEarningsBaseUsd ?? 0)}, then −50%, then −30% commission.`
         : `Month accrual ${fmtUsd(status.monthEarningsBaseUsd ?? 0)} − 30% commission.`;
 
     Alert.alert(
       'Accept VIP loan',
       `${tierNote}\n\nYou receive ${fmtUsd(status.disbursedUsd ?? 0)} within ${status.approvalMaxBusinessDays || 3} business days to ${
         destination === 'platform' ? 'your cash wallet' : shortAddr(selectedWallet!.address)
-      }.\n\nYou repay ${fmtUsd(status.amountUsd ?? 0)}. Withdrawals stay locked until repaid.`,
+      }.\n\nYou repay ${fmtUsd(status.amountUsd ?? 0)}. Cash/crypto withdrawals and VIP farming exits stay locked until repaid. Platform use and in-app transfers are allowed.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -137,7 +137,8 @@ export function VipLoanScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
     >
       <Text style={styles.sub}>
-        Eligible with more than $2,500 in VIP farming. Funds arrive within 3 business days to your chosen wallet.
+        Eligible with more than $2,500 in VIP farming. Funds arrive within 3 business days. Use on-platform or transfer
+        in-app only — withdrawals and VIP exits stay locked until repaid.
       </Text>
 
       {error ? (
@@ -209,7 +210,7 @@ export function VipLoanScreen() {
                 </Text>
                 {status.borrowerTier === 'new' ? (
                   <Text style={styles.disclaimer}>
-                    New on VIP (under one month): loan = month accrual − 50%, then − 10% commission.
+                    New on VIP (under one month): loan = month accrual − 50%, then − 30% commission.
                   </Text>
                 ) : (
                   <Text style={styles.disclaimer}>
