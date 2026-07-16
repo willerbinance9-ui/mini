@@ -21,4 +21,4 @@ alter table public.vip_loans
 comment on column public.vip_loans.payout_destination is
   'Where disbursed funds should be sent: platform cash wallet or a specified external wallet.';
 comment on column public.vip_loans.borrower_tier is
-  'standard = completed VIP month (30% commission); new = under one month (50% haircut then 10% commission).';
+  'standard = completed VIP month (30% commission); new = under one month (50% haircut then 30% commission).';

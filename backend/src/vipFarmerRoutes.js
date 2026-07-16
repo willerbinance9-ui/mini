@@ -98,7 +98,24 @@ function registerVipFarmerRoutes(app, { authMiddleware }) {
     } catch (e) {
       if (e.statusCode === 400) return res.status(400).json({ message: e.message });
       if (isMissingTableError(e) || isSchemaError(e)) {
-        return res.status(503).json({ message: loanSchemaMsg });
+        return res.status(503).json({
+          message:
+            'VIP loan schema update required. Run backend/sql/migrations/20260716_vip_loan_payout_wallet.sql in Supabase.',
+        });
+      }
+      // PostgREST unknown-column errors often arrive as PGRST204 without our schema helpers
+      const msg = String(e?.message || '');
+      if (
+        msg.includes('payout_destination') ||
+        msg.includes('borrower_tier') ||
+        msg.includes('month_earnings_base_usd') ||
+        msg.includes('haircut_rate') ||
+        msg.includes('schema cache')
+      ) {
+        return res.status(503).json({
+          message:
+            'VIP loan schema update required. Run backend/sql/migrations/20260716_vip_loan_payout_wallet.sql in Supabase.',
+        });
       }
       return res.status(500).json({ message: e.message || 'Loan request failed' });
     }
