@@ -15,11 +15,10 @@ const POLL_OPEN_FAST_MS = 2_000;
 const POLL_CLOSED_MS = 15_000;
 
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, {
+  return new Date(iso).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    year: "numeric",
   });
 }
 
