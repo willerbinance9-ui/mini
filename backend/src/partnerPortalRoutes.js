@@ -742,7 +742,7 @@ function registerPartnerPortalRoutes(app) {
             await createPortalMessage({
               portalAccountId: req.portalAccountId,
               sender: 'ai',
-              body: 'Thanks for your message — connecting you to an agent. They will reply here shortly.',
+              body: 'Thanks for your message. Connecting you with an agent — they will reply here shortly.',
             });
             return;
           }
@@ -766,7 +766,7 @@ function registerPartnerPortalRoutes(app) {
             await createPortalMessage({
               portalAccountId: req.portalAccountId,
               sender: 'ai',
-              body: 'Thanks for your message — connecting you to an agent. They will reply here shortly.',
+              body: 'Thanks for your message. Connecting you with an agent — they will reply here shortly.',
             });
           } catch (_) { /* ignore secondary failure */ }
         }
@@ -785,7 +785,7 @@ function registerPartnerPortalRoutes(app) {
         await createPortalMessage({
           portalAccountId: req.portalAccountId,
           sender: 'ai',
-          body: 'You are now connected to an agent — they will reply here shortly.',
+          body: 'You are now connected with an agent. They will reply here shortly.',
         });
       }
       const messages = await listPortalMessages(req.portalAccountId, { limit: 100 });

@@ -132,7 +132,7 @@ async function generateChatReply({ account, context = {}, messages = [] }) {
     const offerAgent = !connectAgent && reply.includes(OFFER_AGENT_MARKER);
     reply = reply.replaceAll(CONNECT_AGENT_MARKER, '').replaceAll(OFFER_AGENT_MARKER, '').trim();
     if (!reply) {
-      reply = connectAgent ? 'Connecting you to an agent now.' : "Sorry I couldn't help with that.";
+      reply = connectAgent ? 'Connecting you with an agent now.' : "Sorry, I couldn't help with that.";
     }
     return { reply, offerAgent, connectAgent };
   } catch (e) {

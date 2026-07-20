@@ -22,6 +22,7 @@ const {
   isMissingTableError,
 } = require('./db');
 const { downloadKycImage } = require('./services/partnerKycStorage');
+const { formatAgentChatMessage } = require('./services/formatChatMessage');
 
 const ONLINE_WINDOW_MS = 2 * 60 * 1000;
 
@@ -335,7 +336,7 @@ function registerAdminPartnerRoutes(app) {
         const account = await getPortalAccountById(req.params.accountId);
         if (!account) return res.status(404).json({ message: 'Portal account not found' });
 
-        const body = String(req.body?.body || '').trim();
+        const body = formatAgentChatMessage(req.body?.body);
         if (!body) return res.status(400).json({ message: 'Message cannot be empty' });
         if (body.length > 4000) return res.status(400).json({ message: 'Message too long (max 4000 characters)' });
 
@@ -381,7 +382,7 @@ function registerAdminPartnerRoutes(app) {
         await createPortalMessage({
           portalAccountId: account.id,
           sender: 'ai',
-          body: 'Our agent has closed this conversation. I am back to help — ask me anything.',
+          body: 'Our agent has closed this conversation. I am back if you need anything else.',
         });
         return res.json({ ok: true });
       } catch (e) {
