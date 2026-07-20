@@ -1752,6 +1752,9 @@
                 <button type="button" class="btn-ghost btn-icon hidden" id="chatReturnAiBtn" aria-label="Return to AarAi" title="Return to AarAi">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M8 14h.01M16 14h.01"/></svg>
                 </button>
+                <button type="button" class="btn-ghost btn-icon" id="chatDeleteBtn" aria-label="Delete conversation" title="Delete conversation" style="color:var(--danger,#e5484d);">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                </button>
               </div>
               <div id="chatMessages" class="chat-messages"></div>
               <div class="chat-input-bar">
@@ -4658,13 +4661,40 @@
           <td style="color:var(--muted);">${escapeHtml(who + preview)}</td>
           <td>${fmtChatTime(c.lastMessage?.createdAt)}</td>
           <td>${badges.join(' ') || '—'}</td>
-          <td><button type="button" class="btn-ghost btn-sm" data-chat-open="${c.portalAccountId}">Open</button></td>
+          <td style="white-space:nowrap;">
+            <button type="button" class="btn-ghost btn-sm" data-chat-open="${c.portalAccountId}">Open</button>
+            <button type="button" class="btn-ghost btn-sm" data-chat-delete="${c.portalAccountId}" style="color:var(--danger,#e5484d);">Delete</button>
+          </td>
         `;
         tbody.appendChild(tr);
       });
       tbody.querySelectorAll('[data-chat-open]').forEach((btn) => {
         btn.onclick = () => openChatThread(btn.getAttribute('data-chat-open')).catch(showChatErr);
       });
+      tbody.querySelectorAll('[data-chat-delete]').forEach((btn) => {
+        btn.onclick = () => deleteChatConversation(btn.getAttribute('data-chat-delete')).catch(showChatErr);
+      });
+    }
+
+    async function deleteChatConversation(accountId) {
+      if (!accountId) return;
+      const label = document.querySelector(`#chatAccountSelect option[value="${accountId}"]`)?.textContent
+        || accountId;
+      if (!confirm(`Delete the entire chat with ${label}?\n\nThis removes all messages for both the partner and admin. Cannot be undone.`)) {
+        return;
+      }
+      clearChatErr();
+      await api(`/admin/api/portal-chats/${accountId}`, { method: 'DELETE' });
+      if (chatActiveAccountId === accountId) {
+        document.getElementById('chatThread').classList.add('hidden');
+        chatActiveAccountId = null;
+        if (chatPollTimer) {
+          clearInterval(chatPollTimer);
+          chatPollTimer = null;
+        }
+        renderChatMessages([]);
+      }
+      await loadChatConversations();
     }
 
     function renderChatMessages(messages) {
@@ -4748,6 +4778,10 @@
       } catch (e) {
         showChatErr(e);
       }
+    };
+    document.getElementById('chatDeleteBtn').onclick = () => {
+      if (!chatActiveAccountId) return;
+      deleteChatConversation(chatActiveAccountId).catch(showChatErr);
     };
     document.getElementById('chatSendBtn').onclick = async () => {
       const draft = document.getElementById('chatDraft');

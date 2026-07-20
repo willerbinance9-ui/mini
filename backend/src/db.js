@@ -853,6 +853,17 @@ async function createPortalMessage({ portalAccountId, sender, body, adminUsernam
   return data;
 }
 
+/** Deletes every message in a portal account thread and clears agent handoff. */
+async function deletePortalConversation(portalAccountId) {
+  const { error, count } = await supabase
+    .from('partner_portal_messages')
+    .delete({ count: 'exact' })
+    .eq('portal_account_id', portalAccountId);
+  if (error && !isMissingTableError(error)) throw error;
+  await updatePortalAccount(portalAccountId, { chat_human_requested_at: null });
+  return { deleted: count || 0 };
+}
+
 /** Marks messages sent by `fromSender` in this thread as read (called by the other side). */
 async function markPortalMessagesRead(portalAccountId, fromSender) {
   const { error } = await supabase
@@ -5713,6 +5724,7 @@ module.exports = {
   upsertPortalInvestorProfile,
   listPortalMessages,
   createPortalMessage,
+  deletePortalConversation,
   markPortalMessagesRead,
   countUnreadPortalMessages,
   listPortalChatConversationsAdmin,

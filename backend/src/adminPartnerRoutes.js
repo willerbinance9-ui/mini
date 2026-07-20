@@ -12,6 +12,7 @@ const {
   getPortalAccountById,
   listPortalMessages,
   createPortalMessage,
+  deletePortalConversation,
   markPortalMessagesRead,
   listPortalChatConversationsAdmin,
   listPortalAccountsAdmin,
@@ -386,6 +387,25 @@ function registerAdminPartnerRoutes(app) {
       } catch (e) {
         if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
         return res.status(500).json({ message: e?.message || 'Failed to return thread to AI' });
+      }
+    }
+  );
+
+  // Wipe a portal chat thread (all messages) and clear agent handoff.
+  app.delete(
+    '/admin/api/portal-chats/:accountId',
+    adminAuthMiddleware,
+    requireSuperAdmin,
+    async (req, res) => {
+      try {
+        const account = await getPortalAccountById(req.params.accountId);
+        if (!account) return res.status(404).json({ message: 'Portal account not found' });
+
+        const result = await deletePortalConversation(account.id);
+        return res.json({ ok: true, deleted: result.deleted, accountId: account.id });
+      } catch (e) {
+        if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
+        return res.status(500).json({ message: e?.message || 'Failed to delete conversation' });
       }
     }
   );
