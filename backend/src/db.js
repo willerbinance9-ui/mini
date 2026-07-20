@@ -905,7 +905,17 @@ async function listPortalChatConversationsAdmin({ limit = 500 } = {}) {
     conv.messageCount += 1;
     if (msg.sender === 'partner' && !msg.read_at) conv.unreadFromPartner += 1;
   }
-  return Array.from(byAccount.values());
+
+  // Agent-requested + unread partner threads first, then most recent activity.
+  return Array.from(byAccount.values()).sort((a, b) => {
+    if (a.humanRequested !== b.humanRequested) return a.humanRequested ? -1 : 1;
+    if (Boolean(a.unreadFromPartner) !== Boolean(b.unreadFromPartner)) {
+      return a.unreadFromPartner ? -1 : 1;
+    }
+    const aAt = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+    const bAt = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+    return bAt - aAt;
+  });
 }
 
 async function listPortalAccountsAdmin({ limit = 200 } = {}) {

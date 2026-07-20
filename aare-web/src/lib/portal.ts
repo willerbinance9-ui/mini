@@ -351,10 +351,13 @@ export type PortalChatMessage = {
   body: string;
   readAt: string | null;
   createdAt: string;
+  offerAgent?: boolean;
 };
 
 export async function portalGetMessages() {
-  return portalFetch<{ messages: PortalChatMessage[]; humanRequested: boolean }>("/v1/portal/messages");
+  return portalFetch<{ messages: PortalChatMessage[]; humanRequested: boolean; offerAgent?: boolean }>(
+    "/v1/portal/messages"
+  );
 }
 
 export async function portalGetUnreadCount() {
@@ -367,6 +370,7 @@ export async function portalSendMessage(body: string) {
     aiReply?: PortalChatMessage;
     humanRequested?: boolean;
     offerAgent?: boolean;
+    aiPending?: boolean;
   }>("/v1/portal/messages", {
     method: "POST",
     body: JSON.stringify({ body }),

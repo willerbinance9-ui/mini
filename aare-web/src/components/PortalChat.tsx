@@ -10,8 +10,9 @@ import {
   type PortalChatMessage,
 } from "@/lib/portal";
 
-const POLL_OPEN_MS = 8_000;
-const POLL_CLOSED_MS = 30_000;
+const POLL_OPEN_MS = 4_000;
+const POLL_OPEN_FAST_MS = 2_000;
+const POLL_CLOSED_MS = 15_000;
 
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
@@ -41,6 +42,7 @@ export function PortalChat() {
   const [humanRequested, setHumanRequested] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [offerAgent, setOfferAgent] = useState(false);
+  const [aiPending, setAiPending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
 
@@ -52,6 +54,18 @@ export function PortalChat() {
       setUnread(0);
       setError("");
       setLoaded(true);
+
+      const last = res.messages[res.messages.length - 1];
+      if (res.humanRequested || (last && last.sender !== "partner")) {
+        setAiPending(false);
+      }
+      if (res.humanRequested) {
+        setOfferAgent(false);
+      } else if (typeof res.offerAgent === "boolean") {
+        setOfferAgent(res.offerAgent);
+      } else if (last?.offerAgent) {
+        setOfferAgent(true);
+      }
     } catch (e) {
       setLoaded(true);
       setError(friendlyChatError(e, "Failed to load chat"));
@@ -77,12 +91,13 @@ export function PortalChat() {
     };
   }, [open]);
 
-  // Poll unread count while closed, full thread while open
+  // Poll unread count while closed, full thread while open (faster when waiting on AI/agent).
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>;
     if (open) {
       void loadThread();
-      timer = setInterval(() => void loadThread(), POLL_OPEN_MS);
+      const interval = aiPending || humanRequested ? POLL_OPEN_FAST_MS : POLL_OPEN_MS;
+      timer = setInterval(() => void loadThread(), interval);
     } else {
       const tick = () =>
         portalGetUnreadCount()
@@ -92,12 +107,12 @@ export function PortalChat() {
       timer = setInterval(tick, POLL_CLOSED_MS);
     }
     return () => clearInterval(timer);
-  }, [open, loadThread]);
+  }, [open, loadThread, aiPending, humanRequested]);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, open, sending, offerAgent]);
+  }, [messages.length, open, sending, offerAgent, aiPending]);
 
   async function send() {
     const body = draft.trim();
@@ -105,24 +120,30 @@ export function PortalChat() {
     setSending(true);
     setError("");
     setDraft("");
-    // Optimistic bubble while AarAi thinks
+    setOfferAgent(false);
+    // Optimistic bubble while AarAi thinks / agent replies
     const tempId = `tmp-${Date.now()}`;
     setMessages((m) => [
       ...m,
       { id: tempId, sender: "partner", body, readAt: null, createdAt: new Date().toISOString() },
     ]);
-    setOfferAgent(false);
     try {
       const res = await portalSendMessage(body);
       setMessages((m) => {
         const withoutTemp = m.filter((x) => x.id !== tempId);
         return res.aiReply ? [...withoutTemp, res.message, res.aiReply] : [...withoutTemp, res.message];
       });
-      if (res.humanRequested) setHumanRequested(true);
+      if (res.humanRequested) {
+        setHumanRequested(true);
+        setAiPending(false);
+      } else if (res.aiPending || !res.aiReply) {
+        setAiPending(true);
+      }
       if (res.offerAgent) setOfferAgent(true);
     } catch (e) {
       setMessages((m) => m.filter((x) => x.id !== tempId));
       setDraft(body);
+      setAiPending(false);
       setError(friendlyChatError(e, "Failed to send"));
     } finally {
       setSending(false);
@@ -134,6 +155,7 @@ export function PortalChat() {
     setConnecting(true);
     setError("");
     setOfferAgent(false);
+    setAiPending(false);
     try {
       const res = await portalRequestHuman();
       setMessages(res.messages);
@@ -144,6 +166,11 @@ export function PortalChat() {
       setConnecting(false);
     }
   }
+
+  const lastMessage = messages[messages.length - 1];
+  const waitingForAgent =
+    humanRequested && (!lastMessage || lastMessage.sender === "partner" || lastMessage.sender === "ai");
+  const showTyping = (sending || aiPending) && !humanRequested;
 
   return (
     <div ref={widgetRef}>
@@ -185,7 +212,9 @@ export function PortalChat() {
                 <p className="font-semibold">{humanRequested ? "Agent" : "AarAi"}</p>
                 <p className="text-xs text-muted">
                   {humanRequested
-                    ? "You're connected to an agent — replies land here."
+                    ? waitingForAgent
+                      ? "Connected — waiting for an agent reply…"
+                      : "You're connected to an agent — replies land here."
                     : "Ask me anything about Aare."}
                 </p>
               </div>
@@ -233,7 +262,7 @@ export function PortalChat() {
                   </div>
                 ))
               )}
-              {sending && !humanRequested ? (
+              {showTyping ? (
                 <div className="flex justify-start">
                   <div className="rounded-2xl rounded-bl-md border border-card-border bg-surface px-4 py-2.5">
                     <span className="inline-flex gap-1">
@@ -244,7 +273,10 @@ export function PortalChat() {
                   </div>
                 </div>
               ) : null}
-              {offerAgent && !humanRequested && !sending ? (
+              {waitingForAgent && !showTyping ? (
+                <p className="px-2 text-center text-xs text-muted">An agent will reply here shortly…</p>
+              ) : null}
+              {offerAgent && !humanRequested && !sending && !aiPending ? (
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}

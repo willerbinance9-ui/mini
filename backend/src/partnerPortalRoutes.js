@@ -33,7 +33,7 @@ const { PARTNER_COMMISSION_RATE } = require('./platformRevenueService');
 const { normalizePhoneDigits, sendLoginOtp, verifyOtpCode } = require('./services/portalOtp');
 const { uploadKycImage, downloadKycImage } = require('./services/partnerKycStorage');
 const { reviewPartnerKyc } = require('./services/partnerKycAiReview');
-const { generateChatReply } = require('./services/aareChatAi');
+const { generateChatReply, OFFER_AGENT_MARKER, CONNECT_AGENT_MARKER } = require('./services/aareChatAi');
 
 const SCHEMA_MSG =
   'Partner portal schema missing. Run backend/sql/migrations/20260624_partner_portal.sql and 20260625_partner_portal_kyc.sql in Supabase.';
@@ -163,12 +163,15 @@ function toInvestorProfilePublic(profile) {
 }
 
 function toMessagePublic(msg) {
+  const rawBody = String(msg.body || '');
+  const offerAgent = rawBody.includes(OFFER_AGENT_MARKER);
   return {
     id: msg.id,
     sender: msg.sender,
-    body: msg.body,
+    body: rawBody.replaceAll(OFFER_AGENT_MARKER, '').replaceAll(CONNECT_AGENT_MARKER, '').trim(),
     readAt: msg.read_at,
     createdAt: msg.created_at,
+    offerAgent: msg.sender === 'ai' ? offerAgent : false,
   };
 }
 
@@ -663,6 +666,11 @@ function registerPartnerPortalRoutes(app) {
       return res.json({
         messages: messages.map(toMessagePublic),
         humanRequested: Boolean(req.portalAccount.chat_human_requested_at),
+        offerAgent: Boolean(
+          !req.portalAccount.chat_human_requested_at &&
+            messages.length &&
+            toMessagePublic(messages[messages.length - 1]).offerAgent
+        ),
       });
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
@@ -698,51 +706,71 @@ function registerPartnerPortalRoutes(app) {
         return res.status(201).json({ message: toMessagePublic(msg), humanRequested: true });
       }
 
-      // AarAi answers using full site knowledge + this account's context.
-      const { application, partner, kyc } = await resolvePortalContext(account);
-      const thread = await listPortalMessages(req.portalAccountId, { limit: 12 });
-      const ai = await generateChatReply({
-        account,
-        context: {
-          kycStatus: kyc?.status || 'draft',
-          applicationStatus: application?.status || null,
-          apiPackage: account.api_package || null,
-          hasPartnerAccess: Boolean(partner && partner.status === 'active'),
-        },
-        messages: thread,
-      });
-
-      if (!ai) {
-        // AI unavailable (no key or API error) — hand the thread to an agent so nobody is left waiting.
-        await updatePortalAccount(req.portalAccountId, { chat_human_requested_at: new Date().toISOString() });
-        const notice = await createPortalMessage({
-          portalAccountId: req.portalAccountId,
-          sender: 'ai',
-          body: 'Thanks for your message — connecting you to an agent. They will reply here shortly.',
-        });
-        return res.status(201).json({
-          message: toMessagePublic(msg),
-          aiReply: toMessagePublic(notice),
-          humanRequested: true,
-        });
-      }
-
-      const aiMsg = await createPortalMessage({
-        portalAccountId: req.portalAccountId,
-        sender: 'ai',
-        body: ai.reply,
-      });
-
-      if (ai.connectAgent) {
-        await updatePortalAccount(req.portalAccountId, { chat_human_requested_at: new Date().toISOString() });
-      }
-
-      return res.status(201).json({
+      // Return immediately so the widget is not stuck waiting on DeepSeek (up to 30s).
+      // AarAi reply is written in the background; the client polls /messages for it.
+      res.status(201).json({
         message: toMessagePublic(msg),
-        aiReply: toMessagePublic(aiMsg),
-        humanRequested: ai.connectAgent,
-        offerAgent: ai.offerAgent,
+        humanRequested: false,
+        aiPending: true,
       });
+
+      void (async () => {
+        try {
+          // Re-check handoff in case the user clicked "speak to an agent" while AI was thinking.
+          const fresh = await getPortalAccountById(req.portalAccountId);
+          if (fresh?.chat_human_requested_at) return;
+
+          const { application, partner, kyc } = await resolvePortalContext(fresh || account);
+          const thread = await listPortalMessages(req.portalAccountId, { limit: 12 });
+          const ai = await generateChatReply({
+            account: fresh || account,
+            context: {
+              kycStatus: kyc?.status || 'draft',
+              applicationStatus: application?.status || null,
+              apiPackage: (fresh || account).api_package || null,
+              hasPartnerAccess: Boolean(partner && partner.status === 'active'),
+            },
+            messages: thread,
+          });
+
+          // Handoff may have happened while the model was running.
+          const stillAi = await getPortalAccountById(req.portalAccountId);
+          if (stillAi?.chat_human_requested_at) return;
+
+          if (!ai) {
+            await updatePortalAccount(req.portalAccountId, { chat_human_requested_at: new Date().toISOString() });
+            await createPortalMessage({
+              portalAccountId: req.portalAccountId,
+              sender: 'ai',
+              body: 'Thanks for your message — connecting you to an agent. They will reply here shortly.',
+            });
+            return;
+          }
+
+          await createPortalMessage({
+            portalAccountId: req.portalAccountId,
+            sender: 'ai',
+            // Keep marker in storage so the client can show "speak to an agent?" after async poll.
+            body: ai.offerAgent ? `${ai.reply}\n${OFFER_AGENT_MARKER}` : ai.reply,
+          });
+
+          if (ai.connectAgent) {
+            await updatePortalAccount(req.portalAccountId, { chat_human_requested_at: new Date().toISOString() });
+          }
+        } catch (e) {
+          console.error('[portal-chat-ai-bg]', e?.message || e);
+          try {
+            const stillAi = await getPortalAccountById(req.portalAccountId);
+            if (stillAi?.chat_human_requested_at) return;
+            await updatePortalAccount(req.portalAccountId, { chat_human_requested_at: new Date().toISOString() });
+            await createPortalMessage({
+              portalAccountId: req.portalAccountId,
+              sender: 'ai',
+              body: 'Thanks for your message — connecting you to an agent. They will reply here shortly.',
+            });
+          } catch (_) { /* ignore secondary failure */ }
+        }
+      })();
     } catch (e) {
       if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
       return res.status(500).json({ message: e?.message || 'Failed to send message' });

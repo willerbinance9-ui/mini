@@ -309,7 +309,14 @@ function registerAdminPartnerRoutes(app) {
             fullName: account.full_name,
             humanRequested: Boolean(account.chat_human_requested_at),
           },
-          messages,
+          messages: messages.map((m) => ({
+            id: m.id,
+            sender: m.sender,
+            body: m.body,
+            readAt: m.read_at,
+            createdAt: m.created_at,
+            adminUsername: m.admin_username,
+          })),
         });
       } catch (e) {
         if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
@@ -331,13 +338,27 @@ function registerAdminPartnerRoutes(app) {
         if (!body) return res.status(400).json({ message: 'Message cannot be empty' });
         if (body.length > 4000) return res.status(400).json({ message: 'Message too long (max 4000 characters)' });
 
+        // Agent reply claims the thread so AarAi stops answering mid-conversation.
+        if (!account.chat_human_requested_at) {
+          await updatePortalAccount(account.id, { chat_human_requested_at: new Date().toISOString() });
+        }
+
         const msg = await createPortalMessage({
           portalAccountId: account.id,
           sender: 'admin',
           body,
           adminUsername: req.adminUser || 'admin',
         });
-        return res.status(201).json({ message: msg });
+        return res.status(201).json({
+          message: {
+            id: msg.id,
+            sender: msg.sender,
+            body: msg.body,
+            readAt: msg.read_at,
+            createdAt: msg.created_at,
+            adminUsername: msg.admin_username,
+          },
+        });
       } catch (e) {
         if (isMissingTableError(e)) return res.status(503).json({ message: CHAT_SCHEMA_MSG });
         return res.status(500).json({ message: e?.message || 'Failed to send message' });

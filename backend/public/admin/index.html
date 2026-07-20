@@ -1714,7 +1714,8 @@
 
           <div class="card" style="margin-bottom:16px;">
             <h3 style="margin:0 0 8px;font-size:1rem;">Partner chat</h3>
-            <p class="hint">Direct messages with partner portal accounts. Partners see replies in their aare.cc dashboard chat.</p>
+            <p class="hint">Direct messages with partner portal accounts. Partners see replies in their aare.cc dashboard chat. Always open the highlighted “Agent requested” row — do not rely on the dropdown alone.</p>
+            <p id="chatQueueHint" class="hint hidden" style="color:#d97706;font-weight:600;"></p>
             <div class="row" style="align-items:flex-end;margin-bottom:12px;">
               <div style="flex:1;min-width:180px;">
                 <label>Start or open a chat</label>
@@ -4624,6 +4625,19 @@
       const tbody = document.getElementById('chatConvRows');
       tbody.innerHTML = '';
       const conversations = convData.conversations || [];
+      const queueHint = document.getElementById('chatQueueHint');
+      if (queueHint) {
+        const needsReply = conversations.filter((c) => c.humanRequested && (
+          c.lastMessage?.sender === 'partner' || c.unreadFromPartner > 0
+        ));
+        if (needsReply.length) {
+          queueHint.classList.remove('hidden');
+          queueHint.textContent = `${needsReply.length} partner(s) waiting for an agent — open the top "Agent requested" thread(s).`;
+        } else {
+          queueHint.classList.add('hidden');
+          queueHint.textContent = '';
+        }
+      }
       if (!conversations.length) {
         tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);">No conversations yet — pick an account above to start one.</td></tr>';
         return;
@@ -4631,13 +4645,16 @@
       conversations.forEach((c) => {
         const acct = c.account || {};
         const tr = document.createElement('tr');
+        if (c.humanRequested && (c.unreadFromPartner > 0 || c.lastMessage?.sender === 'partner')) {
+          tr.style.background = 'rgba(217,119,6,0.12)';
+        }
         const preview = (c.lastMessage?.body || '').slice(0, 64);
         const who = c.lastMessage?.sender === 'admin' ? 'You: ' : c.lastMessage?.sender === 'ai' ? 'AarAi: ' : '';
         const badges = [];
         if (c.humanRequested) badges.push('<span class="pill" style="background:#d97706;color:#fff;">Agent requested</span>');
         if (c.unreadFromPartner > 0) badges.push(`<span class="pill" style="background:var(--danger,#e5484d);color:#fff;">${c.unreadFromPartner} new</span>`);
         tr.innerHTML = `
-          <td>${escapeHtml(acct.full_name || acct.email || c.portalAccountId)}</td>
+          <td>${escapeHtml(acct.full_name || acct.email || c.portalAccountId)}<div style="font-size:0.72rem;color:var(--muted);">${escapeHtml(acct.email || '')}</div></td>
           <td style="color:var(--muted);">${escapeHtml(who + preview)}</td>
           <td>${fmtChatTime(c.lastMessage?.createdAt)}</td>
           <td>${badges.join(' ') || '—'}</td>
@@ -4671,7 +4688,8 @@
         }
         div.style.cssText = `max-width:78%;padding:8px 12px;border-radius:14px;font-size:0.88rem;line-height:1.5;white-space:pre-wrap;word-break:break-word;align-self:${isAdmin || isAi ? 'flex-end' : 'flex-start'};` + bubble;
         const label = isAdmin ? 'Agent · ' : isAi ? 'AarAi · ' : '';
-        div.innerHTML = `${escapeHtml(m.body)}<div style="font-size:0.65rem;opacity:0.7;margin-top:4px;">${label}${fmtChatTime(m.created_at)}</div>`;
+        const when = m.createdAt || m.created_at;
+        div.innerHTML = `${escapeHtml(m.body)}<div style="font-size:0.65rem;opacity:0.7;margin-top:4px;">${label}${fmtChatTime(when)}</div>`;
         wrap.appendChild(div);
       });
       wrap.scrollTop = wrap.scrollHeight;
@@ -4680,6 +4698,8 @@
     async function openChatThread(accountId) {
       clearChatErr();
       chatActiveAccountId = accountId;
+      const select = document.getElementById('chatAccountSelect');
+      if (select) select.value = accountId;
       const data = await api(`/admin/api/portal-chats/${accountId}/messages`);
       document.getElementById('chatThread').classList.remove('hidden');
       document.getElementById('chatThreadHeader').textContent =
@@ -4700,7 +4720,7 @@
           const d = await api(`/admin/api/portal-chats/${chatActiveAccountId}/messages`);
           renderChatMessages(d.messages || []);
         } catch { /* keep polling */ }
-      }, 10000);
+      }, 4000);
     }
 
     document.getElementById('chatOpenBtn').onclick = () => {
