@@ -198,67 +198,6 @@
       background: linear-gradient(90deg, hsl(120, 72%, 42%), hsl(60, 72%, 45%), hsl(0, 72%, 42%));
       border: 1px solid var(--border);
     }
-    .ghost-particle-panel {
-      padding: 0 !important;
-      overflow: hidden;
-      background: #000;
-      border-color: #1a1a1a;
-    }
-    .ghost-particle-header {
-      padding: 16px 20px 12px;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface);
-    }
-    .ghost-network-wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0;
-      margin: 0;
-    }
-    .ghost-network-canvas-box {
-      position: relative;
-      background: #000;
-      overflow: hidden;
-      min-height: 62vh;
-    }
-    #ghostNetworkCanvas {
-      display: block;
-      width: 100%;
-      height: 62vh;
-      min-height: 420px;
-    }
-    .ghost-network-legend {
-      display: flex;
-      gap: 20px;
-      font-size: 0.78rem;
-      color: var(--muted);
-    }
-    .ghost-legend-dot {
-      display: inline-block;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      margin-right: 6px;
-      vertical-align: middle;
-    }
-    .ghost-legend-idle { background: #e8e8e8; }
-    .ghost-legend-soon { background: #5eb3ff; box-shadow: 0 0 8px #5eb3ff; }
-    .ghost-serving-soon td { color: #5eb3ff !important; }
-    .ghost-serving-soon strong { color: #7ec8ff !important; }
-    #ghostNetworkTooltip {
-      position: absolute;
-      pointer-events: none;
-      background: rgba(20, 20, 20, 0.92);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 10px;
-      font-size: 0.75rem;
-      color: var(--text);
-      max-width: 220px;
-      display: none;
-      z-index: 2;
-    }
     .level-meter {
       display: flex;
       align-items: center;
@@ -2425,7 +2364,6 @@
       document.getElementById('panelVipFarmers').classList.toggle('hidden', tab !== 'vipfarmers');
       document.getElementById('panelLiveTrading').classList.toggle('hidden', tab !== 'livetrading');
       document.getElementById('panelGhost').classList.toggle('hidden', tab !== 'ghost');
-      if (tab !== 'ghost') stopGhostNetworkPoll();
       document.getElementById('panelLevels').classList.toggle('hidden', tab !== 'levels');
       document.getElementById('panelAccount').classList.toggle('hidden', tab !== 'account');
       document.getElementById('panelPartners').classList.toggle('hidden', tab !== 'partners');
@@ -6035,10 +5973,6 @@
     function showGhostErr(e) {
       document.getElementById('ghostErr').textContent = e.message;
       document.getElementById('ghostErr').classList.remove('hidden');
-    }
-
-    function stopGhostNetworkPoll() {
-      // retained no-op for setTab compatibility (particle network removed)
     }
 
     function renderGhostAccounts(data) {

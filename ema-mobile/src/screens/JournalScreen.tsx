@@ -35,8 +35,8 @@ function formatBreakdown(breakdown: { airfarming: number; vip: number; contracts
   const parts = [
     `Airfarming ${fmtUsd(breakdown.airfarming)}`,
     `VIP ${fmtUsd(breakdown.vip)}`,
-    `Contracts ${fmtUsd(breakdown.contracts)}`,
   ];
+  if ((breakdown.contracts ?? 0) > 0) parts.push(`Contracts ${fmtUsd(breakdown.contracts)}`);
   if ((breakdown.ghost ?? 0) > 0) parts.push(`Ghost ${fmtUsd(breakdown.ghost ?? 0)}`);
   return parts.join(' · ');
 }

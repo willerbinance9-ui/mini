@@ -1,4 +1,4 @@
-export type TradeHubItemId = 'airfarming' | 'ghost' | 'vip' | 'vipLoan' | 'expert' | 'liveTrading' | 'trades';
+export type TradeHubItemId = 'airfarming' | 'ghost' | 'vip' | 'liveTrading' | 'trades' | 'expert';
 
 export type TradeHubItem = {
   id: TradeHubItemId;
@@ -9,12 +9,15 @@ export type TradeHubItem = {
     | 'AirfarmingTrade'
     | 'GhostAccount'
     | 'VipFarmersTrade'
-    | 'VipLoan'
-    | 'ExpertAutoTrading'
     | 'LiveTrading'
-    | 'Trades';
+    | 'Trades'
+    | 'ExpertAutoTrading';
 };
 
+/**
+ * Earn hub tiles. VIP Loan stays available from Live VIP Farmers (not a separate hub tile).
+ * Expert + in-app Trades stay registered but hidden by default to reduce overlap with Live Trading.
+ */
 export const TRADE_HUB_ITEMS: TradeHubItem[] = [
   {
     id: 'airfarming',
@@ -33,23 +36,9 @@ export const TRADE_HUB_ITEMS: TradeHubItem[] = [
   {
     id: 'vip',
     title: 'Live VIP Farmers',
-    meta: '38-day lock · 6% daily on principal to cash',
+    meta: '38-day lock · 6% daily on principal to cash · VIP loans inside',
     roi: 'Locked yield program',
     route: 'VipFarmersTrade',
-  },
-  {
-    id: 'vipLoan',
-    title: 'VIP Loan',
-    meta: 'Borrow against monthly VIP accrual · $2,500+ VIP',
-    roi: 'Disbursed in 3 business days to your wallet',
-    route: 'VipLoan',
-  },
-  {
-    id: 'expert',
-    title: 'Expert Account Manager',
-    meta: 'Managed MT5 trading — set risk limits and enable the expert',
-    roi: 'Connect MT5, configure risk, then activate',
-    route: 'ExpertAutoTrading',
   },
   {
     id: 'liveTrading',
@@ -65,7 +54,14 @@ export const TRADE_HUB_ITEMS: TradeHubItem[] = [
     roi: 'Allocate cash and track balance & P&L',
     route: 'Trades',
   },
+  {
+    id: 'expert',
+    title: 'Expert Account Manager',
+    meta: 'Managed MT5 trading — set risk limits and enable the expert',
+    roi: 'Connect MT5, configure risk, then activate',
+    route: 'ExpertAutoTrading',
+  },
 ];
 
-export const TRADE_HUB_HIDDEN_STORAGE_KEY = 'ema_trade_hub_hidden_v3';
-export const TRADE_HUB_DEFAULT_HIDDEN: TradeHubItemId[] = ['expert'];
+export const TRADE_HUB_HIDDEN_STORAGE_KEY = 'ema_trade_hub_hidden_v4';
+export const TRADE_HUB_DEFAULT_HIDDEN: TradeHubItemId[] = ['expert', 'trades'];

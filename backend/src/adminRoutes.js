@@ -86,8 +86,6 @@ const {
   processAllGhostLendQueues,
   listGhostAccountsAdminSummary,
   getGhostRevenueAdminStats,
-  buildGhostNetworkAdmin,
-  buildGhostParticleNetworkAdmin,
 } = require('./ghostAccountService');
 const {
   adminGetTradingDesk,
@@ -1843,30 +1841,6 @@ function registerAdminRoutes(app) {
       if (isMissingTableError(e)) return res.status(503).json({ message: ghostSchemaMsg });
       console.error('[admin/ghost-accounts]', e);
       return res.status(500).json({ message: e.message || 'Failed to load ghost accounts' });
-    }
-  });
-
-  app.get('/admin/api/ghost-accounts/particle-network', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
-    try {
-      const userLimit = Number(req.query.limit) || 500;
-      const network = await buildGhostParticleNetworkAdmin({ userLimit });
-      return res.json(network);
-    } catch (e) {
-      if (isMissingTableError(e)) return res.status(503).json({ message: ghostSchemaMsg });
-      console.error('[admin/ghost-accounts/particle-network]', e);
-      return res.status(500).json({ message: e.message || 'Failed to load particle network' });
-    }
-  });
-
-  app.get('/admin/api/ghost-accounts/:id/network', adminAuthMiddleware, requireSuperAdmin, async (req, res) => {
-    try {
-      const network = await buildGhostNetworkAdmin(req.params.id);
-      return res.json(network);
-    } catch (e) {
-      if (isMissingTableError(e)) return res.status(503).json({ message: ghostSchemaMsg });
-      if (e.message === 'Ghost account not found') return res.status(404).json({ message: e.message });
-      console.error('[admin/ghost-accounts/network]', e);
-      return res.status(500).json({ message: e.message || 'Failed to load ghost network' });
     }
   });
 
