@@ -7,11 +7,11 @@ import { palette } from '../theme/colors';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { authService } from '../services/authService';
 
-type AuthMode = 'signin' | 'register' | 'recover';
+type AuthMode = 'signin' | 'recover';
 type RecoverStep = 'credentials' | 'verifying' | 'password';
 
 export function AuthScreen() {
-  const { login, register, completeTotpLogin, loginWithBiometric } = useAuth();
+  const { login, completeTotpLogin, loginWithBiometric } = useAuth();
   const [mode, setMode] = useState<AuthMode>('signin');
   const [recoverStep, setRecoverStep] = useState<RecoverStep>('credentials');
   const [email, setEmail] = useState('');
@@ -47,10 +47,6 @@ export function AuthScreen() {
       const trimmedEmail = email.trim().toLowerCase();
       if (!trimmedEmail || password.length < 6) {
         Alert.alert('Validation', 'Enter valid credentials (min 6-char password).');
-        return;
-      }
-      if (mode === 'register') {
-        await register(trimmedEmail, password);
         return;
       }
       const result = await login(trimmedEmail, password);
@@ -270,8 +266,8 @@ export function AuthScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Min</Text>
-      <Text style={styles.subtitle}>{mode === 'register' ? 'Create account' : 'Sign in'}</Text>
-      {showBiometricLogin && mode === 'signin' ? (
+      <Text style={styles.subtitle}>Sign in</Text>
+      {showBiometricLogin ? (
         <>
           <PrimaryButton
             label={bioBusy ? 'Checking…' : `Sign in with ${biometricLabel()}`}
@@ -297,21 +293,9 @@ export function AuthScreen() {
         value={password}
         onChangeText={setPassword}
       />
-      <PrimaryButton label={mode === 'register' ? 'Create Account' : 'Login'} onPress={submit} />
-      {mode === 'signin' ? (
-        <Text style={styles.switch} onPress={startRecover}>
-          Forgot password?
-        </Text>
-      ) : null}
-      <Text
-        style={styles.switch}
-        onPress={() => {
-          setMode(mode === 'register' ? 'signin' : 'register');
-          setPassword('');
-          setConfirmPassword('');
-        }}
-      >
-        {mode === 'register' ? 'Already registered? Sign in' : 'Need an account? Register'}
+      <PrimaryButton label='Login' onPress={submit} />
+      <Text style={styles.switch} onPress={startRecover}>
+        Forgot password?
       </Text>
     </View>
   );

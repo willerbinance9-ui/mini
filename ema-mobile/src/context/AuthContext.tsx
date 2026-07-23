@@ -10,7 +10,6 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
   completeTotpLogin: (preAuthToken: string, code: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
   loginWithBiometric: () => Promise<boolean>;
   logout: () => Promise<void>;
 }
@@ -59,11 +58,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await persistSession(response.token, response.user);
   };
 
-  const register = async (email: string, password: string) => {
-    const response = await authService.register(email, password);
-    await persistSession(response.token, response.user);
-  };
-
   const loginWithBiometric = async (): Promise<boolean> => {
     const enabled = await securityStorage.isBiometricLoginEnabled();
     const token = await securityStorage.getSecureAuthToken();
@@ -90,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const value = useMemo(
-    () => ({ user, loading, login, completeTotpLogin, register, loginWithBiometric, logout }),
+    () => ({ user, loading, login, completeTotpLogin, loginWithBiometric, logout }),
     [user, loading]
   );
 
