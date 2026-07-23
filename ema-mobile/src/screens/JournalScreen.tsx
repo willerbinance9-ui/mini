@@ -198,11 +198,7 @@ export function JournalScreen() {
             const hasProfit = Boolean(dayInfo?.hasProfit);
             const hasVip = Boolean(dayInfo?.hasVip || (dayInfo?.vipUsd ?? 0) > 0);
             const selected = cell.ymd === selectedDate;
-            const cellAmount = hasVip
-              ? dayInfo!.vipUsd ?? dayInfo!.breakdown.vip
-              : hasProfit
-                ? dayInfo!.totalUsd
-                : 0;
+            const cellAmount = hasProfit ? dayInfo!.totalUsd : 0;
             return (
               <Pressable
                 key={cell.key}
@@ -223,7 +219,7 @@ export function JournalScreen() {
                 >
                   {cell.day}
                 </Text>
-                {hasProfit || hasVip ? (
+                {hasProfit ? (
                   <Text style={[styles.cellAmt, hasVip && styles.cellAmtVip]} numberOfLines={1}>
                     {fmtUsd(cellAmount).replace('$', '')}
                   </Text>
