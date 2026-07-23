@@ -8,7 +8,10 @@ const {
   listRecalledGhostLendsForOwnerOnDate,
   getGhostAccountByOwnerUserId,
   sumCommittedGhostLendAmounts,
+  getActiveVipInvestmentForUser,
+  VIP_DAILY_RATE,
 } = require('./db');
+const { PLATFORM_FEE_VIP_RATE } = require('./platformRevenueService');
 
 function roundUsd(n) {
   return Math.round(Number(n || 0) * 100) / 100;
@@ -35,6 +38,25 @@ function emptyBreakdown() {
   return { airfarming: 0, vip: 0, contracts: 0, ghost: 0 };
 }
 
+function expectedVipDailyNet(principalUsd) {
+  const gross = roundUsd(Number(principalUsd || 0) * VIP_DAILY_RATE);
+  return roundUsd(gross * (1 - PLATFORM_FEE_VIP_RATE));
+}
+
+async function buildVipJournalContext(userId, monthVipProfitUsd = 0) {
+  const inv = await getActiveVipInvestmentForUser(userId);
+  if (!inv && !(monthVipProfitUsd > 0)) return null;
+  const principal = inv ? roundUsd(inv.principal_usd) : 0;
+  return {
+    active: Boolean(inv),
+    principalUsd: principal,
+    expectedDailyNetUsd: inv ? expectedVipDailyNet(principal) : 0,
+    monthProfitUsd: roundUsd(monthVipProfitUsd),
+    daysAccrued: inv ? Number(inv.days_accrued || 0) : 0,
+    status: inv ? inv.status : null,
+  };
+}
+
 async function buildGhostJournalContext(userId) {
   const account = await getGhostAccountByOwnerUserId(userId);
   if (!account) return null;
@@ -59,6 +81,8 @@ function buildMonthDaysMap(year, month) {
       date: ymd,
       totalUsd: 0,
       hasProfit: false,
+      hasVip: false,
+      vipUsd: 0,
       breakdown: emptyBreakdown(),
     };
   }
@@ -72,6 +96,10 @@ function addToDay(days, ymd, source, amount) {
   days[ymd].breakdown[source] = roundUsd(days[ymd].breakdown[source] + n);
   days[ymd].totalUsd = roundUsd(days[ymd].totalUsd + n);
   days[ymd].hasProfit = days[ymd].totalUsd > 0;
+  if (source === 'vip') {
+    days[ymd].vipUsd = roundUsd(days[ymd].breakdown.vip);
+    days[ymd].hasVip = days[ymd].vipUsd > 0;
+  }
 }
 
 async function getJournalMonth(userId, year, month) {
@@ -101,15 +129,24 @@ async function getJournalMonth(userId, year, month) {
   const dayList = Object.values(days);
   const monthTotal = roundUsd(dayList.reduce((s, d) => s + d.totalUsd, 0));
   const profitDays = dayList.filter((d) => d.hasProfit).length;
+  const vipDays = dayList.filter((d) => d.hasVip).length;
   const monthGhostProfit = roundUsd(
     ghostRecalls.reduce((s, g) => s + Number(g.recalled_profit_net || 0), 0)
   );
   const monthVipProfit = roundUsd(vipRows.reduce((s, v) => s + Number(v.amount || 0), 0));
-  const ghost = await buildGhostJournalContext(userId);
+  const [ghost, vip] = await Promise.all([
+    buildGhostJournalContext(userId),
+    buildVipJournalContext(userId, monthVipProfit),
+  ]);
   let bestDay = null;
+  let bestVipDay = null;
   for (const d of dayList) {
-    if (!d.hasProfit) continue;
-    if (!bestDay || d.totalUsd > bestDay.totalUsd) bestDay = { date: d.date, totalUsd: d.totalUsd };
+    if (d.hasProfit && (!bestDay || d.totalUsd > bestDay.totalUsd)) {
+      bestDay = { date: d.date, totalUsd: d.totalUsd };
+    }
+    if (d.hasVip && (!bestVipDay || d.vipUsd > bestVipDay.totalUsd)) {
+      bestVipDay = { date: d.date, totalUsd: d.vipUsd };
+    }
   }
 
   return {
@@ -117,11 +154,14 @@ async function getJournalMonth(userId, year, month) {
     month: Number(month),
     monthTotalUsd: monthTotal,
     monthVipProfitUsd: monthVipProfit,
+    monthVipDays: vipDays,
     monthGhostProfitUsd: monthGhostProfit,
     profitDays,
     bestDay,
+    bestVipDay,
     days,
     ghost,
+    vip,
   };
 }
 
@@ -162,7 +202,7 @@ async function getJournalDay(userId, dateYmd) {
     items.push({
       id: v.id,
       source: 'vip',
-      label: 'VIP Farmers daily payout',
+      label: 'VIP Farmers daily revenue',
       amountUsd: roundUsd(v.amount),
       at: v.created_at || `${date}T12:00:00.000Z`,
     });
@@ -186,15 +226,22 @@ async function getJournalDay(userId, dateYmd) {
     breakdown[item.source] = roundUsd(breakdown[item.source] + item.amountUsd);
   }
   const totalUsd = roundUsd(items.reduce((s, i) => s + i.amountUsd, 0));
-  const ghost = await buildGhostJournalContext(userId);
+  const vipUsd = roundUsd(breakdown.vip);
+  const [ghost, vip] = await Promise.all([
+    buildGhostJournalContext(userId),
+    buildVipJournalContext(userId, vipUsd),
+  ]);
 
   return {
     date,
     totalUsd,
     hasProfit: totalUsd > 0,
+    hasVip: vipUsd > 0,
+    vipUsd,
     breakdown,
     items,
     ghost,
+    vip,
   };
 }
 

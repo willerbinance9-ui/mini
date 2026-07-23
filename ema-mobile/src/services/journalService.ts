@@ -16,10 +16,21 @@ export type JournalGhostContext = {
   accountStatus: string;
 };
 
+export type JournalVipContext = {
+  active: boolean;
+  principalUsd: number;
+  expectedDailyNetUsd: number;
+  monthProfitUsd: number;
+  daysAccrued: number;
+  status: string | null;
+};
+
 export type JournalDaySummary = {
   date: string;
   totalUsd: number;
   hasProfit: boolean;
+  hasVip?: boolean;
+  vipUsd?: number;
   breakdown: JournalBreakdown;
 };
 
@@ -28,11 +39,14 @@ export type JournalMonthResponse = {
   month: number;
   monthTotalUsd: number;
   monthVipProfitUsd?: number;
+  monthVipDays?: number;
   monthGhostProfitUsd?: number;
   profitDays: number;
   bestDay: { date: string; totalUsd: number } | null;
+  bestVipDay?: { date: string; totalUsd: number } | null;
   days: Record<string, JournalDaySummary>;
   ghost: JournalGhostContext | null;
+  vip?: JournalVipContext | null;
 };
 
 export type JournalDayItem = {
@@ -47,9 +61,12 @@ export type JournalDayResponse = {
   date: string;
   totalUsd: number;
   hasProfit: boolean;
+  hasVip?: boolean;
+  vipUsd?: number;
   breakdown: JournalBreakdown;
   items: JournalDayItem[];
   ghost: JournalGhostContext | null;
+  vip?: JournalVipContext | null;
 };
 
 export const journalService = {

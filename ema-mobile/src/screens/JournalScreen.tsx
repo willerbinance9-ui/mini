@@ -32,10 +32,9 @@ function sourceLabel(source: string) {
 }
 
 function formatBreakdown(breakdown: { airfarming: number; vip: number; contracts: number; ghost?: number }) {
-  const parts = [
-    `Airfarming ${fmtUsd(breakdown.airfarming)}`,
-    `VIP ${fmtUsd(breakdown.vip)}`,
-  ];
+  const parts: string[] = [];
+  if ((breakdown.airfarming ?? 0) > 0) parts.push(`Airfarming ${fmtUsd(breakdown.airfarming)}`);
+  if ((breakdown.vip ?? 0) > 0) parts.push(`VIP ${fmtUsd(breakdown.vip)}`);
   if ((breakdown.contracts ?? 0) > 0) parts.push(`Contracts ${fmtUsd(breakdown.contracts)}`);
   if ((breakdown.ghost ?? 0) > 0) parts.push(`Ghost ${fmtUsd(breakdown.ghost ?? 0)}`);
   return parts.join(' · ');
@@ -110,13 +109,16 @@ export function JournalScreen() {
     void journalService.getDay(ymd).then(setDayData).catch((e: any) => setError(e?.message));
   };
 
+  const vipItems = dayData?.items.filter((i) => i.source === 'vip') ?? [];
+  const otherItems = dayData?.items.filter((i) => i.source !== 'vip') ?? [];
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.primary} />}
     >
-      <Text style={styles.sub}>Daily earnings (UTC). Green = profit day.</Text>
+      <Text style={styles.sub}>Daily earnings (UTC). Green = profit · Gold = VIP Farmers revenue.</Text>
 
       {error ? (
         <Card style={styles.errCard}>
@@ -142,11 +144,19 @@ export function JournalScreen() {
         </Card>
       ) : null}
 
-      {monthData && (monthData.monthVipProfitUsd ?? 0) > 0 ? (
+      {monthData?.vip ? (
         <Card style={styles.vipCard}>
           <Text style={styles.vipTitle}>VIP Farmers this month</Text>
-          <Text style={styles.vipBalance}>{fmtUsd(monthData.monthVipProfitUsd ?? 0)}</Text>
-          <Text style={styles.vipMeta}>Daily payouts credited to your balance (UTC)</Text>
+          <Text style={styles.vipBalance}>{fmtUsd(monthData.monthVipProfitUsd ?? monthData.vip.monthProfitUsd ?? 0)}</Text>
+          <Text style={styles.vipMeta}>
+            {(monthData.monthVipDays ?? 0) > 0
+              ? `${monthData.monthVipDays} payout day${monthData.monthVipDays === 1 ? '' : 's'}`
+              : 'No VIP payouts this month yet'}
+            {monthData.bestVipDay ? ` · Best ${fmtUsd(monthData.bestVipDay.totalUsd)}` : ''}
+            {monthData.vip.active
+              ? ` · Expected ~${fmtUsd(monthData.vip.expectedDailyNetUsd)}/weekday`
+              : ''}
+          </Text>
         </Card>
       ) : null}
 
@@ -186,21 +196,36 @@ export function JournalScreen() {
             }
             const dayInfo = monthData?.days?.[cell.ymd];
             const hasProfit = Boolean(dayInfo?.hasProfit);
+            const hasVip = Boolean(dayInfo?.hasVip || (dayInfo?.vipUsd ?? 0) > 0);
             const selected = cell.ymd === selectedDate;
+            const cellAmount = hasVip
+              ? dayInfo!.vipUsd ?? dayInfo!.breakdown.vip
+              : hasProfit
+                ? dayInfo!.totalUsd
+                : 0;
             return (
               <Pressable
                 key={cell.key}
                 style={[
                   styles.cell,
-                  hasProfit && styles.cellProfit,
+                  hasProfit && !hasVip && styles.cellProfit,
+                  hasVip && styles.cellVip,
                   selected && styles.cellSelected,
                 ]}
                 onPress={() => onSelectDay(cell.ymd!)}
               >
-                <Text style={[styles.cellDay, hasProfit && styles.cellDayProfit]}>{cell.day}</Text>
-                {hasProfit ? (
-                  <Text style={styles.cellAmt} numberOfLines={1}>
-                    {fmtUsd(dayInfo!.totalUsd).replace('$', '')}
+                <Text
+                  style={[
+                    styles.cellDay,
+                    hasProfit && !hasVip && styles.cellDayProfit,
+                    hasVip && styles.cellDayVip,
+                  ]}
+                >
+                  {cell.day}
+                </Text>
+                {hasProfit || hasVip ? (
+                  <Text style={[styles.cellAmt, hasVip && styles.cellAmtVip]} numberOfLines={1}>
+                    {fmtUsd(cellAmount).replace('$', '')}
                   </Text>
                 ) : null}
               </Pressable>
@@ -219,8 +244,29 @@ export function JournalScreen() {
             {dayData.hasProfit ? (
               <Text style={styles.breakdown}>{formatBreakdown(dayData.breakdown)}</Text>
             ) : null}
-            {dayData.items.length ? (
-              dayData.items.map((item) => (
+
+            {(dayData.vipUsd ?? dayData.breakdown.vip ?? 0) > 0 || vipItems.length > 0 ? (
+              <View style={styles.vipDayBox}>
+                <Text style={styles.vipDayTitle}>VIP Farmers revenue</Text>
+                <Text style={styles.vipDayAmt}>{fmtUsd(dayData.vipUsd ?? dayData.breakdown.vip)}</Text>
+                {vipItems.map((item) => (
+                  <View key={item.id} style={styles.itemRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.itemLabel}>{item.label}</Text>
+                      <Text style={styles.itemMeta}>{sourceLabel(item.source)}</Text>
+                    </View>
+                    <Text style={styles.vipItemAmt}>{fmtUsd(item.amountUsd)}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : dayData.vip?.active ? (
+              <Text style={styles.meta}>
+                No VIP payout this day yet. Active VIP expects ~{fmtUsd(dayData.vip.expectedDailyNetUsd)} on weekdays.
+              </Text>
+            ) : null}
+
+            {otherItems.length ? (
+              otherItems.map((item) => (
                 <View key={item.id} style={styles.itemRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.itemLabel}>{item.label}</Text>
@@ -229,9 +275,9 @@ export function JournalScreen() {
                   <Text style={styles.itemAmt}>{fmtUsd(item.amountUsd)}</Text>
                 </View>
               ))
-            ) : (
+            ) : !vipItems.length ? (
               <Text style={styles.meta}>No line items for this date.</Text>
-            )}
+            ) : null}
           </>
         ) : (
           <Text style={styles.meta}>Loading day…</Text>
@@ -259,6 +305,17 @@ const styles = StyleSheet.create({
   vipTitle: { color: palette.textSecondary, fontWeight: '700', marginBottom: 4 },
   vipBalance: { color: '#EAB308', fontSize: 28, fontWeight: '800' },
   vipMeta: { color: palette.textSecondary, fontSize: 12, marginTop: 4 },
+  vipDayBox: {
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(234, 179, 8, 0.45)',
+    backgroundColor: 'rgba(234, 179, 8, 0.08)',
+  },
+  vipDayTitle: { color: palette.textSecondary, fontWeight: '700', fontSize: 12 },
+  vipDayAmt: { color: '#EAB308', fontSize: 24, fontWeight: '800', marginTop: 2, marginBottom: 4 },
+  vipItemAmt: { color: '#EAB308', fontWeight: '800', fontSize: 16 },
   monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   monthTitle: { color: palette.textPrimary, fontSize: 17, fontWeight: '700' },
   weekRow: { flexDirection: 'row', marginBottom: 6 },
@@ -276,10 +333,13 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   cellProfit: { backgroundColor: 'rgba(34, 197, 94, 0.18)', borderColor: 'rgba(34, 197, 94, 0.45)' },
+  cellVip: { backgroundColor: 'rgba(234, 179, 8, 0.18)', borderColor: 'rgba(234, 179, 8, 0.5)' },
   cellSelected: { borderColor: palette.primary, borderWidth: 2 },
   cellDay: { color: palette.textPrimary, fontWeight: '700', fontSize: 14 },
   cellDayProfit: { color: palette.success },
+  cellDayVip: { color: '#CA8A04' },
   cellAmt: { color: palette.success, fontSize: 9, marginTop: 2 },
+  cellAmtVip: { color: '#CA8A04' },
   detailCard: { marginTop: 12 },
   detailTitle: { color: palette.textSecondary, fontWeight: '700', marginBottom: 6 },
   detailTotal: { color: palette.primary, fontSize: 28, fontWeight: '800', marginBottom: 8 },
