@@ -285,6 +285,16 @@ async function runVipDailyAccrual(planDate = utcTodayYmd()) {
       skipped += 1;
       continue;
     }
+    const startedYmd = String(inv.started_at || '').slice(0, 10);
+    if (startedYmd && planDate < startedYmd) {
+      skipped += 1;
+      continue;
+    }
+    const maturesYmd = String(inv.matures_at || '').slice(0, 10);
+    if (maturesYmd && planDate > maturesYmd) {
+      skipped += 1;
+      continue;
+    }
     const existing = await getVipAccrualForInvestmentDay(inv.id, planDate);
     if (existing) {
       skipped += 1;
