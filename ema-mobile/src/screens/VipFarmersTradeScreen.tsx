@@ -1,28 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Card } from '../components/Card';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { VipExitWizard } from '../components/VipExitWizard';
 import {
   vipFarmerService,
-  type VipLoanStatus,
   type VipSummary,
   reinvestNetUsd,
   reinvestCommissionUsd,
 } from '../services/vipFarmerService';
 import { palette } from '../theme/colors';
-import type { RootStackParamList } from '../types';
 
 function fmtUsd(n: number) {
   return '$' + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function VipFarmersTradeScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [summary, setSummary] = useState<VipSummary | null>(null);
-  const [loanStatus, setLoanStatus] = useState<VipLoanStatus | null>(null);
   const [amount, setAmount] = useState('');
   const [addAmount, setAddAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -32,16 +26,11 @@ export function VipFarmersTradeScreen() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [s, loan] = await Promise.all([
-        vipFarmerService.getSummary(),
-        vipFarmerService.getLoanStatus().catch(() => null),
-      ]);
+      const s = await vipFarmerService.getSummary();
       setSummary(s);
-      setLoanStatus(loan);
     } catch (e: any) {
       setError(e?.message || 'Failed to load VIP Farmers');
       setSummary(null);
-      setLoanStatus(null);
     }
   }, []);
 
@@ -141,7 +130,6 @@ export function VipFarmersTradeScreen() {
   const lockCal = summary?.lockDaysCalendar ?? summary?.lockDays ?? 38;
   const lockWork = summary?.lockDaysWorking ?? 22;
   const availableRevenue = inv?.availableRevenueUsd ?? 0;
-  const openLoan = loanStatus?.openLoan;
 
   return (
     <>
@@ -166,25 +154,6 @@ export function VipFarmersTradeScreen() {
             <Card>
               <Text style={styles.label}>Cash wallet</Text>
               <Text style={styles.big}>{fmtUsd(summary.cashWalletUsd)}</Text>
-            </Card>
-
-            <Card>
-              <Text style={styles.label}>VIP Loan</Text>
-              {openLoan ? (
-                <Text style={styles.meta}>
-                  {openLoan.status === 'pending' ? 'Loan awaiting disbursement' : 'Active loan'} ·{' '}
-                  {fmtUsd(openLoan.amountUsd)}
-                </Text>
-              ) : (
-                <Text style={styles.meta}>
-                  Borrow against monthly VIP accrual if you have more than $2,500 in VIP.
-                </Text>
-              )}
-              <PrimaryButton
-                label="Open VIP Loan"
-                onPress={() => navigation.navigate('VipLoan')}
-                style={{ marginTop: 10 }}
-              />
             </Card>
 
             {summary.pendingExitRequest ? (

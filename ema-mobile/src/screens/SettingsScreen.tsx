@@ -35,7 +35,6 @@ import type { NotificationPreferences } from '../types';
 import { palette } from '../theme/colors';
 import { formatNetworkLabel } from '../utils/userFacingError';
 import {
-  navigateToP2PSetup,
   navigateToSupport,
   navigateToTransactionHistory,
 } from '../utils/navigationHelpers';
@@ -568,11 +567,6 @@ export function SettingsScreen() {
             title='Deposit & withdrawal alerts'
             subtitle={alertsSummary}
             onPress={() => setAlertsModalOpen(true)}
-          />
-          <SettingsRow
-            title='Start P2P'
-            subtitle='Set your price and payment details to trade with others'
-            onPress={() => navigateToP2PSetup(navigation)}
           />
           <SettingsRow
             title='Help & support'

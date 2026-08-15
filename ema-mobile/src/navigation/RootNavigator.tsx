@@ -1,17 +1,8 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, View } from 'react-native';
 import { MainTabNavigator } from './MainTabNavigator';
-import { P2PStackNavigator } from './P2PStackNavigator';
 import { AirfarmingTradeScreen } from '../screens/AirfarmingTradeScreen';
-import { GhostAccountScreen } from '../screens/GhostAccountScreen';
 import { VipFarmersTradeScreen } from '../screens/VipFarmersTradeScreen';
-import { VipLoanScreen } from '../screens/VipLoanScreen';
-import { ExpertAutoTradingScreen } from '../screens/ExpertAutoTradingScreen';
-import { LiveTradingScreen } from '../screens/LiveTradingScreen';
-import { LiveTradingCreateBotScreen } from '../screens/LiveTradingCreateBotScreen';
-import { LiveTradingCreateSetupScreen } from '../screens/LiveTradingCreateSetupScreen';
-import { LiveTradingAccountScreen } from '../screens/LiveTradingAccountScreen';
-import { TradesScreen } from '../screens/TradesScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { TransactionHistoryScreen } from '../screens/TransactionHistoryScreen';
 import { TransactionDetailScreen } from '../screens/TransactionDetailScreen';
@@ -49,21 +40,8 @@ export function RootNavigator() {
       }}
     >
       <Stack.Screen name='MainTabs' component={MainTabNavigator} options={{ headerShown: false }} />
-      <Stack.Screen name='P2P' component={P2PStackNavigator} options={{ headerShown: false }} />
       <Stack.Screen name='AirfarmingTrade' component={AirfarmingTradeScreen} options={{ title: 'Airfarmers' }} />
-      <Stack.Screen name='GhostAccount' component={GhostAccountScreen} options={{ title: 'Ghost Account' }} />
       <Stack.Screen name='VipFarmersTrade' component={VipFarmersTradeScreen} options={{ title: 'Live VIP Farmers' }} />
-      <Stack.Screen name='VipLoan' component={VipLoanScreen} options={{ title: 'VIP Loan' }} />
-      <Stack.Screen name='ExpertAutoTrading' component={ExpertAutoTradingScreen} options={{ title: 'Expert Account Manager' }} />
-      <Stack.Screen name='LiveTrading' component={LiveTradingScreen} options={{ title: 'My accounts' }} />
-      <Stack.Screen name='Trades' component={TradesScreen} options={{ title: 'Trades' }} />
-      <Stack.Screen name='LiveTradingCreateBot' component={LiveTradingCreateBotScreen} options={{ title: 'Open account' }} />
-      <Stack.Screen name='LiveTradingCreateSetup' component={LiveTradingCreateSetupScreen} options={{ title: 'Set up account' }} />
-      <Stack.Screen
-        name='LiveTradingAccount'
-        component={LiveTradingAccountScreen}
-        options={{ title: 'Live trading' }}
-      />
       <Stack.Screen name='Notifications' component={NotificationsScreen} options={{ title: 'Notifications' }} />
       <Stack.Screen name='TransactionHistory' component={TransactionHistoryScreen} options={{ title: 'Asset history' }} />
       <Stack.Screen

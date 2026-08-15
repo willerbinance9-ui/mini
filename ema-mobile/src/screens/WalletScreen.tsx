@@ -44,8 +44,6 @@ import {
 import {
   navigateToAirfarmingTrade,
   navigateToCryptoDepositPayment,
-  navigateToSendById,
-  navigateToLocalMoney,
   navigateToSettings,
   navigateToSupport,
   navigateToTransactionDetail,
@@ -91,7 +89,6 @@ export function WalletScreen() {
   const [withdrawModalCurrencyLabel, setWithdrawModalCurrencyLabel] = useState('USDT (TRC20)');
   const [complianceComplete, setComplianceComplete] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
-  const [withdrawMethodModalOpen, setWithdrawMethodModalOpen] = useState(false);
   const clientIpLoaded = useRef(false);
 
   const alertComplianceRequired = () => {
@@ -338,18 +335,6 @@ export function WalletScreen() {
 
   const openTransferChooser = () => setTransferModalOpen(true);
 
-  const openWithdrawChooser = () => setWithdrawMethodModalOpen(true);
-
-  const chooseCryptoWithdraw = () => {
-    setWithdrawMethodModalOpen(false);
-    openWithdrawModal();
-  };
-
-  const chooseMobileMoneyWithdraw = () => {
-    setWithdrawMethodModalOpen(false);
-    navigateToLocalMoney(navigation, 'withdraw');
-  };
-
   const inputStyle = {
     backgroundColor: palette.surfaceElevated,
     borderWidth: 1,
@@ -396,7 +381,7 @@ export function WalletScreen() {
               <View style={styles.actionRow}>
                 <Pressable
                   style={styles.actionItem}
-                  onPress={openWithdrawChooser}
+                  onPress={openWithdrawModal}
                   accessibilityLabel='Cash out'
                 >
                   <View style={styles.actionCircle}>
@@ -598,46 +583,8 @@ export function WalletScreen() {
         )}
       </FormModal>
 
-      <FormModal
-        visible={withdrawMethodModalOpen}
-        title='How do you want to cash out?'
-        onClose={() => setWithdrawMethodModalOpen(false)}
-      >
-        <Text style={styles.hint}>Pick where the money should go.</Text>
-        <Pressable style={styles.transferOption} onPress={chooseMobileMoneyWithdraw}>
-          <Ionicons name='phone-portrait-outline' size={22} color={palette.primary} />
-          <View style={styles.transferOptionText}>
-            <Text style={styles.transferOptionTitle}>Phone money</Text>
-            <Text style={styles.transferOptionSub}>Local currency to your mobile number</Text>
-          </View>
-          <Ionicons name='chevron-forward' size={20} color={palette.textSecondary} />
-        </Pressable>
-        <Pressable style={styles.transferOption} onPress={chooseCryptoWithdraw}>
-          <Ionicons name='wallet-outline' size={22} color={palette.primary} />
-          <View style={styles.transferOptionText}>
-            <Text style={styles.transferOptionTitle}>Crypto wallet</Text>
-            <Text style={styles.transferOptionSub}>USDT or ETH to your own address</Text>
-          </View>
-          <Ionicons name='chevron-forward' size={20} color={palette.textSecondary} />
-        </Pressable>
-      </FormModal>
-
       <FormModal visible={transferModalOpen} title='Transfer' onClose={() => setTransferModalOpen(false)}>
-        <Text style={styles.hint}>Move funds between products or send to another member.</Text>
-        <Pressable
-          style={styles.transferOption}
-          onPress={() => {
-            setTransferModalOpen(false);
-            navigateToSendById(navigation);
-          }}
-        >
-          <Ionicons name='person-outline' size={22} color={palette.primary} />
-          <View style={styles.transferOptionText}>
-            <Text style={styles.transferOptionTitle}>Send to member</Text>
-            <Text style={styles.transferOptionSub}>Transfer ID · trading USD balance</Text>
-          </View>
-          <Ionicons name='chevron-forward' size={20} color={palette.textSecondary} />
-        </Pressable>
+        <Text style={styles.hint}>Move cash into Airfarmers or VIP Farmers.</Text>
         <Pressable
           style={styles.transferOption}
           onPress={() => {

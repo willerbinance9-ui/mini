@@ -37,10 +37,15 @@ export type RootTabParamList = {
 
 export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<RootTabParamList> | undefined;
-  P2P: NavigatorScreenParams<P2PStackParamList> | undefined;
   AirfarmingTrade: undefined;
-  GhostAccount: undefined;
   VipFarmersTrade: undefined;
+  Notifications: undefined;
+  TransactionHistory: { initialTab?: TransactionHistoryTab } | undefined;
+  TransactionDetail: { row: WalletActivityRow };
+  CryptoDepositPayment: { deposit: NowpaymentsCreateDepositResponse };
+  Support: { category?: 'withdraw' | 'deposit' | 'daily_earning' | 'transfer' | 'general' } | undefined;
+  /** Unlinked legacy screens — kept for typecheck only */
+  GhostAccount: undefined;
   VipLoan: undefined;
   ExpertAutoTrading: undefined;
   LiveTrading: undefined;
@@ -48,11 +53,7 @@ export type RootStackParamList = {
   LiveTradingCreateBot: undefined;
   LiveTradingCreateSetup: { botType: import('../services/liveTradingService').LiveTradingBotType };
   LiveTradingAccount: { accountId: string };
-  Notifications: undefined;
-  TransactionHistory: { initialTab?: TransactionHistoryTab } | undefined;
-  TransactionDetail: { row: WalletActivityRow };
-  CryptoDepositPayment: { deposit: NowpaymentsCreateDepositResponse };
-  Support: { category?: 'withdraw' | 'deposit' | 'daily_earning' | 'transfer' | 'general' } | undefined;
+  P2P: NavigatorScreenParams<P2PStackParamList> | undefined;
 };
 
 export interface NotificationPreferences {

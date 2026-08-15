@@ -88,8 +88,8 @@ export function MainTabNavigator() {
         name='Journal'
         component={JournalScreen}
         options={{
-          tabBarLabel: 'journal',
-          title: 'journal',
+          tabBarLabel: 'Journal',
+          title: 'Journal',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'book' : 'book-outline'} color={color} size={size} />
           ),
@@ -99,8 +99,8 @@ export function MainTabNavigator() {
         name='Wallet'
         component={WalletScreen}
         options={({ navigation }) => ({
-          tabBarLabel: 'Asset',
-          title: 'Asset',
+          tabBarLabel: 'Wallet',
+          title: 'Wallet',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'briefcase' : 'briefcase-outline'} color={color} size={size} />
           ),

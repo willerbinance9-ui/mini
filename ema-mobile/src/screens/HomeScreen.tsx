@@ -15,11 +15,11 @@ import { usePolling } from '../hooks/usePolling';
 import { useTransactionFeed } from '../hooks/useTransactionFeed';
 import { palette } from '../theme/colors';
 import {
-  navigateToMT5,
-  navigateToP2P,
+  navigateToAirfarmingTrade,
   navigateToSupport,
   navigateToTransactionDetail,
   navigateToTransactionHistory,
+  navigateToVipFarmersTrade,
 } from '../utils/navigationHelpers';
 import { aggregateBalancesForDisplay, sumUsdtFamilyAvailable } from '../utils/walletDisplay';
 import { filterActivityToday } from '../utils/walletActivity';
@@ -79,18 +79,17 @@ export function HomeScreen() {
 
   const quickActions: QuickAction[] = useMemo(
     () => [
-      { key: 'asset', label: 'Asset', icon: 'briefcase-outline', onPress: () => navigation.navigate('Wallet') },
-      { key: 'earn', label: 'Earn', icon: 'trending-up-outline', onPress: () => navigation.navigate('Trades') },
-      { key: 'journal', label: 'journal', icon: 'book-outline', onPress: () => navigation.navigate('Journal') },
-      { key: 'support', label: 'Support', icon: 'chatbubbles-outline', onPress: () => navigateToSupport(navigation) },
-      { key: 'p2p', label: 'P2P', icon: 'swap-horizontal-outline', onPress: () => navigateToP2P(navigation) },
-      { key: 'mt5', label: 'MT5', icon: 'analytics-outline', onPress: () => navigateToMT5(navigation) },
+      { key: 'wallet', label: 'Wallet', icon: 'briefcase-outline', onPress: () => navigation.navigate('Wallet') },
+      { key: 'airfarming', label: 'Airfarmers', icon: 'leaf-outline', onPress: () => navigateToAirfarmingTrade(navigation) },
+      { key: 'vip', label: 'VIP', icon: 'diamond-outline', onPress: () => navigateToVipFarmersTrade(navigation) },
+      { key: 'journal', label: 'Journal', icon: 'book-outline', onPress: () => navigation.navigate('Journal') },
       {
         key: 'history',
         label: 'History',
         icon: 'time-outline',
         onPress: () => navigateToTransactionHistory(navigation),
       },
+      { key: 'support', label: 'Support', icon: 'chatbubbles-outline', onPress: () => navigateToSupport(navigation) },
     ],
     [navigation]
   );
@@ -123,7 +122,7 @@ export function HomeScreen() {
             {npSummary && !npSummary.configured ? (
               <Text style={styles.meta}>Deposits temporarily unavailable.</Text>
             ) : totalUsdt <= 0 && !cryptoError ? (
-              <Text style={styles.meta}>Deposit from the Asset tab to get started.</Text>
+              <Text style={styles.meta}>Deposit from Wallet to get started.</Text>
             ) : (
               <Text style={styles.meta}>Tap to manage deposits & withdrawals</Text>
             )}

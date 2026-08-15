@@ -1,13 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Card } from '../components/Card';
 import { journalService, type JournalDayResponse, type JournalMonthResponse } from '../services/journalService';
-import { navigateToGhostAccount } from '../utils/navigationHelpers';
 import { palette } from '../theme/colors';
-import type { RootStackParamList } from '../types';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -41,7 +37,6 @@ function formatBreakdown(breakdown: { airfarming: number; vip: number; contracts
 }
 
 export function JournalScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const now = new Date();
   const [year, setYear] = useState(now.getUTCFullYear());
   const [month, setMonth] = useState(now.getUTCMonth() + 1);
@@ -123,24 +118,6 @@ export function JournalScreen() {
       {error ? (
         <Card style={styles.errCard}>
           <Text style={styles.err}>{error}</Text>
-        </Card>
-      ) : null}
-
-      {monthData?.ghost ? (
-        <Card style={styles.ghostCard}>
-          <View style={styles.ghostHeader}>
-            <Text style={styles.ghostTitle}>Ghost pool balance</Text>
-            <Pressable onPress={() => navigateToGhostAccount(navigation)} hitSlop={8}>
-              <Text style={styles.ghostLink}>Manage</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.ghostBalance}>{fmtUsd(monthData.ghost.poolBalance)}</Text>
-          <Text style={styles.ghostMeta}>
-            Available {fmtUsd(monthData.ghost.poolAvailable)} · Committed {fmtUsd(monthData.ghost.poolCommitted)}
-            {(monthData.monthGhostProfitUsd ?? 0) > 0
-              ? ` · Recall profit this month ${fmtUsd(monthData.monthGhostProfitUsd ?? 0)}`
-              : ''}
-          </Text>
         </Card>
       ) : null}
 

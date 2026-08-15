@@ -50,17 +50,6 @@ export function navigateToSupport(
   root.navigate('Support', params);
 }
 
-export function navigateToSendById(navigation: NavLike) {
-  navigation.navigate('Settings', { screen: 'SendById' });
-}
-
-export function navigateToLocalMoney(navigation: NavLike, initialTab?: 'deposit' | 'withdraw') {
-  navigation.navigate('Settings', {
-    screen: 'LocalMoney',
-    params: initialTab ? { initialTab } : undefined,
-  });
-}
-
 export function navigateToSettings(navigation: NavLike, params?: { openSecurity?: boolean }) {
   getRootNavigation(navigation).navigate('MainTabs', {
     screen: 'Settings',
@@ -68,30 +57,10 @@ export function navigateToSettings(navigation: NavLike, params?: { openSecurity?
   });
 }
 
-export function navigateToP2P(navigation: NavLike) {
-  getRootNavigation(navigation).navigate('P2P');
-}
-
-export function navigateToP2PSetup(navigation: NavLike) {
-  getRootNavigation(navigation).navigate('P2P', { screen: 'P2PSetup' });
-}
-
-export function navigateToMT5(navigation: NavLike) {
-  navigation.navigate('Settings', { screen: 'MT5' });
-}
-
 export function navigateToAirfarmingTrade(navigation: NavLike) {
   getRootNavigation(navigation).navigate('AirfarmingTrade');
 }
 
-export function navigateToGhostAccount(navigation: NavLike) {
-  getRootNavigation(navigation).navigate('GhostAccount');
-}
-
 export function navigateToVipFarmersTrade(navigation: NavLike) {
   getRootNavigation(navigation).navigate('VipFarmersTrade');
-}
-
-export function navigateToVipLoan(navigation: NavLike) {
-  getRootNavigation(navigation).navigate('VipLoan');
 }
