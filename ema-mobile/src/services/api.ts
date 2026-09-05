@@ -37,13 +37,18 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function shouldFailoverAuth(path: string, status: number, data: unknown): boolean {
   if (!AUTH_FAILOVER_PATHS.has(path)) return false;
+  // Primary Render service suspended or cold — try the other backend.
+  if (status >= 502 && status <= 504) return true;
   const msg = String((data as { message?: string } | null)?.message || '').toLowerCase();
-  if (status !== 401) return false;
-  return (
-    msg.includes('invalid email') ||
-    msg.includes('invalid token') ||
-    msg.includes('missing token')
-  );
+  if (status === 401) {
+    return (
+      msg.includes('invalid email') ||
+      msg.includes('invalid token') ||
+      msg.includes('missing token')
+    );
+  }
+  if (msg.includes('<!doctype') || msg.includes('service suspended')) return true;
+  return false;
 }
 
 function parseResponseBody(raw: string, contentType: string): unknown {

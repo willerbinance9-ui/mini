@@ -12,7 +12,7 @@
       "distribution": "internal",
       "channel": "production",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://mini-rdjs.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://ema-0gp3.onrender.com"
       },
       "android": {
         "buildType": "apk"
@@ -22,7 +22,7 @@
       "autoIncrement": true,
       "channel": "production",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://mini-rdjs.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://ema-0gp3.onrender.com"
       }
     }
   },
