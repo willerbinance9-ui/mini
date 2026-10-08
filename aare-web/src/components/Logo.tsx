@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export function Logo({ className = "" }: { className?: string }) {
   return (
-    <Link href="/" className={`inline-flex items-center gap-2.5 ${className}`}>
+    <Link href="/new" className={`inline-flex items-center gap-2.5 ${className}`}>
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden>
         <rect x="2" y="10" width="8" height="8" rx="1.5" fill="currentColor" className="text-foreground" />
         <rect x="18" y="10" width="8" height="8" rx="1.5" fill="currentColor" className="text-muted" />

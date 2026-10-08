@@ -5,7 +5,7 @@ import { SITE_URL } from "@/lib/constants";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const staticRoutes = [
-    "",
+    "/new",
     "/services",
     "/compare",
     "/pricing",
@@ -25,7 +25,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       url: `${SITE_URL}${path}`,
       lastModified: new Date(),
       changeFrequency: "weekly" as const,
-      priority: path === "" ? 1 : 0.8,
+      priority: path === "/new" ? 1 : 0.8,
     })),
     ...services.map((s) => ({
       url: `${SITE_URL}/services/${s.slug}`,

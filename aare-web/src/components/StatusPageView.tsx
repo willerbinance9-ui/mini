@@ -57,7 +57,7 @@ export function StatusPageView() {
     <div className="min-h-screen bg-background">
       <header className="border-b border-card-border">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
-          <Link href="/" className="flex items-baseline gap-2">
+          <Link href="/new" className="flex items-baseline gap-2">
             <span className="text-lg font-bold tracking-tight">Aare</span>
             <span className="text-lg font-bold tracking-widest text-emerald-500">STATUS</span>
           </Link>
@@ -165,7 +165,7 @@ export function StatusPageView() {
       </main>
 
       <footer className="border-t border-card-border py-8 text-center text-xs text-muted">
-        <Link href="/" className="hover:text-foreground">
+        <Link href="/new" className="hover:text-foreground">
           ← Back to Aare
         </Link>
       </footer>
