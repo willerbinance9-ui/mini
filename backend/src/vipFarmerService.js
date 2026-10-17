@@ -58,6 +58,7 @@ function isUtcWeekendYmd(ymd) {
 }
 
 async function getVipSummary(userId) {
+  const { VIP_PAUSED, VIP_PAUSE_MESSAGE } = require('./platformHalt');
   const wallet = await ensureWalletForUser(userId);
   const cash = roundUsd(wallet?.balance);
   const inv = await getActiveVipInvestmentForUser(userId);
@@ -73,10 +74,13 @@ async function getVipSummary(userId) {
     exitPenaltyRate: VIP_EARLY_PENALTY_RATE,
     investment: vipInvestmentToApi(inv),
     pendingExitRequest: pendingExit ? vipExitRequestToApi(pendingExit) : null,
+    activitiesPaused: VIP_PAUSED,
+    pauseMessage: VIP_PAUSED ? VIP_PAUSE_MESSAGE : null,
   };
 }
 
 async function investVip(userId, amount) {
+  require('./platformHalt').assertVipActive();
   const amt = roundUsd(amount);
   if (!Number.isFinite(amt) || amt < VIP_MIN_INVEST_USD) {
     const err = new Error(`Minimum investment is $${VIP_MIN_INVEST_USD}`);
@@ -113,6 +117,7 @@ async function investVip(userId, amount) {
 }
 
 async function addCapitalVip(userId, amount) {
+  require('./platformHalt').assertVipActive();
   const amt = roundUsd(amount);
   if (!Number.isFinite(amt) || amt < VIP_MIN_INVEST_USD) {
     const err = new Error(`Minimum add is $${VIP_MIN_INVEST_USD}`);
@@ -157,6 +162,7 @@ async function addCapitalVip(userId, amount) {
 
 /** Reinvest available VIP earnings into principal (30% commission, 70% compounds). */
 async function reinvestVipEarnings(userId, amount) {
+  require('./platformHalt').assertVipActive();
   const inv = await getActiveVipInvestmentForUser(userId);
   if (!inv) {
     const err = new Error('No active VIP investment');
@@ -265,6 +271,18 @@ async function earlyWithdrawVip(userId) {
 }
 
 async function runVipDailyAccrual(planDate = utcTodayYmd()) {
+  const { VIP_PAUSED } = require('./platformHalt');
+  if (VIP_PAUSED) {
+    return {
+      ok: true,
+      planDate,
+      paused: true,
+      investmentsChecked: 0,
+      accrualsApplied: 0,
+      skipped: 0,
+    };
+  }
+
   if (isUtcWeekendYmd(planDate)) {
     return {
       ok: true,

@@ -419,6 +419,9 @@ function dropToHistoryRow(row) {
 }
 
 async function ensureNextScheduledDrop(userId, weekStart) {
+  const { AIRFARMING_PAUSED } = require('./platformHalt');
+  if (AIRFARMING_PAUSED) return null;
+
   const existing = await getScheduledAirfarmingDrop(userId, weekStart);
   if (existing) return existing;
 
@@ -720,6 +723,9 @@ async function settleDrop(userId, drop, options = {}) {
 
 /** Process all overdue scheduled drops; schedule the next one after each settlement. */
 async function processDueDrops(userId, weekStart, options = {}) {
+  const { AIRFARMING_PAUSED } = require('./platformHalt');
+  if (AIRFARMING_PAUSED) return { processed: 0, lastSettled: null, paused: true };
+
   let processed = 0;
   let lastSettled = null;
   const guardMax = 20;

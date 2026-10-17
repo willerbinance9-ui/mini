@@ -123,7 +123,13 @@ async function buildAirfarmingStatusResponse(userId) {
     scheduleHours: [],
     lastEventAt: settled[0]?.paid_at || settled[0]?.due_at || null,
     autoFundEnabled,
-    dropsPaused: require('./airfarmingPause').pauseStatusFromState(state).dropsPausedNow,
+    dropsPaused:
+      require('./platformHalt').AIRFARMING_PAUSED ||
+      require('./airfarmingPause').pauseStatusFromState(state).dropsPausedNow,
+    activitiesPaused: require('./platformHalt').AIRFARMING_PAUSED,
+    pauseMessage: require('./platformHalt').AIRFARMING_PAUSED
+      ? require('./platformHalt').AIRFARMING_PAUSE_MESSAGE
+      : null,
     platformHighlight: AIRFARMING_PLATFORM_HIGHLIGHT,
     nextDrop,
     upcomingDrops,
